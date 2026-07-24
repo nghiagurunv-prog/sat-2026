@@ -5,6 +5,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { GamificationProvider } from "@/context/GamificationContext";
 import { ToastProvider } from "@/context/ToastContext";
 import { BadgeUnlockWatcher } from "@/components/BadgeUnlockWatcher";
+import { WelcomeNameModal } from "@/components/WelcomeNameModal";
 
 export const metadata: Metadata = {
   title: "Gia sư AI SAT - Phú Gia Education",
@@ -26,6 +27,7 @@ export default function RootLayout({
           <GamificationProvider>
             <ToastProvider>
               <BadgeUnlockWatcher />
+              <WelcomeNameModal />
               <AppShell>{children}</AppShell>
             </ToastProvider>
           </GamificationProvider>
