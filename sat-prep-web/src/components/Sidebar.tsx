@@ -10,13 +10,10 @@ import { useAuth } from '@/context/AuthContext';
 
 const MENU_GROUPS = [
   {
-    title: '🏠 TỔNG QUAN & LỘ TRÌNH',
+    title: '🏠 HỌC MỖI NGÀY',
     items: [
       { name: '✨ Ôn Luyện Hằng Ngày', path: '/' },
-      { name: '🎯 Test Xếp Lớp', path: '/diagnostic' },
-      { name: '🌳 Cây Năng Lực SAT', path: '/skill-tree' },
-      { name: '📊 Nhật Ký Trưởng Thành', path: '/dashboard' },
-      { name: '👨‍👩‍👧 Chia Sẻ Phụ Huynh', path: '/parent-share' },
+      { name: '⚡ Trả Lời Nhanh', path: '/speed-quiz' },
       { name: '💎 Nâng Cấp Gói VIP', path: '/upgrade' },
     ]
   },
@@ -39,13 +36,21 @@ const MENU_GROUPS = [
     ]
   },
   {
+    title: '📈 TIẾN ĐỘ & HỒ SƠ',
+    items: [
+      { name: '🎯 Test Xếp Lớp', path: '/diagnostic' },
+      { name: '🌳 Cây Năng Lực SAT', path: '/skill-tree' },
+      { name: '📊 Nhật Ký Trưởng Thành', path: '/dashboard' },
+      { name: '👨‍👩‍👧 Chia Sẻ Phụ Huynh', path: '/parent-share' },
+    ]
+  },
+  {
     title: '🎮 HỆ SINH THÁI CHIẾN BINH',
     items: [
       { name: '🗺️ Bản Đồ Sưu Tập', path: '/collection' },
       { name: '🛒 Cửa Hàng Vật Phẩm', path: '/shop' },
       { name: '📜 Sổ Tay Nhiệm Vụ', path: '/quests' },
       { name: '🗼 Tháp Vô Tận', path: '/tower' },
-      { name: '⚡ Trả Lời Nhanh', path: '/speed-quiz' },
       { name: '🏟️ Đấu Trường PvP', path: '/pvp' },
       { name: '🏆 Bảng Xếp Hạng', path: '/leaderboard' },
       { name: '⚒️ Lò Rèn Chiến Binh', path: '/forge' },
