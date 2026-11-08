@@ -111,6 +111,20 @@ let _cache: CacheEntry | null = null;
 const CACHE_TTL_MS = 60_000;
 
 /**
+ * Chia nhỏ mảng thành các batch tối đa `chunkSize` phần tử (Fix #028).
+ * Giới hạn danh sách ids truyền vào .in('user_id', ...) tối đa 100 ID mỗi batch
+ * để URL PostgREST không bao giờ vượt giới hạn HTTP header/query (chống lỗi 414 URI Too Long).
+ */
+export function chunkArray<T>(items: T[], chunkSize: number = 100): T[][] {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+/**
  * Dựng bảng xếp hạng (top N + vị trí của mình). now được TIÊM (mặc định thời
  * điểm gọi) — cho phép test/route truyền thời gian xác định.
  */
@@ -151,17 +165,24 @@ export async function buildLeaderboard(
     return { season, top: [], me: null, available: true };
   }
 
-  // 2) MỘT query mastery cho MỌI user opt-in (tránh N+1).
+  // 2) Batch query mastery cho MỌI user opt-in (tránh N+1 và chống HTTP 414 URI Too Long - Fix #028).
   const ids = opted.map((p) => p.user_id);
-  const { data: masteryRows, error: mErr } = await admin
-    .from('user_mastery')
-    .select('user_id, skills')
-    .in('user_id', ids);
+  const idChunks = chunkArray(ids, 100);
 
-  if (mErr) {
-    console.error('buildLeaderboard mastery error:', mErr.message);
-    return { season, top: [], me: null, available: true };
-  }
+  const masteryPromises = idChunks.map(async (batchIds) => {
+    const { data, error } = await admin
+      .from('user_mastery')
+      .select('user_id, skills')
+      .in('user_id', batchIds);
+    if (error) {
+      console.error('buildLeaderboard mastery batch error:', error.message);
+      return [];
+    }
+    return data ?? [];
+  });
+
+  const masteryBatches = await Promise.all(masteryPromises);
+  const masteryRows = masteryBatches.flat();
 
   // 3) Tính basePower in-memory (summarizeMastery + computeStats thuần).
   const skillsByUser = new Map<string, Record<string, SkillMastery>>();
@@ -186,11 +207,15 @@ export async function buildLeaderboard(
   //    chưa thắng giải (danh vọng giả). Nay khung/danh hiệu Nhà Vô Địch Mùa CHỈ hiện
   //    cho người ĐÃ được cron cấp (user_cosmetics). getUsersTierMap/CosmeticsMap tự
   //    fail-safe → rỗng khi lỗi/pre-migration ⇒ bestFrameFor trả null ⇒ dòng thường.
+  //    Batching theo 100 ID/lượt để chống HTTP 414 URI Too Long (Fix #028).
   const nowISO = now.toISOString();
-  const [tierMap, cosmeticsMap] = await Promise.all([
-    getUsersTierMap(ids), // fail-safe: {} → mọi user 'free'
-    getUsersCosmeticsMap(ids), // fail-safe: {} → chưa ai thắng cosmetic
+  const [tierBatches, cosmeticsBatches] = await Promise.all([
+    Promise.all(idChunks.map((batchIds) => getUsersTierMap(batchIds))),
+    Promise.all(idChunks.map((batchIds) => getUsersCosmeticsMap(batchIds))),
   ]);
+  const tierMap: Record<string, 'free' | 'premium' | 'ultimate'> = Object.assign({}, ...tierBatches);
+  const cosmeticsMap: Record<string, string[]> = Object.assign({}, ...cosmeticsBatches);
+
   for (const row of rows) {
     const tier = tierMap[row.userId] ?? 'free';
     const ownedIds = [...tierPerkCosmeticIds(tier), ...(cosmeticsMap[row.userId] ?? [])];

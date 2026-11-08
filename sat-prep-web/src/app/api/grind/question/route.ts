@@ -28,6 +28,18 @@ import { isValidSkill } from '@/lib/skill-taxonomy';
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
 
+  // Giới hạn count / limit truy vấn tối đa (<= 50) chống DoS/treo server (#016)
+  const countParam = request.nextUrl.searchParams.get('count') ?? request.nextUrl.searchParams.get('limit');
+  if (countParam !== null) {
+    const parsed = parseInt(countParam, 10);
+    if (isNaN(parsed) || parsed < 1 || parsed > 50) {
+      return NextResponse.json(
+        { error: 'Số lượng câu hỏi khổ luyện (count/limit) tối đa là 50.' },
+        { status: 400 }
+      );
+    }
+  }
+
   // GATE ultimate — khổ luyện là quyền lợi cao cấp nhất.
   const tier = await getUserTier(user.id);
   if (tier !== 'ultimate') {

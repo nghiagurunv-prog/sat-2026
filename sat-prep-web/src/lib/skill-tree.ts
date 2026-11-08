@@ -1,6 +1,7 @@
 import type { MasterySummary } from './mastery';
 import { RETRY_CORRECT_NEEDED, type GateProgress } from './gate-exam';
 import type { AiTier } from './ai-quota';
+import { getDomainOfSkill } from './skill-taxonomy';
 
 /**
  * ============================================================================
@@ -224,4 +225,14 @@ export function applyTierGate(view: SkillTreeView, tier: AiTier): SkillTreeView 
   ).length;
 
   return { domains, nodes, masteredCount, totalNodes: view.nodes.length };
+}
+
+/**
+ * Kiểm tra quyền luyện tập skill theo gói (Free chỉ được các skill thuộc FREE_DOMAINS).
+ */
+export function canGeneratePracticeForTier(tier: AiTier, skillId: string | undefined): boolean {
+  if (tier !== 'free') return true;
+  if (!skillId) return false;
+  const domain = getDomainOfSkill(skillId);
+  return !!domain && FREE_DOMAINS.includes(domain.id);
 }

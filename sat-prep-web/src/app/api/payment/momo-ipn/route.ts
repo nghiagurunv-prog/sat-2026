@@ -38,7 +38,7 @@ export async function POST(req: Request) {
       return new NextResponse(null, { status: 204 });
     }
 
-    // 3) Xác nhận atomic (kiểm tiền + idempotent).
+    // 3) Xác nhận atomic (kiểm tiền + idempotent + hỗ trợ pending/expired).
     const orderId = String(payload.orderId ?? '');
     const gatewayTxnId = String(payload.transId ?? '');
     const amountVnd = Number(payload.amount ?? 0);
@@ -47,11 +47,29 @@ export async function POST(req: Request) {
     // 4) A2: GÓI ĐÃ ĐƯỢC CẤP NGUYÊN TỬ trong confirm_payment RPC (cùng transaction
     //    với UPDATE status='paid') → KHÔNG cấp gói tách rời ở đây. Vá lỗ tiền: trước
     //    đây grant rời (grantSubscription, nay đã gỡ) có thể fail sau khi đơn 'paid'.
+    //    Hỗ trợ khôi phục đơn 'expired' khi tiền thật về, và bảo đảm idempotent.
 
-    // MoMo: 204 = đã nhận IPN (kể cả idempotent/đã xử lý). Lỗi confirm → 500 để retry.
-    if (!outcome.ok && outcome.reason !== 'amount_mismatch' && outcome.reason !== 'not_found') {
+    // 4.1) Idempotent: Nếu đơn đã thanh toán trước đó (order.status === 'paid'), bỏ qua không cộng trùng
+    if (outcome.alreadyConfirmed) {
+      return new NextResponse(null, { status: 204 });
+    }
+
+    // 4.2) Kiểm tra lỗi xác nhận
+    if (!outcome.ok) {
+      if (outcome.reason === 'amount_mismatch') {
+        console.warn(`[momo-ipn] Số tiền không khớp hoặc không đủ cho đơn orderId=${orderId}: nhận ${amountVnd} VND`);
+        return NextResponse.json({ message: 'Amount mismatch or insufficient' }, { status: 400 });
+      }
+      if (outcome.reason === 'not_found') {
+        console.warn(`[momo-ipn] Không tìm thấy đơn hàng: orderId=${orderId}`);
+        return NextResponse.json({ message: 'Order not found' }, { status: 404 });
+      }
+      // MoMo: Lỗi hệ thống / DB thất bại → 500 để MoMo retry
+      console.error(`[momo-ipn] Lỗi hệ thống khi xác nhận thanh toán orderId=${orderId}:`, outcome.reason);
       return NextResponse.json({ message: 'Confirm failed, retry' }, { status: 500 });
     }
+
+    // MoMo: 204 = đã nhận IPN và xử lý thành công
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     console.error('Lỗi momo-ipn:', error);

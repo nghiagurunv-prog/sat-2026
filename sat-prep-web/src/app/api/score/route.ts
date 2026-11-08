@@ -4,6 +4,25 @@ import { predictScore, setGoal, type ScorePrediction } from '@/lib/score-predict
 import { getUserTier } from '@/lib/subscription-store';
 import type { AiTier } from '@/lib/ai-quota';
 
+/** Khử giá trị NaN/Infinity tránh chia cho 0 khi user mới tạo chưa có bài làm (#026) */
+function sanitizeNumbers<T>(val: T): T {
+  if (val === null || val === undefined) return val;
+  if (typeof val === 'number') {
+    return (Number.isNaN(val) || !Number.isFinite(val) ? 0 : val) as unknown as T;
+  }
+  if (Array.isArray(val)) {
+    return val.map(sanitizeNumbers) as unknown as T;
+  }
+  if (typeof val === 'object') {
+    const res: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(val)) {
+      res[k] = sanitizeNumbers(v);
+    }
+    return res as T;
+  }
+  return val;
+}
+
 /**
  * Cắt tầng HIỂN THỊ theo tier: free chỉ thấy TỔNG điểm (miếng mồi), premium/
  * ultimate mở breakdown môn + focus skills. Redact SERVER-SIDE để client free
@@ -30,13 +49,19 @@ function redactForTier(prediction: ScorePrediction, tier: AiTier) {
  */
 
 export async function GET() {
-  const user = await getCurrentUser();
-  const [prediction, tier] = await Promise.all([
-    predictScore(user.id),
-    getUserTier(user.id),
-  ]);
+  try {
+    const user = await getCurrentUser();
+    const [prediction, tier] = await Promise.all([
+      predictScore(user.id),
+      getUserTier(user.id),
+    ]);
 
-  return NextResponse.json(redactForTier(prediction, tier));
+    const safePrediction = sanitizeNumbers(prediction);
+    return NextResponse.json(redactForTier(safePrediction, tier));
+  } catch (error) {
+    console.error('Lỗi dự đoán điểm:', error);
+    return NextResponse.json({ error: 'Failed to predict score' }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
@@ -53,7 +78,8 @@ export async function POST(req: Request) {
       predictScore(user.id),
       getUserTier(user.id),
     ]);
-    return NextResponse.json({ success: true, goal, prediction: redactForTier(prediction, tier) });
+    const safePrediction = sanitizeNumbers(prediction);
+    return NextResponse.json({ success: true, goal, prediction: redactForTier(safePrediction, tier) });
   } catch (error) {
     console.error('Lỗi đặt mục tiêu:', error);
     return NextResponse.json({ error: 'Failed to set goal' }, { status: 500 });

@@ -57,7 +57,8 @@ begin
                               'userId', v_user, 'tier', v_tier, 'period', v_period);
   end if;
 
-  if v_status <> 'pending' then
+  -- Fix #006: Chấp nhận cả đơn 'pending' và 'expired' (khách chuyển trễ qua webhook tiền về thực tế)
+  if v_status not in ('pending', 'expired') then
     return jsonb_build_object('ok', false, 'reason', 'bad_status',
                               'userId', v_user, 'tier', v_tier, 'period', v_period);
   end if;

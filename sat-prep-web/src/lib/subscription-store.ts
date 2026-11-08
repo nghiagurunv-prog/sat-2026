@@ -3,9 +3,12 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import type { AiTier } from './ai-quota';
 import {
   resolveTier,
+  SUBSCRIPTION_GRACE_PERIOD_MS,
+  TIER_PRIORITY,
   type BillingPeriod,
   type PaidTier,
   type SubscriptionRecord,
+  type SubscriptionTier,
 } from './subscription';
 
 /**
@@ -24,25 +27,63 @@ import {
  * ============================================================================
  */
 
-/** Đọc gói còn-hạn-mới-nhất của user (đường ĐỌC, RLS). null nếu không có/lỗi. */
+/**
+ * Helper lọc & sắp xếp danh sách subscription:
+ * 1. Lọc dòng còn hạn (tính cả 12-hour grace period, và status='active' nếu có cột status).
+ * 2. Ưu tiên TIER_PRIORITY cao nhất: ultimate > premium > pro > free.
+ * 3. Nếu cùng tier, ưu tiên expires_at xa nhất.
+ */
+function selectBestSubscription(rows: Array<Record<string, unknown>>): SubscriptionRecord | null {
+  const activeRows = rows
+    .filter((row) => {
+      if ('status' in row && row.status && row.status !== 'active') return false;
+      const exp = row.expires_at as string;
+      if (!exp) return false;
+      return new Date(exp).getTime() + SUBSCRIPTION_GRACE_PERIOD_MS > Date.now();
+    })
+    .sort((a, b) => {
+      const tierA = (a.tier as SubscriptionTier) || 'free';
+      const tierB = (b.tier as SubscriptionTier) || 'free';
+      const priorityDiff = (TIER_PRIORITY[tierB] ?? 0) - (TIER_PRIORITY[tierA] ?? 0);
+      if (priorityDiff !== 0) return priorityDiff;
+
+      const expA = new Date((a.expires_at as string) || 0).getTime();
+      const expB = new Date((b.expires_at as string) || 0).getTime();
+      return expB - expA;
+    });
+
+  const best = activeRows[0];
+  if (!best) return null;
+
+  return {
+    tier: best.tier as PaidTier,
+    period: best.period as BillingPeriod,
+    startedAt: (best.started_at as string) ?? '',
+    expiresAt: (best.expires_at as string) ?? '',
+  };
+}
+
+/**
+ * Đọc gói còn-hạn tốt nhất của user (Fix #005: Multi-Tier Hierarchy & Fix #032: 12-Hour Grace Period).
+ * Ưu tiên bậc cao nhất: ultimate > premium > pro > free.
+ * Nếu cùng bậc, ưu tiên gói có expires_at xa nhất.
+ */
 export async function getActiveSubscription(userId: string): Promise<SubscriptionRecord | null> {
   const supabase = await createClient();
+  const minValidExpiresAt = new Date(Date.now() - SUBSCRIPTION_GRACE_PERIOD_MS).toISOString();
+
   const { data, error } = await supabase
     .from('user_subscriptions')
     .select('tier, period, started_at, expires_at')
     .eq('user_id', userId)
-    .order('expires_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .gte('expires_at', minValidExpiresAt);
 
-  if (error || !data) return null;
-  return {
-    tier: data.tier as PaidTier,
-    period: data.period as BillingPeriod,
-    startedAt: data.started_at ?? '',
-    expiresAt: data.expires_at ?? '',
-  };
+  if (error || !data || data.length === 0) return null;
+  return selectBestSubscription(data as Array<Record<string, unknown>>);
 }
+
+/** Alias getActiveSubscriptionFromDb cho getActiveSubscription */
+export const getActiveSubscriptionFromDb = getActiveSubscription;
 
 /**
  * Tier HIỆU LỰC của user (nối vào ai-quota). FAIL-SAFE → 'free' khi lỗi/không có.
@@ -66,21 +107,16 @@ export async function getUserTier(userId: string): Promise<AiTier> {
 export async function getUserTierAdmin(userId: string): Promise<AiTier> {
   try {
     const admin = createAdminClient();
+    const minValidExpiresAt = new Date(Date.now() - SUBSCRIPTION_GRACE_PERIOD_MS).toISOString();
+
     const { data, error } = await admin
       .from('user_subscriptions')
       .select('tier, period, started_at, expires_at')
       .eq('user_id', userId)
-      .order('expires_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .gte('expires_at', minValidExpiresAt);
 
-    if (error || !data) return 'free';
-    const sub: SubscriptionRecord = {
-      tier: data.tier as PaidTier,
-      period: data.period as BillingPeriod,
-      startedAt: data.started_at ?? '',
-      expiresAt: data.expires_at ?? '',
-    };
+    if (error || !data || data.length === 0) return 'free';
+    const sub = selectBestSubscription(data as Array<Record<string, unknown>>);
     return resolveTier(sub, new Date().toISOString());
   } catch (e) {
     console.error('getUserTierAdmin lỗi (fail-safe → free):', e);
@@ -108,26 +144,30 @@ export async function getUsersTierMap(
   try {
     const admin = createAdminClient();
     const nowISO = new Date().toISOString();
-    // MỘT query cho MỌI user (order expires_at desc → gói mới-nhất đứng trước).
+    const minValidExpiresAt = new Date(Date.now() - SUBSCRIPTION_GRACE_PERIOD_MS).toISOString();
+
     const { data, error } = await admin
       .from('user_subscriptions')
       .select('user_id, tier, period, started_at, expires_at')
       .in('user_id', ids)
-      .order('expires_at', { ascending: false });
+      .gte('expires_at', minValidExpiresAt);
 
     if (error || !data) return result; // fail-safe: map rỗng → mọi user 'free'
 
-    // Chỉ giữ gói ĐẦU TIÊN gặp mỗi user (đã sort desc → mới-nhất). resolveTier
-    // tự trả 'free' nếu gói đã hết hạn.
+    // Gom nhóm theo user_id
+    const userRows: Record<string, Array<Record<string, unknown>>> = {};
     for (const row of data as Array<Record<string, unknown>>) {
       const uid = typeof row.user_id === 'string' ? row.user_id : null;
-      if (!uid || result[uid] !== undefined) continue;
-      const sub: SubscriptionRecord = {
-        tier: row.tier as PaidTier,
-        period: row.period as BillingPeriod,
-        startedAt: (row.started_at as string) ?? '',
-        expiresAt: (row.expires_at as string) ?? '',
-      };
+      if (!uid) continue;
+      if (!userRows[uid]) userRows[uid] = [];
+      userRows[uid].push(row);
+    }
+
+    // Chọn gói tốt nhất cho từng user
+    for (const uid of ids) {
+      const rows = userRows[uid];
+      if (!rows || rows.length === 0) continue;
+      const sub = selectBestSubscription(rows);
       result[uid] = resolveTier(sub, nowISO);
     }
     return result;
@@ -143,3 +183,85 @@ export async function getUsersTierMap(
  * 2026-07-10), hàm này thành mồ côi (0 caller). Gỡ để tránh dùng nhầm → double-grant
  * ngoài transaction xác nhận đơn. Cấp gói duy nhất qua confirm_payment.
  */
+
+/**
+ * Kích hoạt / gia hạn gói trả phí cho trường hợp Admin duyệt đơn thủ công (`/api/admin/orders`).
+ * Luôn cộng dồn thời hạn (`expires_at`) nếu user đang có gói còn hạn và giữ bậc cao nhất (`ultimate > premium`).
+ */
+export async function activateSubscription(
+  userId: string,
+  planOrTier: string,
+  durationDaysOrPeriod: number | BillingPeriod = 30,
+  _orderId?: string
+): Promise<boolean> {
+  try {
+    const admin = createAdminClient();
+    const nowMs = Date.now();
+    const nowISO = new Date(nowMs).toISOString();
+
+    const normalizedTier: PaidTier =
+      planOrTier.toLowerCase().includes('ultimate') ? 'ultimate' : 'premium';
+    const days =
+      typeof durationDaysOrPeriod === 'number' && durationDaysOrPeriod > 0
+        ? durationDaysOrPeriod
+        : durationDaysOrPeriod === 'yearly'
+        ? 365
+        : durationDaysOrPeriod === 'quarterly'
+        ? 90
+        : 30;
+    const period: BillingPeriod =
+      days >= 300 ? 'yearly' : days >= 80 ? 'quarterly' : 'monthly';
+
+    const { data: existingRows } = await admin
+      .from('user_subscriptions')
+      .select('tier, period, started_at, expires_at')
+      .eq('user_id', userId)
+      .gte('expires_at', nowISO);
+
+    const currentBest =
+      existingRows && existingRows.length > 0
+        ? selectBestSubscription(existingRows as Array<Record<string, unknown>>)
+        : null;
+
+    const baseMs =
+      currentBest && new Date(currentBest.expiresAt).getTime() > nowMs
+        ? new Date(currentBest.expiresAt).getTime()
+        : nowMs;
+    const newExpiresAt = new Date(baseMs + days * 86_400_000).toISOString();
+    const bestPaidTier: PaidTier | null = currentBest
+      ? currentBest.tier === 'pro'
+        ? 'premium'
+        : currentBest.tier
+      : null;
+    const effectiveTier: PaidTier =
+      bestPaidTier && (TIER_PRIORITY[bestPaidTier] ?? 0) > (TIER_PRIORITY[normalizedTier] ?? 0)
+        ? bestPaidTier
+        : normalizedTier;
+
+    const { error } = await admin.from('user_subscriptions').upsert(
+      {
+        user_id: userId,
+        tier: effectiveTier,
+        period,
+        started_at: currentBest?.startedAt || nowISO,
+        expires_at: newExpiresAt,
+        updated_at: nowISO,
+      },
+      { onConflict: 'user_id' }
+    );
+
+    if (error) {
+      await admin.from('user_subscriptions').insert({
+        user_id: userId,
+        tier: effectiveTier,
+        period,
+        started_at: nowISO,
+        expires_at: newExpiresAt,
+      });
+    }
+    return true;
+  } catch (err) {
+    console.error('activateSubscription lỗi:', err);
+    return false;
+  }
+}

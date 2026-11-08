@@ -20,21 +20,42 @@ export function BadgeUnlockWatcher() {
   const seenRef = useRef<Set<string> | null>(null);
 
   useEffect(() => {
+    const timeouts: NodeJS.Timeout[] = [];
+    const safeBadges = Array.isArray(unlockedBadges) ? unlockedBadges : [];
+
     // Lần đầu: ghi nhận baseline, không thông báo.
     if (seenRef.current === null) {
-      seenRef.current = new Set(unlockedBadges);
+      seenRef.current = new Set(safeBadges);
       return;
     }
     const seen = seenRef.current;
-    for (const id of unlockedBadges) {
+    const newBadges: string[] = [];
+    for (const id of safeBadges) {
       if (!seen.has(id)) {
         seen.add(id);
-        const badge = BADGE_CATALOG.find((b) => b.id === id);
-        if (badge) {
-          showToast(`${badge.icon} Mở khóa huy hiệu: ${badge.title}!`, 'success');
-        }
+        newBadges.push(id);
       }
     }
+
+    // Nếu vừa hydrate từ localStorage/server sau khi mount (seen ban đầu rỗng nhưng đổ về > 1 badge)
+    // thì chỉ cập nhật seen mà không bắn bão toast.
+    if (seen.size === newBadges.length && newBadges.length > 1) {
+      return;
+    }
+
+    newBadges.forEach((id, index) => {
+      const badge = BADGE_CATALOG.find((b) => b.id === id);
+      if (badge) {
+        const timer = setTimeout(() => {
+          showToast(`${badge.icon} Mở khóa huy hiệu: ${badge.title}!`, 'success');
+        }, index * 300);
+        timeouts.push(timer);
+      }
+    });
+
+    return () => {
+      timeouts.forEach(clearTimeout);
+    };
   }, [unlockedBadges, showToast]);
 
   return null;

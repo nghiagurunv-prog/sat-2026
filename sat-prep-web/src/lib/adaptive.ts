@@ -1,6 +1,9 @@
 import type { MasterySummary, Difficulty } from './mastery';
 import type { Subject } from './skill-taxonomy';
 
+// Tái xuất toàn bộ mô hình IRT 2PL, Fisher Information, EAP Estimation & Memory Decay
+export * from './irt';
+
 /**
  * ============================================================================
  *  ADAPTIVE ENGINE (IRT-lite) — implementation_plan.md §10.A.1, task #12
@@ -43,10 +46,14 @@ export interface AdaptiveRecommendation {
 export interface RecommendOptions {
   subject?: Subject;
   moduleType?: string;
+  /** Danh sách skillId vừa mới luyện tập gần đây (chống lặp kỹ năng gây chán - Anti-Skill-Fatigue) */
+  recentSkillIds?: string[];
 }
 
 /**
  * Đề xuất skill + độ khó kế tiếp nên luyện.
+ * Có cơ chế Recency Cooldown: kỹ năng vừa xuất hiện trong recentSkillIds sẽ chịu
+ * điểm phạt tạm thời khi xếp thứ tự để ưu tiên xoay vòng sang kỹ năng yếu khác.
  * Trả null nếu không có skill nào khớp bộ lọc.
  */
 export function recommendNext(
@@ -60,13 +67,27 @@ export function recommendNext(
 
   if (pool.length === 0) return null;
 
+  // Recency Cooldown (Anti-Skill-Fatigue): kỹ năng vừa luyện trong recentSkillIds
+  // bị phạt điểm tạm thời khi xếp hạng để ưu tiên xoay vòng sang kỹ năng yếu tiếp theo.
+  const recentList = opts.recentSkillIds ?? [];
+  const getCooldownPenalty = (skillId: string): number => {
+    const idx = recentList.indexOf(skillId);
+    if (idx === -1) return 0;
+    // Càng gần (index càng nhỏ) mức phạt càng cao, tối đa +50, tối thiểu +15
+    return Math.max(15, 50 - idx * 10);
+  };
+
   // Ưu tiên skill CHƯA thành thạo; nếu đã thạo hết thì cho ôn duy trì.
   const notMastered = pool.filter((s) => !s.mastered);
   // Sao chép trước khi sort để không mutate mảng của summary (tránh tác dụng phụ).
   const working = [...(notMastered.length > 0 ? notMastered : pool)];
 
-  // Yếu nhất trước (score thấp); cùng score thì ít luyện hơn trước (độ phủ).
-  working.sort((a, b) => a.score - b.score || a.attempts - b.attempts);
+  // Sắp xếp theo điểm hiệu dụng (score + cooldown penalty); cùng score thì ít luyện hơn trước (độ phủ).
+  working.sort((a, b) => {
+    const effA = a.score + getCooldownPenalty(a.id);
+    const effB = b.score + getCooldownPenalty(b.id);
+    return effA - effB || a.attempts - b.attempts;
+  });
   const pick = working[0];
 
   let reason: string;

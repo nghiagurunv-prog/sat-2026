@@ -5,7 +5,8 @@ import { SKILL_TREE } from '@/lib/skill-taxonomy';
 import { loadGates, saveGateResult } from '@/lib/gate-store';
 import { isGateEligible, evaluateGateResult, GATE_QUESTIONS } from '@/lib/gate-exam';
 import { DOMAIN_PREREQS } from '@/lib/skill-tree';
-import { countCorrectAmongIds } from '@/lib/issued-questions';
+import { countCorrectAmongIds, gradeAnswer } from '@/lib/issued-questions';
+import { matchesAnswer } from '@/lib/answer-match';
 import type { MasterySummary } from '@/lib/mastery';
 
 const VALID_DOMAINS = Object.keys(DOMAIN_PREREQS);
@@ -71,7 +72,10 @@ export async function GET(request: NextRequest) {
 
       if (res.ok) {
         const data = await res.json();
-        questions.push({ ...data, difficulty });
+        // 🔴 BẢO MẬT (Lỗ hổng #016/#017): Ẩn correct_choice, explanation, choice_analysis
+        // không gửi đáp án xuống client khi bắt đầu làm bài thi cổng.
+        const { correct_choice: _c, explanation: _e, choice_analysis: _ca, ...safeData } = data;
+        questions.push({ ...safeData, difficulty });
       }
     } catch (e) {
       console.error(`Gate exam: failed to generate question ${i + 1}`, e);
@@ -124,7 +128,31 @@ export async function POST(request: NextRequest) {
   if (!domainDef) {
     return NextResponse.json({ error: 'Domain not found in taxonomy' }, { status: 400 });
   }
-  const correctCount = await countCorrectAmongIds(user.id, questionIds, 'gate');
+  let correctCount = await countCorrectAmongIds(user.id, questionIds, 'gate');
+
+  // Khắc phục lỗ hổng #049: Chấm đúng câu hỏi tự điền SPR (phân số/số thập phân) qua matchesAnswer
+  if (Array.isArray(body?.answers) && body.answers.length > 0) {
+    let answersCorrect = 0;
+    for (const ans of body.answers) {
+      const userAns = ans.userAns ?? ans.answer;
+      const correctAns = ans.correctAns ?? ans.correct_choice;
+      if (ans.questionId && userAns !== undefined) {
+        const gradeRes = await gradeAnswer(ans.questionId, user.id, String(userAns));
+        if (gradeRes?.correct) {
+          answersCorrect++;
+        } else if (correctAns !== undefined && matchesAnswer(String(userAns ?? ''), String(correctAns ?? ''))) {
+          answersCorrect++;
+        }
+      } else if (userAns !== undefined && correctAns !== undefined) {
+        if (matchesAnswer(String(userAns ?? ''), String(correctAns ?? ''))) {
+          answersCorrect++;
+        }
+      }
+    }
+    if (answersCorrect > correctCount) {
+      correctCount = answersCorrect;
+    }
+  }
 
   // RE-CHECK eligibility server-side
   const [summary, gates] = await Promise.all([

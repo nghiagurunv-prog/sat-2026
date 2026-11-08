@@ -13,10 +13,15 @@
  * dùng component này — nó là pattern khác hẳn.
  */
 export function LoadingState({ message = 'Đang tải...' }: { message?: string }) {
+  const safeMessage = message || 'Đang tải...';
   return (
-    <div className="my-6 p-12 flex flex-col items-center justify-center bg-[#1b2533] rounded-xl border border-[#262730]">
-      <div className="text-4xl animate-spin mb-4">⚙️</div>
-      <div className="text-white font-bold text-center">{message}</div>
+    <div
+      role="status"
+      aria-live="polite"
+      className="my-6 p-12 flex flex-col items-center justify-center bg-[#1b2533] rounded-xl border border-[#262730]"
+    >
+      <div className="text-4xl animate-spin mb-4" aria-hidden="true">⚙️</div>
+      <div className="text-white font-bold text-center">{safeMessage}</div>
     </div>
   );
 }

@@ -12,14 +12,40 @@ import { useGamification } from '@/context/GamificationContext';
  * user hoàn tất — cố ý nhắc lại, nhưng vẫn cho tắt trong phiên. KHÔNG redirect
  * ép: degrade-graceful, tôn trọng lựa chọn của user.
  */
+const BANNER_SESSION_KEY = 'sat_diagnostic_banner_dismissed';
+
 export function DiagnosticBanner() {
   const { onboardingCompleted } = useGamification();
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return sessionStorage.getItem(BANNER_SESSION_KEY) === 'true';
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  });
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem(BANNER_SESSION_KEY, 'true');
+      } catch {
+        // bỏ qua lỗi storage
+      }
+    }
+  };
 
   if (onboardingCompleted || dismissed) return null;
 
   return (
-    <div className="relative bg-gradient-to-r from-indigo-900/60 to-blue-900/40 border border-indigo-500/40 rounded-xl p-5 flex items-center gap-4 shadow-lg animate-in fade-in slide-in-from-top-2 duration-500">
+    <aside
+      role="region"
+      aria-label="Gợi ý làm bài test xếp lớp đầu vào"
+      className="relative bg-gradient-to-r from-indigo-900/60 to-blue-900/40 border border-indigo-500/40 rounded-xl p-5 flex items-center gap-4 shadow-lg animate-in fade-in slide-in-from-top-2 duration-500"
+    >
       <div className="text-4xl shrink-0">🎯</div>
       <div className="flex-1 min-w-0">
         <h3 className="text-white font-black text-lg">Làm bài test xếp lớp (5 phút)</h3>
@@ -32,12 +58,12 @@ export function DiagnosticBanner() {
         Bắt đầu →
       </Link>
       <button
-        onClick={() => setDismissed(true)}
-        aria-label="Ẩn gợi ý"
+        onClick={handleDismiss}
+        aria-label="Ẩn gợi ý làm bài test"
         className="shrink-0 text-gray-400 hover:text-white text-xl leading-none px-1"
       >
         ×
       </button>
-    </div>
+    </aside>
   );
 }

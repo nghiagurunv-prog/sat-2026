@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
 import { isValidCodeFormat } from '@/lib/parent-share';
 import { resolveShareCode } from '@/lib/parent-share-store';
 import { buildParentReport, type ParentReport } from '@/lib/parent-report-store';
@@ -41,6 +41,8 @@ import { todayVN } from '@/lib/daily-snapshot-store';
 const MODEL = 'gpt-4o-mini';
 const MAX_TOKENS = 500;
 const TEMPERATURE = 0.7;
+// Giới hạn kích thước dữ liệu tóm tắt đầu vào gửi cho AI
+const MAX_INPUT_SUMMARY_LEN = 2500;
 
 /** Tóm tắt số liệu report thành chuỗi ngắn (dùng cho cả prompt lẫn hash cache). */
 function summarizeReport(report: ParentReport): string {
@@ -99,7 +101,16 @@ async function saveCachedComment(
 }
 
 export async function GET(request: NextRequest) {
-  const code = request.nextUrl.searchParams.get('code') ?? '';
+  // Rate-limit chuẩn hóa ban đầu qua getRateLimitKey
+  const initialRateKey = getRateLimitKey(request, 'mentor-comment');
+  const rlInitial = rateLimit(initialRateKey, 45, 60_000);
+  if (!rlInitial.allowed) {
+    return NextResponse.json({ error: 'Quá nhiều yêu cầu. Thử lại sau.', retryAfterMs: rlInitial.retryAfterMs }, { status: 429 });
+  }
+
+  const rawCode = request.nextUrl.searchParams.get('code') ?? '';
+  // Giới hạn độ dài chuỗi code đầu vào chống chuỗi dài bất thường
+  const code = rawCode.slice(0, 100).trim();
 
   if (!isValidCodeFormat(code)) {
     return NextResponse.json({ error: 'Mã không hợp lệ' }, { status: 404 });
@@ -123,6 +134,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Mã không tồn tại hoặc đã hết hạn' }, { status: 404 });
   }
 
+  // Rate-limit per-student qua getRateLimitKey
+  const studentRateKey = getRateLimitKey(request, 'mentor-comment', studentId);
+  const rlStudent = rateLimit(studentRateKey, 30, 60_000);
+  if (!rlStudent.allowed) {
+    return NextResponse.json({ error: 'Quá nhiều yêu cầu. Thử lại sau.', retryAfterMs: rlStudent.retryAfterMs }, { status: 429 });
+  }
+
   try {
     // GATE: chỉ gói Ultimate của CON mới có Mentor AI.
     const tier = await getUserTierAdmin(studentId);
@@ -131,7 +149,8 @@ export async function GET(request: NextRequest) {
     }
 
     const report = await buildParentReport(studentId);
-    const summary = summarizeReport(report);
+    // Giới hạn kích thước dữ liệu đầu vào trước khi gọi AI / hash cache
+    const summary = summarizeReport(report).slice(0, MAX_INPUT_SUMMARY_LEN);
 
     // Khóa cache: studentId + ngày VN + hash tóm tắt report (prefix tách namespace).
     const hash = crypto

@@ -21,30 +21,69 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
+function clearUserLocalCaches() {
+  if (typeof window === 'undefined') return;
+  try {
+    const prefixes = [
+      'sat_progress',
+      'sat_mistakes',
+      'sat_gamification',
+      'sat_exam_session',
+      'sat_study_plan',
+      'sat_Adaptive',
+      'sat_adaptive',
+      'sat_leitner',
+    ];
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && prefixes.some((p) => key.toLowerCase().startsWith(p.toLowerCase()))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // Ignore localStorage access errors
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
     const supabase = createClient();
 
     supabase.auth.getSession().then(({ data }) => {
+      if (!isMounted) return;
       setUser(data.session?.user ?? null);
       setIsLoading(false);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
+      if (event === 'SIGNED_OUT') {
+        clearUserLocalCaches();
+      }
       setUser(session?.user ?? null);
       setIsLoading(false);
     });
 
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {
     const supabase = createClient();
-    await supabase.auth.signOut();
-    setUser(null);
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      clearUserLocalCaches();
+      setUser(null);
+    }
   };
 
   return (

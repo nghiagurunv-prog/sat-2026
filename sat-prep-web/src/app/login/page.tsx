@@ -1,12 +1,13 @@
 'use client';
 
 import { Suspense, useState, useEffect } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 /** Chỉ nhận path nội bộ (bắt đầu '/' nhưng không '//') — chống open-redirect. */
 function safeNext(raw: string | null): string {
-  if (raw && raw.startsWith('/') && !raw.startsWith('//')) return raw;
+  if (raw && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\') && !raw.includes('://')) return raw;
   return '/';
 }
 
@@ -51,12 +52,18 @@ function LoginForm() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setError('Vui lòng nhập địa chỉ email.');
+      return;
+    }
     setLoading(true);
     setError(null);
     setMessage(null);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
 
     if (error) {
       setError(error.message);
@@ -69,8 +76,15 @@ function LoginForm() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setError(null);
     setMessage(null);
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setError('Vui lòng nhập địa chỉ email.');
+      return;
+    }
 
     if (password.length < 6) {
       setError('Mật khẩu cần tối thiểu 6 ký tự.');
@@ -83,7 +97,7 @@ function LoginForm() {
 
     setLoading(true);
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({ email: cleanEmail, password });
 
     if (error) {
       setError(error.message);
@@ -94,15 +108,17 @@ function LoginForm() {
   };
 
   const handleForgotPassword = async () => {
+    if (loading) return;
     setError(null);
     setMessage(null);
-    if (!email) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
       setError('Nhập email của bạn trước, rồi bấm "Quên mật khẩu".');
       return;
     }
     setLoading(true);
     const supabase = createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
     if (error) {
       setError(error.message);
     } else {
@@ -112,6 +128,7 @@ function LoginForm() {
   };
 
   const handleOAuth = async (provider: 'google' | 'facebook') => {
+    if (loading) return;
     setError(null);
     setMessage(null);
     setLoading(true);
@@ -135,20 +152,43 @@ function LoginForm() {
       {/* Halo vàng nền */}
       <div className="pointer-events-none absolute -top-40 left-1/2 h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-amber-500/10 blur-[120px]" />
 
-      <div className="relative w-full max-w-md rounded-2xl border border-amber-400/20 bg-slate-900/70 p-8 shadow-[0_10px_50px_-5px_rgba(0,0,0,0.7)] backdrop-blur">
-        <div className="mb-6 text-center">
-          <div className="mb-2 text-4xl">🎓</div>
-          <h2 className="bg-gradient-to-r from-yellow-300 to-amber-500 bg-clip-text text-xl font-extrabold uppercase tracking-wide text-transparent">
-            Viet Nam League Math Academy
-          </h2>
-          <p className="mt-1 text-sm text-slate-400">
-            {isLogin ? 'Đăng nhập để tiếp tục hành trình' : 'Tạo hồ sơ để lưu tiến trình của bạn'}
-          </p>
-          {/* Chữ ký thương hiệu — nhỏ, nằm dưới tên app */}
-          <div className="mt-3">
-            <div className="produced-by" style={{ fontSize: '9px', letterSpacing: '2px', marginBottom: '2px' }}>PRODUCED BY</div>
-            <div className="guru-name" style={{ fontSize: '26px', marginTop: '2px' }}>Nghia Guru</div>
+      <div className="relative w-full max-w-lg rounded-2xl border border-amber-400/20 bg-slate-900/80 p-6 sm:p-8 shadow-[0_10px_50px_-5px_rgba(0,0,0,0.7)] backdrop-blur">
+        <div className="mb-5 text-center">
+          <div className="mb-2 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/10 text-3xl shadow-[0_0_20px_rgba(245,158,11,0.2)]">
+            🎓
           </div>
+          <h1 className="bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 bg-clip-text text-xl sm:text-2xl font-black uppercase tracking-tight text-transparent">
+            SAT Guru 2026 — Luyện Thi Digital SAT Thực Chiến
+          </h1>
+          <p className="mt-1 text-xs sm:text-sm text-slate-400 font-medium">
+            {isLogin ? 'Đăng nhập để tiếp tục hành trình chinh phục 1500+' : 'Tạo hồ sơ để lưu tiến trình & nhận dự đoán điểm'}
+          </p>
+          {/* Chữ ký thương hiệu */}
+          <div className="mt-2.5 flex items-center justify-center gap-2 text-[10px] tracking-widest text-slate-400 uppercase">
+            <span>PRODUCED BY</span>
+            <span className="font-black text-amber-400 tracking-wider text-xs">NGHIA GURU</span>
+          </div>
+        </div>
+
+        {/* Dải Social Proof uy tín */}
+        <div className="mb-5 rounded-xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-yellow-500/5 to-amber-500/10 p-3 text-center text-xs leading-relaxed text-amber-200/90 shadow-sm">
+          🌟 Đồng hành cùng <strong className="font-bold text-amber-300">15.000+ sĩ tử</strong> chinh phục SAT 1400–1550+ xét tuyển <span className="font-semibold text-white">Ngoại Thương (FTU)</span>, <span className="font-semibold text-white">Kinh Tế Quốc Dân (NEU)</span>, <span className="font-semibold text-white">Bách Khoa (HUST)</span> & <span className="font-semibold text-white">Du học Mỹ</span>
+        </div>
+
+        {/* Nút Học Thử 3 Phút Không Cần Đăng Nhập */}
+        <div className="mb-5">
+          <Link
+            href="/"
+            className="group flex w-full items-center justify-between rounded-xl border border-emerald-400/40 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 px-4 py-3 text-sm font-black text-white shadow-[0_4px_20px_rgba(16,185,129,0.25)] transition-all hover:scale-[1.01] hover:border-emerald-300 hover:shadow-[0_4px_25px_rgba(16,185,129,0.4)]"
+          >
+            <span className="flex items-center gap-2">
+              <span className="text-lg">🚀</span>
+              <span>Học Thử 3 Phút Không Cần Đăng Nhập</span>
+            </span>
+            <span className="rounded-full bg-emerald-950/60 border border-emerald-300/40 px-2.5 py-0.5 text-[11px] font-bold text-emerald-200 group-hover:bg-emerald-950/80">
+              Miễn phí 100% →
+            </span>
+          </Link>
         </div>
 
         {/* Tabs */}

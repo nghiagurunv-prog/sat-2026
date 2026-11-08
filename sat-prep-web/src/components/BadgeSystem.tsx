@@ -14,6 +14,7 @@ const BADGES = BADGE_CATALOG;
 export function BadgeSystem() {
   const { unlockedBadges } = useGamification();
   const [activeTab, setActiveTab] = useState("Tu Vi");
+  const safeUnlockedBadges = Array.isArray(unlockedBadges) ? unlockedBadges : [];
   
   const tabs = [
     { id: "Tu Vi", label: "🎖️ Huy Hiệu Tu Vi" },
@@ -47,7 +48,7 @@ export function BadgeSystem() {
       {/* Grid of Badges */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {BADGES.filter(b => b.category === activeTab).map((badge, idx) => {
-          const isUnlocked = unlockedBadges.includes(badge.id);
+          const isUnlocked = safeUnlockedBadges.includes(badge.id);
           if (isUnlocked) {
             return (
               <div key={idx} className="flex flex-col items-center">

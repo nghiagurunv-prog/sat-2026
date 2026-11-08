@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { gradeAnswer, getGradedResult, issueQuestion } from '@/lib/issued-questions';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
 import { loadEconomy, saveEconomy, ensureEconomyRow, tryIncrementEconomyAtomic } from '@/lib/economy-store';
 import { applyExamRewardFromDifficulties, MAX_EXAM_QUESTIONS, type Difficulty, type EconomyState } from '@/lib/economy';
 import { getUserTier } from '@/lib/subscription-store';
@@ -10,6 +10,17 @@ import { generateModule } from '@/lib/exam-generator';
 import { determineAdaptivePath } from '@/lib/exam-scoring';
 import { isE2E, e2eModule, e2eGrade, E2E_ECONOMY } from '@/lib/e2e';
 import { bumpDailyActivity } from '@/lib/daily-activity-store';
+import { matchesAnswer } from '@/lib/answer-match';
+import { createClient } from '@supabase/supabase-js';
+
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
 /**
  * NỘP 1 MODULE THI ADAPTIVE — server chấm + thưởng, và (nếu Module 1) sinh Module 2.
@@ -37,7 +48,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
 
-    const rl = rateLimit(`exam-session-submit:${user.id}`, 20, 60_000);
+    const rl = rateLimit(getRateLimitKey(request, 'exam-session-submit', user.id), 20, 60_000);
     if (!rl.allowed) {
       return NextResponse.json({ error: 'Quá nhiều request. Thử lại sau.', retryAfterMs: rl.retryAfterMs }, { status: 429 });
     }
@@ -46,6 +57,11 @@ export async function POST(request: NextRequest) {
     const section = body.section === 'math' ? 'math' : body.section === 'rw' ? 'rw' : null;
     const moduleNum = body.moduleNum === 2 ? 2 : body.moduleNum === 1 ? 1 : null;
     const rawAnswers = Array.isArray(body?.answers) ? body.answers : [];
+    const elapsedSeconds = typeof body?.elapsedSeconds === 'number' && Number.isFinite(body.elapsedSeconds)
+      ? Math.max(0, Math.floor(body.elapsedSeconds))
+      : null;
+    const maxAllowedSeconds = (section === 'math' ? 35 : 32) * 60 + 60; // +60s network grace
+    const isOvertime = elapsedSeconds !== null && elapsedSeconds > maxAllowedSeconds;
 
     if (!section || !moduleNum) {
       return NextResponse.json({ error: 'section/moduleNum không hợp lệ' }, { status: 400 });
@@ -55,9 +71,21 @@ export async function POST(request: NextRequest) {
     // tất định; Module 2 → kết thúc section. Đủ để drive luồng UI tới bảng điểm.
     if (isE2E()) {
       const correctE2E = e2eGrade(rawAnswers);
+      const gradedItems = rawAnswers.map((a: { questionId?: string; answer?: string }) => {
+        const ansStr = String(a?.answer ?? '').trim();
+        const isCorrect = ansStr.startsWith('A') || matchesAnswer(ansStr, 'A. Option A');
+        return {
+          questionId: String(a?.questionId ?? ''),
+          correct: isCorrect,
+          correctChoice: 'A. Option A',
+          explanation: 'Lời giải chuẩn Digital SAT (E2E): Đáp án A thỏa mãn đầy đủ dữ kiện đề bài.',
+          skillId: section === 'rw' ? 'rw_info_central_ideas' : 'math_algebra_linear_eq_1var',
+        };
+      });
       if (moduleNum === 1) {
         return NextResponse.json({
           moduleResult: { correct: correctE2E, total: rawAnswers.length },
+          gradedItems,
           adaptivePath: 'hard',
           granted: { coins: 0, xp: 0 },
           economy: E2E_ECONOMY,
@@ -66,6 +94,7 @@ export async function POST(request: NextRequest) {
       }
       return NextResponse.json({
         moduleResult: { correct: correctE2E, total: rawAnswers.length },
+        gradedItems,
         granted: { coins: 0, xp: 0 },
         economy: E2E_ECONOMY,
       });
@@ -106,6 +135,13 @@ export async function POST(request: NextRequest) {
     // getGradedResult non-null (đã chấm, retry) đều là câu sở hữu hợp lệ → đếm.
     // Câu ID lạ/không sở hữu → cả 2 null → KHÔNG đếm (client không thổi được mẫu số).
     let gradedTotal = 0;
+    const gradedItems: Array<{
+      questionId: string;
+      correct: boolean;
+      correctChoice: string;
+      explanation: string | null;
+      skillId: string | null;
+    }> = [];
 
     for (const { questionId, answer } of uniqueAnswers) {
       const result = await gradeAnswer(questionId, user.id, answer);
@@ -119,6 +155,13 @@ export async function POST(request: NextRequest) {
             : 'Medium';
           correctDifficulties.push(d);
         }
+        gradedItems.push({
+          questionId,
+          correct: result.correct,
+          correctChoice: result.correctChoice,
+          explanation: result.explanation ?? null,
+          skillId: result.skillId ?? null,
+        });
         continue;
       }
       // gradeAnswer null: câu ĐÃ chấm trước (retry) / lạ / không sở hữu. Nếu là câu
@@ -127,6 +170,13 @@ export async function POST(request: NextRequest) {
       if (prior) {
         gradedTotal++;
         if (prior.correct) correct++;
+        gradedItems.push({
+          questionId,
+          correct: prior.correct,
+          correctChoice: prior.correctChoice ?? '',
+          explanation: prior.explanation ?? null,
+          skillId: prior.skillId ?? null,
+        });
       }
     }
 
@@ -172,6 +222,7 @@ export async function POST(request: NextRequest) {
         // idempotent (CAS) nên client KHÔNG được retry — đây là đường thoát an toàn.
         return NextResponse.json({
           moduleResult: { correct, total: gradedTotal },
+          gradedItems,
           adaptivePath,
           granted,
           economy: economyOut,
@@ -182,7 +233,10 @@ export async function POST(request: NextRequest) {
 
       const safeQuestions = await Promise.all(
         generated.questions.map(async (q) => {
-          const questionId = await issueQuestion(user.id, q.correct_choice, q.skillId, q.difficulty, { src: 'exam' });
+          const questionId = await issueQuestion(user.id, q.correct_choice, q.skillId, q.difficulty, {
+            src: 'exam',
+            explanation: q.explanation,
+          });
           const { correct_choice: _c, explanation: _e, difficulty: _d, ...safe } = q;
           return { ...safe, questionId };
         })
@@ -190,6 +244,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         moduleResult: { correct, total: gradedTotal },
+        gradedItems,
         adaptivePath,
         granted,
         economy: economyOut,
@@ -212,8 +267,10 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({
       moduleResult: { correct, total: gradedTotal },
+      gradedItems,
       granted,
       economy: economyOut,
+      isOvertime,
     });
   } catch (error) {
     console.error('exam-session submit error:', error);

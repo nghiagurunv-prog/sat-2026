@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from 'react';
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -23,6 +23,7 @@ export function useToast(): ToastContextValue {
 }
 
 let nextId = 0;
+const MAX_TOASTS = 5;
 
 // Cùng bảng màu với banner kết quả sẵn có trong app (xanh đúng / đỏ sai / xanh dương info).
 const STYLES: Record<ToastType, string> = {
@@ -33,14 +34,51 @@ const STYLES: Record<ToastType, string> = {
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const timersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Dọn dẹp toàn bộ timer khi unmount để chống rò rỉ bộ nhớ
+  useEffect(() => {
+    const currentTimers = timersRef.current;
+    return () => {
+      currentTimers.forEach((timer) => clearTimeout(timer));
+      currentTimers.clear();
+    };
+  }, []);
+
+  const removeToast = useCallback((id: number) => {
+    const timer = timersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
     const id = nextId++;
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
+
+    setToasts((prev) => {
+      const updated = [...prev, { id, message, type }];
+      if (updated.length > MAX_TOASTS) {
+        // Hủy timer của những toast cũ bị đẩy ra khỏi hàng đợi
+        const pruned = updated.slice(0, updated.length - MAX_TOASTS);
+        pruned.forEach((t) => {
+          const tTimer = timersRef.current.get(t.id);
+          if (tTimer) {
+            clearTimeout(tTimer);
+            timersRef.current.delete(t.id);
+          }
+        });
+        return updated.slice(-MAX_TOASTS);
+      }
+      return updated;
+    });
+
+    const timer = setTimeout(() => {
+      removeToast(id);
     }, 3500);
-  }, []);
+    timersRef.current.set(id, timer);
+  }, [removeToast]);
 
   return (
     <ToastContext.Provider value={{ showToast }}>

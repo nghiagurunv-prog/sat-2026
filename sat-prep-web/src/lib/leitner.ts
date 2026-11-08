@@ -46,11 +46,19 @@ export function adaptiveInterval(box: number, consecutiveCorrect = 0): number {
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 /**
- * Ngày hôm nay theo giờ VN, dạng YYYY-MM-DD (chuẩn so sánh chuỗi).
+ * Ngày hôm nay theo giờ VN UTC+7 dạng YYYY-MM-DD (Fix #026 - chuẩn hóa ngày VN).
  * `nowMs` tiêm được để unit-test boundary tất định (mặc định Date.now()).
  */
+export function todayISO(nowMs: number = Date.now()): string {
+  return new Date(nowMs + 7 * 3600_000).toISOString().slice(0, 10);
+}
+
+/**
+ * Ngày hôm nay theo giờ VN, dạng YYYY-MM-DD (chuẩn so sánh chuỗi).
+ * Giữ nguyên alias tương thích ngược với callers hiện có.
+ */
 export function todayStr(nowMs: number = Date.now()): string {
-  return new Date(nowMs + VN_OFFSET_MS).toISOString().split('T')[0];
+  return todayISO(nowMs);
 }
 
 /** Box mới sau khi ôn: nhớ → lên box (tối đa MAX_BOX); quên → về box 1. */
@@ -79,7 +87,15 @@ export function nextReview(
   return d.toISOString().split('T')[0];
 }
 
-/** Một mục có đến hạn ôn chưa (next_review <= hôm nay VN, hoặc chưa từng đặt lịch). */
-export function isDue(nextReviewDate: string | undefined, today: string = todayStr()): boolean {
-  return !nextReviewDate || nextReviewDate <= today;
+/**
+ * Một mục có đến hạn ôn chưa (next_review <= hôm nay VN, hoặc chưa từng đặt lịch).
+ * Chuẩn hóa cả nextReviewDate.slice(0, 10) và d.slice(0, 10) trước khi so sánh <= (Fix #026)
+ * để nếu nextReviewDate lưu full ISO timestamp (vd: 2026-11-06T14:20:00.000Z)
+ * thì vẫn khớp chính xác trong cùng ngày YYYY-MM-DD.
+ */
+export function isDue(nextReviewDate: string | undefined, today: string = todayISO()): boolean {
+  if (!nextReviewDate) return true;
+  const reviewDate = nextReviewDate.slice(0, 10);
+  const targetDate = today.slice(0, 10);
+  return reviewDate <= targetDate;
 }

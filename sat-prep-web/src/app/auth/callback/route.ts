@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 
 /** Chỉ nhận path nội bộ (bắt đầu '/' nhưng không '//') — chống open-redirect. */
 function safeNext(raw: string | null): string {
-  if (raw && raw.startsWith('/') && !raw.startsWith('//')) return raw
+  if (raw && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\') && !raw.includes('://')) return raw
   return '/'
 }
 
@@ -21,13 +21,29 @@ export async function GET(request: Request) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      // Sau proxy/load-balancer (Vercel) origin có thể sai → ưu tiên x-forwarded-host.
+      // Sau proxy/load-balancer (Vercel) origin có thể sai → ưu tiên x-forwarded-host hợp lệ.
       const forwardedHost = request.headers.get('x-forwarded-host')
       const isLocalEnv = process.env.NODE_ENV === 'development'
       if (isLocalEnv) {
         return NextResponse.redirect(`${origin}${next}`)
       } else if (forwardedHost) {
-        return NextResponse.redirect(`https://${forwardedHost}${next}`)
+        let allowedHost: string | null = null
+        if (process.env.NEXT_PUBLIC_SITE_URL) {
+          try {
+            allowedHost = new URL(process.env.NEXT_PUBLIC_SITE_URL).host
+          } catch {
+            // ignore malformed NEXT_PUBLIC_SITE_URL
+          }
+        }
+        let originHost: string | null = null
+        try {
+          originHost = new URL(origin).host
+        } catch {
+          // ignore malformed origin
+        }
+        if ((allowedHost && forwardedHost === allowedHost) || (originHost && forwardedHost === originHost)) {
+          return NextResponse.redirect(`https://${forwardedHost}${next}`)
+        }
       }
       return NextResponse.redirect(`${origin}${next}`)
     }

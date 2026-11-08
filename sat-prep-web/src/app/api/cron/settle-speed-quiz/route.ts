@@ -24,12 +24,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    console.error('settle-speed-quiz cron: thiếu env CRON_SECRET → từ chối (fail-closed).');
-    return NextResponse.json({ error: 'CRON_SECRET chưa cấu hình' }, { status: 500 });
-  }
   const auth = request.headers.get('authorization');
-  if (auth !== `Bearer ${secret}`) {
+  if (!secret || auth !== `Bearer ${secret}`) {
+    console.error('settle-speed-quiz cron: thiếu env CRON_SECRET hoặc authorization không khớp → từ chối 401 (fail-closed).');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

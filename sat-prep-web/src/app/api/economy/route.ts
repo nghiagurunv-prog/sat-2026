@@ -4,7 +4,7 @@ import { loadEconomy, saveEconomy, loadPvpState, savePvpState, tryConsumePvpFigh
 import { getMasterySummary } from '@/lib/mastery';
 import { computeStats, computeDomainStats } from '@/lib/stats';
 import { PVP_OPPONENTS, getPvpRankDomain } from '@/helpers/pvp';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
 import {
   applyQuestReward,
   applySpend,
@@ -76,7 +76,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Bạn cần đăng nhập để dùng ví học tập.' }, { status: 401 });
     }
 
-    const rl = rateLimit(`economy:${user.id}`, 20, 60_000);
+    const rl = rateLimit(getRateLimitKey(req, 'economy-post', user.id), 20, 60_000);
     if (!rl.allowed) {
       return NextResponse.json(
         { success: false, error: 'Quá nhiều request. Thử lại sau.', retryAfterMs: rl.retryAfterMs },
@@ -329,7 +329,11 @@ export async function POST(req: Request) {
         const item: SpendItemInfo | null = SPENDABLE_ITEMS[itemId] ?? cosmeticSellable;
         opts = { userTier, item, itemKnown: item !== null };
       }
-      const result = applySpend(state, body.amount, itemId, opts);
+      const rawAmount = Number(body.amount);
+      if (!Number.isFinite(rawAmount) || rawAmount < 0) {
+        return NextResponse.json({ success: false, error: 'Số xu không hợp lệ.' }, { status: 400 });
+      }
+      const result = applySpend(state, Math.floor(rawAmount), itemId, opts);
       if (!result.ok) {
         return NextResponse.json({ success: false, error: result.error }, { status: 400 });
       }

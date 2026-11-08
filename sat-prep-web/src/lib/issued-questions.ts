@@ -142,18 +142,29 @@ export async function gradeAnswer(
 export async function getGradedResult(
   questionId: string,
   userId: string
-): Promise<{ correct: boolean } | null> {
+): Promise<{
+  correct: boolean;
+  correctChoice?: string;
+  explanation?: string | null;
+  skillId?: string | null;
+} | null> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from('issued_questions')
-    .select('user_id, answered, was_correct')
+    .select('user_id, answered, was_correct, correct_choice, skill_id, context')
     .eq('id', questionId)
     .single();
 
   if (error || !data) return null;
   if (data.user_id !== userId) return null;
   if (!data.answered) return null; // chưa chấm → không có điểm đã lưu
-  return { correct: !!data.was_correct };
+  const ctx = decodeContext(data.context ?? null);
+  return {
+    correct: !!data.was_correct,
+    correctChoice: data.correct_choice ?? '',
+    explanation: ctx.exp ?? null,
+    skillId: data.skill_id ?? null,
+  };
 }
 
 export async function countAnsweredQuestionsBySource(

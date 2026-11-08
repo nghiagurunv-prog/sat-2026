@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useToast } from '@/context/ToastContext';
 import { CorePracticeUI, type PracticeQuestion } from '@/components/CorePracticeUI';
@@ -11,6 +11,9 @@ import { ALL_SKILLS } from '@/lib/skill-taxonomy';
  * Quyền lợi ULTIMATE. Clone luồng Tower: server chọn skill + độ khó theo mastery
  * thật rồi sinh câu qua /api/grind/question → CorePracticeUI ghi mastery đúng skill
  * qua /api/grade (giữ ROOT A, không chấm/faucet ở client).
+ *
+ * POINT 68: Thẻ Tổng kết Mini sau mỗi 5 câu luyện tập (Grind Session Summary Card)
+ * + Modal chúc mừng cột mốc 5 câu (5, 10, 15...) kèm nút "Tiếp tục 5 câu nữa" hoặc "Đổi kỹ năng".
  */
 
 const MASTERED_THRESHOLD = 80;
@@ -39,14 +42,43 @@ export default function GrindPage() {
   const [activeSkillId, setActiveSkillId] = useState<string | null>(null);
   const [mastery, setMastery] = useState<MasterySkill[] | null>(null);
 
+  // POINT 68: Session Tracking State
+  const [sessionCount, setSessionCount] = useState(0);
+  const [sessionCorrect, setSessionCorrect] = useState(0);
+  const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
+  const [initialSkillScore, setInitialSkillScore] = useState<number | null>(null);
+  const [showMilestoneModal, setShowMilestoneModal] = useState(false);
+
+  // Bảo vệ unmount / chống rò rỉ bộ nhớ (#058)
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Deep-link hỗ trợ ?skillId=... từ Journey và Skill Tree
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const sid = params.get('skillId');
+      if (sid) {
+        setChosenSkill(sid);
+      }
+    }
+  }, []);
+
   const activeSkill = mastery && activeSkillId ? mastery.find((s) => s.id === activeSkillId) ?? null : null;
 
   const loadMastery = useCallback(async () => {
     try {
       const res = await fetch('/api/mastery');
-      if (res.ok) {
+      if (res.ok && isMountedRef.current) {
         const data = await res.json();
-        setMastery(data.skills ?? []);
+        if (isMountedRef.current) {
+          setMastery(data.skills ?? []);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -58,9 +90,11 @@ export default function GrindPage() {
     (async () => {
       try {
         const res = await fetch('/api/mastery');
-        if (res.ok && !cancelled) {
+        if (res.ok && !cancelled && isMountedRef.current) {
           const data = await res.json();
-          setMastery(data.skills ?? []);
+          if (!cancelled && isMountedRef.current) {
+            setMastery(data.skills ?? []);
+          }
         }
       } catch (e) {
         console.error(e);
@@ -70,11 +104,16 @@ export default function GrindPage() {
   }, []);
 
   const generateQuestion = async () => {
+    // Chống bấm đúp (double-submit / spam) (#073)
+    if (isLoading) return;
+
     setIsLoading(true);
     setQuestionData(null);
     try {
       const qs = chosenSkill ? `?skillId=${encodeURIComponent(chosenSkill)}` : '';
       const res = await fetch(`/api/grind/question${qs}`);
+
+      if (!isMountedRef.current) return;
 
       if (res.status === 403) {
         setLocked(true);
@@ -85,23 +124,55 @@ export default function GrindPage() {
 
       if (res.ok) {
         const data = await res.json();
+        if (!isMountedRef.current) return;
         setQuestionData(data);
         setActiveSkillId(data.skillId ?? null);
+        if (initialSkillScore === null && data.skillId && mastery) {
+          const found = mastery.find(m => m.id === data.skillId);
+          if (found) setInitialSkillScore(found.score);
+        }
       } else {
         const err = await res.json().catch(() => ({}));
+        if (!isMountedRef.current) return;
         showToast(err?.error ?? 'Thất bại khi sinh câu khổ luyện (API Error).', 'error');
         setIsPlaying(false);
       }
     } catch (e) {
+      if (!isMountedRef.current) return;
       console.error(e);
       setIsPlaying(false);
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
-    setIsLoading(false);
   };
 
   const startGrind = () => {
+    if (isLoading) return;
     setIsPlaying(true);
+    setSessionCount(0);
+    setSessionCorrect(0);
+    setSessionStartTime(Date.now());
+    setInitialSkillScore(null);
+    setShowMilestoneModal(false);
     generateQuestion();
+  };
+
+  // Callback khi submit câu hỏi (Point 68)
+  const handleQuestionSubmitted = (res?: any) => {
+    const isCorrect = res?.isCorrect ?? res?.correct ?? true;
+    if (isCorrect) {
+      setSessionCorrect(prev => prev + 1);
+    }
+    setSessionCount(prev => {
+      const next = prev + 1;
+      if (next > 0 && next % 5 === 0) {
+        setShowMilestoneModal(true);
+      }
+      return next;
+    });
+    loadMastery();
   };
 
   // Upsell khi không phải Ultimate.
@@ -125,7 +196,10 @@ export default function GrindPage() {
     );
   }
 
-  const pct = activeSkill ? Math.min(100, Math.round((activeSkill.score / MASTERED_THRESHOLD) * 100)) : 0;
+  // Khắc phục lỗ hổng #065: bảo vệ các phép tính tỷ lệ/thanh phần trăm khỏi chia cho 0 hoặc NaN
+  const safeThreshold = MASTERED_THRESHOLD > 0 ? MASTERED_THRESHOLD : 80;
+  const rawScore = Number(activeSkill?.score) || 0;
+  const pct = activeSkill ? Math.max(0, Math.min(100, Math.round((Math.max(0, rawScore) / safeThreshold) * 100))) : 0;
   const isMastered = !!activeSkill?.mastered;
   // Gợi ý skill kế tiếp (yếu nhất chưa thành thạo, khác skill hiện tại).
   const nextSuggestion = mastery
@@ -133,6 +207,16 @@ export default function GrindPage() {
         .filter((s) => !s.mastered && s.id !== activeSkillId)
         .sort((a, b) => a.score - b.score || a.attempts - b.attempts)[0] ?? null
     : null;
+
+  // Tính toán chỉ số thống kê phiên luyện (Point 68) — An toàn tuyệt đối không bao giờ NaN% (#065)
+  const safeSessionCount = Math.max(0, sessionCount);
+  const safeSessionCorrect = Math.max(0, Math.min(safeSessionCount, sessionCorrect));
+  const accuracyPct = safeSessionCount > 0 ? Math.max(0, Math.min(100, Math.round((safeSessionCorrect / safeSessionCount) * 100))) : 100;
+  const elapsedSec = sessionStartTime ? Math.max(1, Math.round((Date.now() - sessionStartTime) / 1000)) : 1;
+  const avgSecPerQuestion = safeSessionCount > 0 ? Math.max(0, Math.round(elapsedSec / safeSessionCount)) : 0;
+  const masteryGain = activeSkill && initialSkillScore !== null
+    ? Math.max(0, Math.min(100, Math.round(activeSkill.score - initialSkillScore)))
+    : 0;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
@@ -170,9 +254,12 @@ export default function GrindPage() {
 
           <button
             onClick={startGrind}
-            className="bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-amber-950 font-black text-xl px-12 py-4 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-transform hover:scale-105"
+            disabled={isLoading}
+            className={`bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-amber-950 font-black text-xl px-12 py-4 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-transform ${
+              isLoading ? 'opacity-60 cursor-not-allowed' : 'hover:scale-105'
+            }`}
           >
-            BẮT ĐẦU KHỔ LUYỆN
+            {isLoading ? 'ĐANG TẢI...' : 'BẮT ĐẦU KHỔ LUYỆN'}
           </button>
         </div>
       )}
@@ -191,7 +278,7 @@ export default function GrindPage() {
                   onClick={() => { setIsPlaying(false); setQuestionData(null); loadMastery(); }}
                   className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition-colors whitespace-nowrap"
                 >
-                  Thoát
+                  Thoát phiên
                 </button>
               </div>
               <div className="w-full bg-[#0e1117] rounded-full h-4 overflow-hidden border border-[#334155]">
@@ -206,6 +293,50 @@ export default function GrindPage() {
             </div>
           )}
 
+          {/* =========================================================================
+              POINT 68: THẺ TỔNG KẾT MINI PHIÊN LUYỆN (GRIND SESSION SUMMARY CARD)
+              ========================================================================= */}
+          <div className="bg-[#131b26] border border-amber-500/30 rounded-xl p-4 shadow-md flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">⚡</span>
+              <div>
+                <span className="text-xs text-amber-400 font-bold uppercase tracking-wider">Phiên Khổ Luyện Hiện Tại</span>
+                <div className="text-sm text-gray-200 font-medium">
+                  Đã hoàn thành <strong className="text-amber-300 font-bold">{sessionCount}</strong> câu
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 md:gap-6 text-center">
+              <div className="bg-[#0b1017] px-3 py-1.5 rounded-lg border border-gray-800">
+                <div className="text-[11px] text-gray-400">Độ chính xác</div>
+                <div className={`text-sm font-bold ${accuracyPct >= 80 ? 'text-emerald-400' : accuracyPct >= 60 ? 'text-amber-400' : 'text-red-400'}`}>
+                  {accuracyPct}%
+                </div>
+              </div>
+
+              <div className="bg-[#0b1017] px-3 py-1.5 rounded-lg border border-gray-800">
+                <div className="text-[11px] text-gray-400">Tốc độ tb</div>
+                <div className="text-sm font-bold text-sky-400">
+                  {avgSecPerQuestion > 0 ? `${avgSecPerQuestion}s/câu` : '--'}
+                </div>
+              </div>
+
+              <div className="bg-[#0b1017] px-3 py-1.5 rounded-lg border border-gray-800">
+                <div className="text-[11px] text-gray-400">Mastery tăng</div>
+                <div className="text-sm font-bold text-emerald-400">
+                  +{masteryGain}%
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">
+                Cột mốc kế tiếp: <strong className="text-amber-400">{Math.ceil((sessionCount + 1) / 5) * 5} câu</strong>
+              </span>
+            </div>
+          </div>
+
           {/* Ăn mừng khi đạt mastered */}
           {isMastered && (
             <div className="text-center p-8 bg-[#022c22] rounded-xl border-2 border-[#10b981] shadow-[0_0_30px_rgba(16,185,129,0.25)]">
@@ -214,10 +345,18 @@ export default function GrindPage() {
               <p className="text-gray-200 mb-6">Bạn đã làm chủ kỹ năng này. Chuyển sang mục tiêu kế tiếp nhé!</p>
               {nextSuggestion ? (
                 <button
-                  onClick={() => { setChosenSkill(nextSuggestion.id); setActiveSkillId(null); generateQuestion(); }}
-                  className="bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-amber-950 font-black px-8 py-3 rounded-full transition-transform hover:scale-105"
+                  onClick={() => {
+                    if (isLoading) return;
+                    setChosenSkill(nextSuggestion.id);
+                    setActiveSkillId(null);
+                    generateQuestion();
+                  }}
+                  disabled={isLoading}
+                  className={`bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-amber-950 font-black px-8 py-3 rounded-full transition-transform ${
+                    isLoading ? 'opacity-60 cursor-not-allowed' : 'hover:scale-105'
+                  }`}
                 >
-                  Nhồi tiếp: {nextSuggestion.label}
+                  {isLoading ? 'Đang chuẩn bị...' : `Nhồi tiếp: ${nextSuggestion.label}`}
                 </button>
               ) : (
                 <p className="text-emerald-300 font-bold">Mọi kỹ năng đã thành thạo — quá đỉnh! 🎉</p>
@@ -230,9 +369,75 @@ export default function GrindPage() {
               <CorePracticeUI
                 questionData={questionData as PracticeQuestion}
                 isLoading={isLoading}
-                onSubmitted={loadMastery}
+                onSubmitted={handleQuestionSubmitted}
                 onNext={generateQuestion}
               />
+            </div>
+          )}
+
+          {/* =========================================================================
+              POINT 68: MODAL CHÚC MỪNG CỘT MỐC SAU MỖI 5 CÂU (5, 10, 15...)
+              ========================================================================= */}
+          {showMilestoneModal && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-[#1b2533] border-2 border-amber-500 rounded-2xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-300">
+                <div className="text-center">
+                  <div className="text-5xl mb-3">🔥</div>
+                  <span className="text-xs font-bold text-amber-400 bg-amber-950/80 border border-amber-600/40 px-3 py-1 rounded-full uppercase">
+                    Cột Mốc {sessionCount} Câu Khổ Luyện
+                  </span>
+                  <h3 className="text-2xl font-black text-white mt-3 mb-2">
+                    Nỗ Lực Tuyệt Vời!
+                  </h3>
+                  <p className="text-sm text-gray-300 mb-6">
+                    Bạn vừa hoàn thành thêm một chu kỳ 5 câu hỏi nhồi sâu. Đây là nhịp tập trung tối ưu để não bộ ghi nhớ kiến thức dài hạn.
+                  </p>
+
+                  {/* Summary Box */}
+                  <div className="grid grid-cols-2 gap-3 mb-6 bg-[#0e1117] p-4 rounded-xl border border-gray-800 text-left">
+                    <div>
+                      <div className="text-xs text-gray-400">Số câu phiên này:</div>
+                      <div className="text-lg font-extrabold text-amber-300">{sessionCount} câu</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-400">Độ chính xác:</div>
+                      <div className="text-lg font-extrabold text-emerald-400">{accuracyPct}%</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-400">Thời gian trung bình:</div>
+                      <div className="text-lg font-extrabold text-sky-400">{avgSecPerQuestion}s / câu</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-400">Tiến độ Mastery:</div>
+                      <div className="text-lg font-extrabold text-purple-400">+{masteryGain}%</div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      onClick={() => {
+                        setShowMilestoneModal(false);
+                        generateQuestion();
+                      }}
+                      className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-amber-950 font-black text-sm shadow-lg transition-all"
+                    >
+                      ⚡ Tiếp tục 5 câu nữa
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowMilestoneModal(false);
+                        setIsPlaying(false);
+                        setQuestionData(null);
+                        loadMastery();
+                      }}
+                      className="py-3 px-4 rounded-xl bg-[#2a3649] hover:bg-[#35445c] text-gray-200 font-bold text-sm border border-gray-600 transition-all"
+                    >
+                      🔄 Đổi kỹ năng
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </>

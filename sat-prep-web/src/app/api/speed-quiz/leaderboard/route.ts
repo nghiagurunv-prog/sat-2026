@@ -20,6 +20,36 @@ import type { SeasonCycle } from '@/lib/season';
 const TOP_N = 50;
 const VALID_CYCLES: SeasonCycle[] = ['day', 'week', 'month', 'year'];
 
+// Helper bảo vệ PII: Che email nếu nickname/displayName/name chứa ký tự '@'
+function maskEmailOrName(str?: string | null): string {
+  if (!str) return 'Học viên SAT';
+  const trimmed = str.trim();
+  if (trimmed.includes('@')) {
+    const localPart = trimmed.split('@')[0];
+    return localPart.length <= 2 ? `${localPart}***` : `${localPart.slice(0, 3)}***`;
+  }
+  return trimmed;
+}
+
+// Helper loại bỏ trường email nhạy cảm khỏi bảng xếp hạng công khai (#027)
+function sanitizeLeaderboardEntry<T extends Record<string, any>>(entry: T): T {
+  if (!entry || typeof entry !== 'object') return entry;
+  const { email: _removedEmail, ...rest } = entry;
+  const sanitized: Record<string, any> = { ...rest };
+
+  if (typeof sanitized.nickname === 'string') {
+    sanitized.nickname = maskEmailOrName(sanitized.nickname);
+  }
+  if (typeof sanitized.name === 'string') {
+    sanitized.name = maskEmailOrName(sanitized.name);
+  }
+  if (typeof sanitized.displayName === 'string') {
+    sanitized.displayName = maskEmailOrName(sanitized.displayName);
+  }
+
+  return sanitized as T;
+}
+
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
 
@@ -39,7 +69,14 @@ export async function GET(request: NextRequest) {
 
   try {
     const view = await buildSpeedQuizLeaderboard(user.id, cycleParam as SeasonCycle, TOP_N, new Date(), bracket);
-    return NextResponse.json(view);
+    const sanitizedTop = Array.isArray(view.top) ? view.top.map(sanitizeLeaderboardEntry) : [];
+    const sanitizedMe = view.me ? sanitizeLeaderboardEntry(view.me) : null;
+
+    return NextResponse.json({
+      ...view,
+      top: sanitizedTop,
+      me: sanitizedMe,
+    });
   } catch (error) {
     console.error('Lỗi speed-quiz leaderboard:', error);
     return NextResponse.json({ error: 'Lỗi hệ thống' }, { status: 500 });

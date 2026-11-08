@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { getMasterySummary } from '@/lib/mastery';
 import { pickSpeedQuizSkill } from '@/lib/adaptive';
 import { tagQuestion } from '@/lib/speed-quiz-store';
+import { matchesAnswer } from '@/lib/answer-match';
 
 /**
  * SPEED QUIZ QUESTION API — "Trả lời nhanh" adaptive (kế thừa engine Tower).
@@ -71,4 +72,26 @@ export async function GET(request: NextRequest) {
     console.error('Speed Quiz question: lỗi sinh câu hỏi', e);
     return NextResponse.json({ error: 'Lỗi sinh câu hỏi cho lượt trả lời nhanh.' }, { status: 503 });
   }
+}
+
+/**
+ * POST /api/speed-quiz/question — Kiểm tra câu trả lời (server-authoritative).
+ * Dùng matchesAnswer từ @/lib/answer-match để chuẩn hóa phân số, khoảng trắng, số thập phân (khắc phục #072).
+ */
+export async function POST(request: NextRequest) {
+  const user = await getCurrentUser();
+  const body = await request.json().catch(() => ({}));
+  const { userAnswer, correctAnswer, questionId } = body;
+
+  if (userAnswer === undefined || correctAnswer === undefined) {
+    return NextResponse.json({ error: 'userAnswer và correctAnswer là bắt buộc' }, { status: 400 });
+  }
+
+  const isCorrect = matchesAnswer(String(userAnswer), String(correctAnswer));
+
+  return NextResponse.json({
+    isCorrect,
+    correct: isCorrect,
+    questionId: questionId ?? null,
+  });
 }

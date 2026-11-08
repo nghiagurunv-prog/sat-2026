@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
 import { getReward } from '@/lib/rewards';
 import { tryRedeemReward, listRedemptions } from '@/lib/redemption-store';
 
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     }
 
     // Rate-limit chặt hơn economy (đây là tiền-RA): 10 req/phút/user.
-    const rl = rateLimit(`redeem:${user.id}`, 10, 60_000);
+    const rl = rateLimit(getRateLimitKey(req, 'redeem-post', user.id), 10, 60_000);
     if (!rl.allowed) {
       return NextResponse.json(
         { success: false, error: 'Quá nhiều yêu cầu. Thử lại sau.', retryAfterMs: rl.retryAfterMs },
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const rewardId = typeof body?.rewardId === 'string' ? body.rewardId : '';
+    const rewardId = typeof body?.rewardId === 'string' ? body.rewardId.trim() : '';
 
     // Server tra danh mục → lấy GIÁ. rewardId không hợp lệ → 400 (chống forge).
     const reward = getReward(rewardId);

@@ -1,34 +1,29 @@
-import { NextResponse } from 'next/server';
-import { verifyAdminAccess } from '@/lib/admin-access';
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyAdmin, logAdminAudit } from '@/lib/admin-auth';
 import { rateLimit } from '@/lib/rate-limit';
 import {
   listPendingRedemptions,
   fulfillRedemption,
   cancelRedemption,
 } from '@/lib/admin-fulfillment-store';
+import { rejectRedemption } from '@/lib/economy';
 
 /**
  * ============================================================================
- *  ADMIN REDEMPTIONS API — Phase 2: xử lý hàng đợi đổi quà (shared-secret)
+ *  ADMIN REDEMPTIONS API — Phase 2: xử lý hàng đợi đổi quà (shared-secret / admin session)
  * ============================================================================
- *  Bảo vệ bằng shared-secret (header `x-admin-secret`, so timing-safe với ENV
- *  ADMIN_SECRET — admin-auth.ts). App CHƯA có role system → đây là biện pháp NHẸ
- *  cho beta. FAIL-CLOSED: ENV chưa set → mọi request 403.
+ *  Bảo vệ bằng verifyAdmin (x-admin-secret hoặc session role admin).
+ *  FAIL-CLOSED: Không có quyền hoặc ENV chưa set → mọi request 403.
  *
- *  GET  → danh sách phiếu 'pending' toàn hệ thống (FIFO), cho admin xử lý.
- *  POST → { redemptionId, action: 'fulfill' | 'cancel' }.
- *         fulfill: đánh dấu đã giao (KHÔNG hoàn xu).
- *         cancel : hủy + HOÀN xu (atomic, idempotent chống double-refund).
+ *  GET        → danh sách phiếu 'pending' toàn hệ thống (FIFO), cho admin xử lý.
+ *  POST/PATCH → { redemptionId, action: 'fulfill' | 'cancel' | 'reject', note?: string }.
+ *               fulfill: đánh dấu đã giao mã/quà (KHÔNG hoàn xu).
+ *               cancel : hủy + HOÀN xu (atomic, idempotent chống double-refund).
+ *               reject : từ chối do gian lận (KHÔNG hoàn xu, ghi chú lý do).
  *
- *  🔴 Đường GHI cross-user chạy service-role trong store — CHỈ sau khi verify
- *  secret. Số tiền (hoàn xu) do RPC atomic quyết từ cost_coins của phiếu; client
- *  admin KHÔNG gửi số xu.
+ *  🔴 Audit log: Ghi logAdminAudit cho mọi thao tác fulfill, cancel, reject.
  * ============================================================================
  */
-
-function unauthorized() {
-  return NextResponse.json({ success: false, error: 'Không có quyền truy cập.' }, { status: 403 });
-}
 
 /** IP client (x-forwarded-for đầu tiên) để rate-limit brute-force secret. */
 function clientIp(req: Request): string {
@@ -38,15 +33,13 @@ function clientIp(req: Request): string {
 }
 
 /**
- * DUAL-AUTH (session-admin HOẶC secret) + chống brute-force: verifyAdminAccess
- * cho qua nếu user có role admin HOẶC secret đúng (admin-access.ts). CHỈ rate-limit
- * các lần thử THẤT BẠI theo IP (10 lần/phút) — vào hợp lệ (secret/session) không
- * chạm limit. Trả:
- *   • {ok:true}          — có quyền (secret hoặc session-admin), cho qua.
- *   • {ok:false, res}    — không quyền (403) hoặc vượt số lần thử (429).
+ * DUAL-AUTH (session-admin HOẶC secret) + chống brute-force qua verifyAdmin:
+ * CHỈ rate-limit các lần thử THẤT BẠI theo IP (10 lần/phút).
  */
-async function verifyAdminOrLimit(req: Request): Promise<{ ok: true } | { ok: false; res: NextResponse }> {
-  if (await verifyAdminAccess(req)) return { ok: true };
+async function verifyAdminOrLimit(req: Request): Promise<{ ok: true; actor: string } | { ok: false; res: NextResponse }> {
+  const auth = await verifyAdmin(req as NextRequest);
+  if (auth.ok) return { ok: true, actor: auth.actor || 'admin' };
+
   const rl = rateLimit(`admin-auth-fail:${clientIp(req)}`, 10, 60_000);
   if (!rl.allowed) {
     return {
@@ -57,7 +50,13 @@ async function verifyAdminOrLimit(req: Request): Promise<{ ok: true } | { ok: fa
       ),
     };
   }
-  return { ok: false, res: unauthorized() };
+  return {
+    ok: false,
+    res: NextResponse.json(
+      { success: false, error: auth.error || 'Không có quyền truy cập.' },
+      { status: auth.status || 403 }
+    ),
+  };
 }
 
 export async function GET(req: Request) {
@@ -90,13 +89,20 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    const redemptionId = typeof (body as { redemptionId?: unknown })?.redemptionId === 'string' ? (body as { redemptionId: string }).redemptionId : '';
-    const actionValue = (body as { action?: unknown })?.action;
-    const action = actionValue === 'fulfill' || actionValue === 'cancel' ? actionValue : '';
+
+    const payload = body as { redemptionId?: unknown; action?: unknown; note?: unknown; adminNote?: unknown };
+    const redemptionId = typeof payload?.redemptionId === 'string' ? payload.redemptionId : '';
+    const actionValue = payload?.action;
+    const action = actionValue === 'fulfill' || actionValue === 'cancel' || actionValue === 'reject' ? actionValue : '';
+    const note = typeof payload?.note === 'string'
+      ? payload.note
+      : typeof payload?.adminNote === 'string'
+      ? payload.adminNote
+      : '';
 
     if (!redemptionId || !action) {
       return NextResponse.json(
-        { success: false, error: 'Thiếu redemptionId hoặc action (fulfill/cancel).' },
+        { success: false, error: 'Thiếu redemptionId hoặc action (fulfill/cancel/reject).' },
         { status: 400 }
       );
     }
@@ -104,50 +110,66 @@ export async function POST(req: Request) {
     const outcome =
       action === 'fulfill'
         ? await fulfillRedemption(redemptionId)
-        : await cancelRedemption(redemptionId);
+        : action === 'cancel'
+        ? await cancelRedemption(redemptionId)
+        : await rejectRedemption(redemptionId, note);
 
-    if (!outcome.ok) {
-      if (outcome.reason === 'unavailable') {
+    const isOk = (outcome as any)?.ok ?? (outcome as any)?.success ?? false;
+    if (!isOk) {
+      const reason = (outcome as any)?.reason || (outcome as any)?.error;
+      if (reason === 'unavailable') {
         return NextResponse.json(
           { success: false, error: 'Tính năng đang được nâng cấp. Vui lòng quay lại sau!', code: 'UNAVAILABLE' },
           { status: 503 }
         );
       }
-      if (outcome.reason === 'not_found') {
+      if (reason === 'not_found' || reason === 'Redemption not found') {
         return NextResponse.json(
           { success: false, error: 'Không tìm thấy phiếu.', code: 'NOT_FOUND' },
           { status: 404 }
         );
       }
-      if (outcome.reason === 'bad_status') {
+      if (reason === 'bad_status' || reason === 'Invalid redemption status') {
         return NextResponse.json(
           {
             success: false,
-            error: 'Phiếu không ở trạng thái xử lý được (đã giao hoặc đã hủy).',
+            error: 'Phiếu không ở trạng thái xử lý được (đã giao hoặc đã hủy/từ chối).',
             code: 'BAD_STATUS',
-            status: outcome.status,
+            status: (outcome as any)?.status,
           },
           { status: 409 }
         );
       }
       return NextResponse.json(
-        { success: false, error: 'Không thể xử lý phiếu lúc này.' },
+        { success: false, error: (outcome as any)?.error || 'Không thể xử lý phiếu lúc này.' },
         { status: 500 }
       );
     }
+
+    // Ghi audit log sau khi thực hiện thành công
+    await logAdminAudit(
+      auth.actor || 'admin',
+      `redemption_${action}`,
+      redemptionId,
+      { note: note || undefined }
+    );
 
     return NextResponse.json({
       success: true,
       redemptionId,
       action,
-      status: outcome.status,
+      status: (outcome as any)?.status || (action === 'fulfill' ? 'fulfilled' : action === 'cancel' ? 'cancelled' : 'rejected'),
       // Với cancel: số dư MỚI của user sau hoàn xu (server-authoritative).
-      coins: outcome.coins,
+      coins: (outcome as any)?.coins,
       // 'already' = idempotent (đã ở trạng thái đích), vẫn coi là thành công.
-      idempotent: outcome.reason === 'already',
+      idempotent: (outcome as any)?.reason === 'already',
     });
   } catch (error) {
     console.error('Lỗi admin redemptions:', error);
     return NextResponse.json({ success: false, error: 'Lỗi hệ thống' }, { status: 500 });
   }
+}
+
+export async function PATCH(req: Request) {
+  return POST(req);
 }

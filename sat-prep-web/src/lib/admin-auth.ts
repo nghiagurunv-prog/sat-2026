@@ -1,4 +1,10 @@
 import crypto from 'crypto';
+import { NextResponse } from 'next/server';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { getCurrentUser } from '@/lib/auth';
+import { isUserAdmin } from '@/lib/admin-role-store';
+import { createClient } from '@/lib/supabase/server';
 
 /**
  * ============================================================================
@@ -33,15 +39,140 @@ export function safeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Xác thực secret admin từ header. FAIL-CLOSED khi ENV chưa cấu hình.
+ * Xác thực secret admin từ header hoặc Request. FAIL-CLOSED khi ENV chưa cấu hình.
+ * Hỗ trợ nhận Request (có tích hợp rate limit chống brute-force) hoặc chuỗi secret trực tiếp.
  *
- * @param provided giá trị header `x-admin-secret` (hoặc null nếu thiếu)
- * @returns true CHỈ khi ENV `ADMIN_SECRET` có giá trị VÀ provided khớp hệt.
+ * @param reqOrProvided Request đối tượng hoặc giá trị header `x-admin-secret` (hoặc null nếu thiếu)
+ * @returns true CHỈ khi ENV `ADMIN_SECRET` có giá trị VÀ provided khớp hệt và không vượt rate limit.
  */
-export function verifyAdminSecret(provided: string | null | undefined): boolean {
+export function verifyAdminSecret(reqOrProvided: Request | string | null | undefined): boolean {
+  let provided: string | null | undefined;
+  if (reqOrProvided && typeof reqOrProvided === 'object' && 'headers' in reqOrProvided) {
+    const req = reqOrProvided as Request;
+    provided = req.headers.get('x-admin-secret');
+    if (provided) {
+      const rl = rateLimit(`admin-secret:${getClientIp(req)}`, 10, 60_000);
+      const isAllowed = 'allowed' in rl ? rl.allowed : (rl as { ok?: boolean }).ok !== false;
+      if (!isAllowed) {
+        return false;
+      }
+    }
+  } else {
+    provided = reqOrProvided;
+  }
+
   const expected = process.env.ADMIN_SECRET;
   // Fail-closed: chưa cấu hình secret → khoá cửa, không cho ai vào.
   if (!expected || expected.length === 0) return false;
   if (typeof provided !== 'string' || provided.length === 0) return false;
   return safeEqual(provided, expected);
+}
+
+export type AdminAuthResult =
+  | { ok: true; actor?: string }
+  | { ok: false; response: NextResponse; error?: string; status?: number };
+
+/**
+ * Xác thực quyền quản trị viên tổng hợp (Dual-Auth: shared-secret HOẶC session-admin).
+ * Có tích hợp rate limit chống brute-force cho x-admin-secret (10 req/phút).
+ *
+ * @param req Request hiện tại
+ * @returns AdminAuthResult { ok: true, actor?: string } hoặc { ok: false, response: NextResponse, error?: string, status?: number }
+ */
+export async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
+  const secretHeader = req.headers.get('x-admin-secret');
+
+  // 1. Nếu gửi đúng x-admin-secret: cho phép ngay lập tức (KHÔNG tính vào rate-limit lỗi)
+  if (secretHeader !== null && secretHeader !== undefined && secretHeader.length > 0) {
+    if (verifyAdminSecret(secretHeader)) {
+      return { ok: true, actor: 'secret:x-admin-secret' };
+    }
+  }
+
+  // 2. Session-admin: kiểm tra session Supabase của user và role 'admin'
+  try {
+    const user = await getCurrentUser();
+    if (user.isAuthenticated && (await isUserAdmin(user.id))) {
+      let actor = user.id;
+      try {
+        const supabase = await createClient();
+        const { data } = await supabase.auth.getUser();
+        if (data?.user?.email) {
+          actor = data.user.email;
+        }
+      } catch {
+        // Fallback dùng user.id nếu không đọc được email
+      }
+      return { ok: true, actor };
+    }
+  } catch {
+    // Fail-safe: lỗi phiên đăng nhập coi như không có quyền
+  }
+
+  // 3. Nếu gửi sai x-admin-secret: áp dụng rate limit chống brute-force (10 lần sai / phút / IP)
+  if (secretHeader !== null && secretHeader !== undefined && secretHeader.length > 0) {
+    const rl = rateLimit(`admin-secret:${getClientIp(req)}`, 10, 60_000);
+    const isAllowed = 'allowed' in rl ? rl.allowed : (rl as { ok?: boolean }).ok !== false;
+    if (!isAllowed) {
+      return {
+        ok: false,
+        error: 'Too many admin authentication attempts. Please try again later.',
+        status: 429,
+        response: NextResponse.json(
+          { success: false, error: 'Too many admin authentication attempts. Please try again later.' },
+          { status: 429 }
+        ),
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    error: 'Không có quyền truy cập.',
+    status: 403,
+    response: NextResponse.json(
+      { success: false, error: 'Không có quyền truy cập.' },
+      { status: 403 }
+    ),
+  };
+}
+
+/**
+ * Ghi nhật ký kiểm toán (Admin Audit Trail Helper - #030).
+ * Bất biến (append-only), an toàn fail-soft (không bao giờ làm crash request nếu bảng chưa migrate).
+ * Hỗ trợ truyền 1 object `{ action, targetId, actor, details }` hoặc 4 tham số rời `(actor, action, targetId, details)`.
+ */
+export async function logAdminAudit(
+  paramsOrActor:
+    | {
+        action: string;
+        targetId?: string;
+        actor?: string;
+        details?: Record<string, unknown>;
+      }
+    | string,
+  actionArg?: string,
+  targetIdArg?: string,
+  detailsArg?: Record<string, unknown>
+): Promise<void> {
+  try {
+    const params =
+      typeof paramsOrActor === 'string'
+        ? {
+            actor: paramsOrActor,
+            action: actionArg || 'admin_action',
+            targetId: targetIdArg,
+            details: detailsArg,
+          }
+        : paramsOrActor;
+    const admin = createAdminClient();
+    await admin.from('admin_audit_logs').insert({
+      admin_identity: params.actor || 'admin',
+      action: params.action,
+      target_id: params.targetId || null,
+      details: params.details || {},
+    });
+  } catch (err) {
+    console.warn('[admin-audit]', err);
+  }
 }

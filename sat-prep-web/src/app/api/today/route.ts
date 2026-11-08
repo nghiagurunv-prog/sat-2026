@@ -5,10 +5,10 @@ import { recommendNext } from '@/lib/adaptive';
 import { buildTodayPlan } from '@/lib/today-plan';
 import { loadVocab } from '@/lib/vocab-store';
 import { loadMistakes } from '@/lib/mistakes-store';
-import { isDue, todayStr } from '@/lib/leitner';
+import { isDue } from '@/lib/leitner';
 import { computeWeeklyTrend } from '@/lib/daily-snapshot';
 import { loadOwnSnapshots } from '@/lib/daily-snapshot-store';
-import { todayVN } from '@/lib/daily-snapshot-store';
+import { getTodayVN } from '@/lib/economy';
 
 /**
  * TODAY API — "Kế hoạch hôm nay" (RPG 60/40, north star).
@@ -32,7 +32,8 @@ export async function GET() {
   const summary = await getMasterySummary(user.id);
 
   // Đếm mục ĐẾN HẠN ôn SRS (vocab + mistakes). Lỗi → 0.
-  const today = todayStr();
+  // Đồng bộ múi giờ Asia/Ho_Chi_Minh UTC+7 (#025) để chốt đúng 00:00 VN.
+  const today = getTodayVN();
   let dueCount = 0;
   try {
     const vocab = await loadVocab(user.id);
@@ -55,7 +56,7 @@ export async function GET() {
   // Mastery delta tuần (đo tiến bộ bản thân) — từ daily_snapshots. Lỗi → null.
   let weeklyDelta: number | null = null;
   try {
-    const todayVn = todayVN();
+    const todayVn = getTodayVN();
     const since = new Date(Date.now() - 8 * 86_400_000).toISOString().slice(0, 10);
     const snaps = await loadOwnSnapshots(user.id, since);
     const trend = computeWeeklyTrend(snaps, todayVn);

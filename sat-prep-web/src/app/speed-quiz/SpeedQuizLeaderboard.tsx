@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '@/context/ToastContext';
 import { LoadingState } from '@/components/LoadingState';
 import { EmptyState } from '@/components/EmptyState';
@@ -54,8 +54,9 @@ interface ProfileData {
 
 /** Đếm ngược msLeft → chuỗi dễ đọc ("2 ngày 3 giờ" / "5 giờ" / "12 phút"). */
 function formatMsLeft(ms: number): string {
-  if (ms <= 0) return 'sắp kết thúc';
+  if (!Number.isFinite(ms) || ms <= 0) return 'sắp kết thúc';
   const totalMin = Math.floor(ms / 60000);
+  if (!Number.isFinite(totalMin) || totalMin <= 0) return 'sắp kết thúc';
   const days = Math.floor(totalMin / (60 * 24));
   const hours = Math.floor((totalMin % (60 * 24)) / 60);
   const mins = totalMin % 60;
@@ -79,6 +80,15 @@ export function SpeedQuizLeaderboard() {
   const [nickInput, setNickInput] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Khắc phục #073: Chống memory leak khi component unmount trong khi đang fetch
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const loadBoard = useCallback(async (c: Cycle, b: Bracket) => {
     setLoading(true);
     try {
@@ -86,21 +96,34 @@ export function SpeedQuizLeaderboard() {
         ? `/api/speed-quiz/leaderboard?cycle=${c}&bracket=ultimate`
         : `/api/speed-quiz/leaderboard?cycle=${c}`;
       const [bRes, pRes] = await Promise.all([
-        fetch(lbUrl),
-        fetch('/api/profile'),
+        fetch(lbUrl).catch(() => null),
+        fetch('/api/profile').catch(() => null),
       ]);
-      if (bRes.ok) setBoard(await bRes.json());
-      if (pRes.ok) {
-        const p = await pRes.json();
-        setProfile(p);
-        if (p.nickname) setNickInput(p.nickname);
+      if (!isMountedRef.current) return;
+      if (bRes && bRes.ok) {
+        const bData = await bRes.json().catch(() => null);
+        if (isMountedRef.current && bData) setBoard(bData);
+      } else if (isMountedRef.current) {
+        setBoard(null);
+      }
+      if (pRes && pRes.ok) {
+        const p = await pRes.json().catch(() => null);
+        if (isMountedRef.current && p) {
+          setProfile(p);
+          if (p.nickname) setNickInput(p.nickname);
+        }
       }
     } catch (e) {
       console.error('Failed to load speed-quiz leaderboard', e);
+      if (isMountedRef.current) {
+        showToast('❌ Lỗi kết nối khi tải bảng xếp hạng.', 'error');
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [showToast]);
 
   // Tải bảng khi đổi cycle/bracket (data-fetch-on-dependency-change hợp lệ). loadBoard set
   // loading=true đồng bộ để đổi tab thấy trạng thái tải ngay — không phải cascading render.
@@ -116,7 +139,8 @@ export function SpeedQuizLeaderboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nickname: nickInput }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!isMountedRef.current) return;
       if (res.ok) {
         showToast('✅ Đã lưu bí danh!', 'success');
         await loadBoard(cycle, bracket);
@@ -124,9 +148,13 @@ export function SpeedQuizLeaderboard() {
         showToast(`❌ ${data.error ?? 'Không lưu được bí danh.'}`, 'error');
       }
     } catch {
-      showToast('❌ Lỗi kết nối.', 'error');
+      if (isMountedRef.current) {
+        showToast('❌ Lỗi kết nối.', 'error');
+      }
     } finally {
-      setSaving(false);
+      if (isMountedRef.current) {
+        setSaving(false);
+      }
     }
   };
 
@@ -139,7 +167,8 @@ export function SpeedQuizLeaderboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ optIn: next }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!isMountedRef.current) return;
       if (res.ok) {
         showToast(next ? '🏆 Bạn đã tham gia bảng xếp hạng!' : 'Đã ẩn khỏi bảng xếp hạng.', 'success');
         await loadBoard(cycle, bracket);
@@ -147,9 +176,13 @@ export function SpeedQuizLeaderboard() {
         showToast(`❌ ${data.error ?? 'Không đổi được.'}`, 'error');
       }
     } catch {
-      showToast('❌ Lỗi kết nối.', 'error');
+      if (isMountedRef.current) {
+        showToast('❌ Lỗi kết nối.', 'error');
+      }
     } finally {
-      setSaving(false);
+      if (isMountedRef.current) {
+        setSaving(false);
+      }
     }
   };
 

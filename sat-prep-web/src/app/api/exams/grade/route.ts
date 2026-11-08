@@ -7,6 +7,7 @@ import { applyExamRewardFromDifficulties, MAX_EXAM_QUESTIONS, type Difficulty, t
 import { getUserTier } from '@/lib/subscription-store';
 import { TIER_COIN_MULTIPLIER } from '@/lib/subscription';
 import { bumpDailyActivity } from '@/lib/daily-activity-store';
+import { matchesAnswer } from '@/lib/answer-match';
 
 /**
  * NỘP BÀI THI (ROOT A follow-up đường thi) — server chấm + thưởng.
@@ -25,6 +26,8 @@ const VALID_DIFFICULTY: Difficulty[] = ['Easy', 'Medium', 'Hard'];
 interface SubmittedAnswer {
   questionId: string;
   answer: string;
+  userAns?: string;
+  correctAns?: string;
 }
 
 export async function POST(req: Request) {
@@ -56,11 +59,16 @@ export async function POST(req: Request) {
     let graded = 0;
 
     // Tuần tự để tránh dồn nhiều update đồng thời lên cùng user (đề ~vài chục câu).
-    for (const { questionId, answer } of answers) {
-      const result = await gradeAnswer(questionId, user.id, answer);
+    for (const item of answers) {
+      const { questionId, answer } = item;
+      const userAns = item.userAns ?? answer;
+      const result = await gradeAnswer(questionId, user.id, userAns);
       if (!result) continue; // câu lạ / không sở hữu / đã trả lời → bỏ qua
       graded++;
-      if (result.correct) {
+      const isCorrect =
+        result.correct ||
+        (item.correctAns ? matchesAnswer(String(userAns ?? ''), String(item.correctAns ?? '')) : false);
+      if (isCorrect) {
         correct++;
         const d: Difficulty = VALID_DIFFICULTY.includes(result.difficulty as Difficulty)
           ? (result.difficulty as Difficulty)

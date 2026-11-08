@@ -17,10 +17,34 @@ import { rateLimit } from '@/lib/rate-limit';
 
 const VALID_DIFFICULTY: Difficulty[] = ['Easy', 'Medium', 'Hard'];
 
+/** Khử giá trị NaN/Infinity tránh chia cho 0 khi user mới tạo chưa có bài làm (#026) */
+function sanitizeNumbers<T>(val: T): T {
+  if (val === null || val === undefined) return val;
+  if (typeof val === 'number') {
+    return (Number.isNaN(val) || !Number.isFinite(val) ? 0 : val) as unknown as T;
+  }
+  if (Array.isArray(val)) {
+    return val.map(sanitizeNumbers) as unknown as T;
+  }
+  if (typeof val === 'object') {
+    const res: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(val)) {
+      res[k] = sanitizeNumbers(v);
+    }
+    return res as T;
+  }
+  return val;
+}
+
 export async function GET() {
-  const user = await getCurrentUser();
-  const summary = await getMasterySummary(user.id);
-  return NextResponse.json(summary);
+  try {
+    const user = await getCurrentUser();
+    const summary = await getMasterySummary(user.id);
+    return NextResponse.json(sanitizeNumbers(summary));
+  } catch (error) {
+    console.error('Lỗi lấy mastery:', error);
+    return NextResponse.json({ error: 'Failed to get mastery' }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
@@ -47,7 +71,7 @@ export async function POST(req: Request) {
     const diff: Difficulty = VALID_DIFFICULTY.includes(difficulty) ? difficulty : 'Medium';
 
     const updated = await recordAnswer(user.id, skillId, isCorrect, diff);
-    return NextResponse.json({ success: true, skillId, mastery: updated });
+    return NextResponse.json({ success: true, skillId, mastery: sanitizeNumbers(updated) });
   } catch (error) {
     console.error('Lỗi ghi mastery:', error);
     return NextResponse.json({ error: 'Failed to record mastery' }, { status: 500 });

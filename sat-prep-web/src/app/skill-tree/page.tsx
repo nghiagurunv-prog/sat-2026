@@ -13,6 +13,10 @@ import { LoadingState } from '@/components/LoadingState';
  *
  * Kèm panel "Luyện Mục Tiêu" (Nhóm 6 T4) đọc /api/adaptive → đề xuất skill yếu
  * nhất + độ khó kế tiếp, deep-link sang trang luyện tương ứng.
+ *
+ * POINT 66: Gắn nhãn "💎 Dễ ăn điểm nhất (+20~30đ)" cho các kỹ năng có ROI cao nhất
+ * (Linear Equations, Systems of Equations, Punctuation Boundaries, Transitions,
+ * Rhetorical Synthesis, Words in Context) + Bộ lọc "💎 Xem kỹ năng dễ ăn điểm nhất".
  */
 
 type NodeState = 'locked' | 'available' | 'in_progress' | 'mastered';
@@ -94,12 +98,40 @@ const STATE_META: Record<NodeState, { label: string; badge: string; card: string
   },
 };
 
+/** Từ khóa nhận diện kỹ năng High-ROI (Point 66) */
+const HIGH_ROI_KEYWORDS = [
+  'linear equation',
+  'linear',
+  'phương trình bậc nhất',
+  'system of linear',
+  'systems of',
+  'hệ phương trình',
+  'punctuation',
+  'boundaries',
+  'boundary',
+  'dấu câu',
+  'transitions',
+  'transition',
+  'từ nối',
+  'rhetorical synthesis',
+  'synthesis',
+  'tổng hợp mục đích',
+  'words in context',
+  'từ vựng'
+];
+
+function isHighRoiSkill(node: SkillNode): boolean {
+  const text = (node.label + ' ' + node.id).toLowerCase();
+  return HIGH_ROI_KEYWORDS.some(kw => text.includes(kw));
+}
+
 export default function SkillTreePage() {
   const [tree, setTree] = useState<SkillTreeView | null>(null);
   const [rec, setRec] = useState<AdaptiveRecommendation | null>(null);
   const [adaptiveLocked, setAdaptiveLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [filterRoiOnly, setFilterRoiOnly] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -127,7 +159,11 @@ export default function SkillTreePage() {
   }, []);
 
   const masteredPct =
-    tree && tree.totalNodes > 0 ? Math.round((tree.masteredCount / tree.totalNodes) * 100) : 0;
+    tree && tree.totalNodes > 0 && Number.isFinite(tree.masteredCount) && Number.isFinite(tree.totalNodes)
+      ? Math.max(0, Math.min(100, Math.round((tree.masteredCount / tree.totalNodes) * 100)))
+      : 0;
+
+  const totalHighRoiCount = tree?.nodes.filter(isHighRoiSkill).length || 0;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
@@ -141,20 +177,48 @@ export default function SkillTreePage() {
         </div>
       </div>
 
-      {/* Tổng quan tiến trình — thay cho chỉ số "Level" cũ */}
-      <div className="bg-[#1b2533] p-6 rounded-xl border border-[#262730] shadow-lg">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="text-xl font-bold text-white">Tiến Trình Tinh Thông</h3>
-          <span className="text-2xl font-black text-[#818cf8]">
-            {loading ? '...' : `${tree?.masteredCount ?? 0}/${tree?.totalNodes ?? 0}`}
-          </span>
+      {/* Tổng quan tiến trình + Bộ lọc High-ROI */}
+      <div className="bg-[#1b2533] p-6 rounded-xl border border-[#262730] shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="flex-1">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-xl font-bold text-white">Tiến Trình Tinh Thông</h3>
+            <span className="text-2xl font-black text-[#818cf8]">
+              {loading ? '...' : `${tree?.masteredCount ?? 0}/${tree?.totalNodes ?? 0}`}
+            </span>
+          </div>
+          <div className="w-full h-3.5 bg-[#0e1117] rounded-full overflow-hidden border border-[#334155]">
+            <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-700" style={{ width: `${masteredPct}%` }} />
+          </div>
+          <p className="text-xs text-gray-400 mt-2">
+            Bạn đã tinh thông {masteredPct}% số kỹ năng SAT. Mỗi kỹ năng tinh thông là một bước tiến thật tới điểm số mục tiêu.
+          </p>
         </div>
-        <div className="w-full h-4 bg-[#0e1117] rounded-full overflow-hidden border border-[#334155]">
-          <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-700" style={{ width: `${masteredPct}%` }} />
+
+        {/* POINT 66: BỘ LỌC KỸ NĂNG DỄ ĂN ĐIỂM NHẤT (HIGH-ROI) */}
+        <div className="bg-[#131b26] p-4 rounded-xl border border-emerald-500/30 flex flex-col gap-2 min-w-[280px]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-emerald-300 uppercase tracking-wide">Bộ Lọc Tối Ưu Thời Gian</span>
+            <span className="text-[11px] bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-700">
+              {totalHighRoiCount} kỹ năng
+            </span>
+          </div>
+          <button
+            onClick={() => setFilterRoiOnly(!filterRoiOnly)}
+            className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+              filterRoiOnly
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-lg shadow-emerald-500/20'
+                : 'bg-[#1f2937] hover:bg-[#374151] text-emerald-300 border border-emerald-500/40'
+            }`}
+          >
+            <span>💎</span>
+            <span>{filterRoiOnly ? 'Đang lọc: Kỹ năng dễ ăn điểm' : 'Xem kỹ năng dễ ăn điểm nhất (+20~30đ)'}</span>
+          </button>
+          {filterRoiOnly && (
+            <p className="text-[11px] text-gray-400 text-center">
+              Đang ẩn các kỹ năng khác để bạn tập trung kéo điểm nhanh nhất. Bấm lại để xem đầy đủ.
+            </p>
+          )}
         </div>
-        <p className="text-xs text-gray-400 mt-2">
-          Bạn đã tinh thông {masteredPct}% số kỹ năng SAT. Mỗi kỹ năng tinh thông là một bước tiến thật tới điểm số mục tiêu.
-        </p>
       </div>
 
       {/* Luyện Mục Tiêu (Nhóm 6 T4) — đề xuất skill yếu nhất + độ khó kế tiếp từ /api/adaptive */}
@@ -217,7 +281,14 @@ export default function SkillTreePage() {
       {tree && !loading && (
         <div className="space-y-8">
           {tree.domains.map((domain) => {
-            const domainNodes = tree.nodes.filter((n) => n.domainId === domain.id);
+            const rawDomainNodes = tree.nodes.filter((n) => n.domainId === domain.id);
+            const domainNodes = filterRoiOnly
+              ? rawDomainNodes.filter(isHighRoiSkill)
+              : rawDomainNodes;
+
+            if (filterRoiOnly && domainNodes.length === 0) {
+              return null; // Ẩn chương nếu không có kỹ năng ROI cao thỏa mãn bộ lọc
+            }
 
             // PHÂN TẦNG: chương chỉ Premium+ (free) → khóa nội dung + upsell, không lộ điểm.
             if (domain.tierLocked) {
@@ -232,7 +303,7 @@ export default function SkillTreePage() {
                   </div>
                   <div className="mt-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-[#0f172a] border border-[#334155] rounded-lg p-4">
                     <p className="text-sm text-gray-400 flex-1">
-                      Chương này ({domainNodes.length} kỹ năng) nằm trong lộ trình đầy đủ. Nâng cấp Premium để mở toàn bộ Cây Năng Lực + Cổng Khảo Thí và luyện đúng thứ tự sư phạm.
+                      Chương này ({rawDomainNodes.length} kỹ năng) nằm trong lộ trình đầy đủ. Nâng cấp Premium để mở toàn bộ Cây Năng Lực + Cổng Khảo Thí và luyện đúng thứ tự sư phạm.
                     </p>
                     <Link
                       href="/upgrade?from=skill-tree&unlock=premium"
@@ -252,12 +323,17 @@ export default function SkillTreePage() {
                   <h3 className="text-lg font-bold text-white flex items-center gap-2">
                     <span className="w-1.5 h-5 bg-[#6366f1] rounded-full inline-block" />
                     {domain.label}
+                    {filterRoiOnly && (
+                      <span className="text-xs text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-2 py-0.5 rounded">
+                        Đang hiện {domainNodes.length}/{rawDomainNodes.length} kỹ năng ROI cao
+                      </span>
+                    )}
                   </h3>
                   <div className="flex items-center gap-3">
                     <div className="w-40 h-2.5 bg-[#0e1117] rounded-full overflow-hidden border border-[#334155]">
-                      <div className={`h-full ${domain.satisfied ? 'bg-[#10b981]' : 'bg-[#f59e0b]'} transition-all`} style={{ width: `${Math.min(100, domain.avgScore)}%` }} />
+                      <div className={`h-full ${domain.satisfied ? 'bg-[#10b981]' : 'bg-[#f59e0b]'} transition-all`} style={{ width: `${Math.max(0, Math.min(100, Number.isFinite(domain.avgScore) ? domain.avgScore : 0))}%` }} />
                     </div>
-                    <span className="text-sm font-bold text-gray-300 whitespace-nowrap">{domain.avgScore}/100</span>
+                    <span className="text-sm font-bold text-gray-300 whitespace-nowrap">{Number.isFinite(domain.avgScore) ? domain.avgScore : 0}/100</span>
                     {domain.gateStatus === 'passed' && (
                       <span className="text-xs bg-[#064e3b] text-[#34d399] border border-[#10b981] px-2 py-0.5 rounded">✅ Đã vượt cổng</span>
                     )}
@@ -283,19 +359,48 @@ export default function SkillTreePage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {domainNodes.map((node) => {
                     const meta = STATE_META[node.state];
+                    const isRoi = isHighRoiSkill(node);
                     return (
-                      <div key={node.id} className={`p-4 rounded-xl border-2 transition-all ${meta.card}`}>
+                      <div
+                        key={node.id}
+                        className={`p-4 rounded-xl border-2 transition-all relative ${
+                          isRoi ? 'border-emerald-500/60 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : meta.card
+                        } ${meta.card}`}
+                      >
+                        {/* POINT 66: HUY HIỆU ROI CAO */}
                         <div className="flex justify-between items-start gap-2 mb-2">
-                          <h4 className="text-sm font-bold text-gray-100 leading-snug">{node.label}</h4>
-                          <span className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap ${meta.badge}`}>{meta.label}</span>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                              {isRoi && (
+                                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-emerald-950/90 text-emerald-300 border border-emerald-500 font-bold whitespace-nowrap shadow-sm">
+                                  <span>💎</span>
+                                  <span>ROI Cao (+20~30đ)</span>
+                                </span>
+                              )}
+                            </div>
+                            <h4 className="text-sm font-bold text-gray-100 leading-snug">{node.label}</h4>
+                          </div>
+                          <span className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap ${meta.badge}`}>
+                            {meta.label}
+                          </span>
                         </div>
+
                         <div className="w-full h-2 bg-[#0e1117] rounded-full overflow-hidden border border-[#334155]">
-                          <div className={`h-full ${meta.bar} transition-all`} style={{ width: `${Math.min(100, node.score)}%` }} />
+                          <div className={`h-full ${meta.bar} transition-all`} style={{ width: `${Math.max(0, Math.min(100, Number.isFinite(node.score) ? node.score : 0))}%` }} />
                         </div>
-                        <div className="flex justify-between items-center mt-1.5">
-                          <span className="text-xs text-gray-400">{node.score}/100</span>
+
+                        <div className="flex justify-between items-center mt-2">
+                          <span className="text-xs text-gray-400">{Number.isFinite(node.score) ? node.score : 0}/100</span>
                           {node.state === 'locked' && node.lockedBy && node.lockedBy.length > 0 && (
                             <span className="text-[11px] text-amber-500">Cần: {node.lockedBy.join(', ')}</span>
+                          )}
+                          {node.state !== 'locked' && (
+                            <Link
+                              href={`/grind?skillId=${encodeURIComponent(node.id)}`}
+                              className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold hover:underline inline-flex items-center gap-1"
+                            >
+                              ⚡ Luyện ngay →
+                            </Link>
                           )}
                         </div>
                       </div>

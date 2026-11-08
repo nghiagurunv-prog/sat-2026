@@ -31,18 +31,23 @@ export function EmptyState({
 }: {
   icon?: string;
   title?: string;
-  message: string;
+  message?: string;
   actionHref?: string;
   actionLabel?: string;
   secondaryHref?: string;
   secondaryLabel?: string;
 }) {
+  const safeMessage = message || '';
   return (
-    <div className="bg-[#1b2533] border border-[#262730] rounded-xl p-12 text-center">
-      {icon && <div className="text-5xl mb-4">{icon}</div>}
+    <div
+      role="region"
+      aria-label={title || 'Trạng thái trống'}
+      className="bg-[#1b2533] border border-[#262730] rounded-xl p-12 text-center"
+    >
+      {icon && <div className="text-5xl mb-4" aria-hidden="true">{icon}</div>}
       {title && <h2 className="text-xl font-bold text-white mb-2">{title}</h2>}
-      <p className="text-gray-400">{message}</p>
-      {(actionHref || secondaryHref) && (
+      {safeMessage && <p className="text-gray-400">{safeMessage}</p>}
+      {((actionHref && actionLabel) || (secondaryHref && secondaryLabel)) && (
         <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center items-center">
           {actionHref && actionLabel && (
             <Link

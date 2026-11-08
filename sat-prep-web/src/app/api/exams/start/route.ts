@@ -45,7 +45,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'examId bắt buộc' }, { status: 400 });
     }
 
-    // Thi Thật (QAS): gate tier + năng lực server-side (đóng lỗ hổng gate-level client).
+    // Thi Thật (QAS): gate tier server-side. Nếu level < 7 thì gắn cờ cảnh báo khuyên dùng
+    // (Soft Warning) nhưng KHÔNG khóa cứng học viên đã mua gói Ultimate.
+    let levelWarning = false;
+    let currentLevel = 1;
     if (mode === 'real') {
       const [tier, summary, gates] = await Promise.all([
         getUserTier(user.id),
@@ -61,13 +64,8 @@ export async function POST(req: Request) {
       }
 
       // level = masteredCount + 1 (khớp cách client derive từ /api/skill-tree).
-      const level = buildSkillTree(summary, gates).masteredCount + 1;
-      if (level < 7) {
-        return NextResponse.json(
-          { error: 'Cần tinh thông 6 kỹ năng để mở khóa đề thi thật QAS.', reason: 'capability' },
-          { status: 403 }
-        );
-      }
+      currentLevel = buildSkillTree(summary, gates).masteredCount + 1;
+      levelWarning = currentLevel < 7;
     }
 
     const exam = getExamById(examId);
@@ -84,7 +82,7 @@ export async function POST(req: Request) {
             const questionId = await issueQuestion(user.id, q.correct_choice, undefined, q.difficulty, {
               src: 'exam',
             });
-            const { correct_choice: _c, explanation: _e, ...safe } = q;
+            const { correct_choice: _c, explanation: _e, choice_analysis: _ca, ...safe } = q as any;
             return { ...safe, questionId };
           })
         );
@@ -98,6 +96,7 @@ export async function POST(req: Request) {
       description: exam.description,
       total_time_minutes: exam.total_time_minutes,
       modules,
+      ...(mode === 'real' ? { levelWarning, level: currentLevel } : {}),
     });
   } catch (error) {
     console.error('Exam start error:', error);

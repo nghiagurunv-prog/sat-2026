@@ -1,4 +1,4 @@
-import { loadMastery, saveMastery } from './mastery-store';
+import { loadMastery, saveMastery, enqueueUserMasteryUpdate } from './mastery-store';
 import { ALL_SKILLS, isValidSkill, getDomainOfSkill, SKILL_TREE, type Subject } from './skill-taxonomy';
 import { bumpDomainGateProgress } from './gate-exam';
 import { todayStr } from './leitner';
@@ -15,6 +15,8 @@ import { todayStr } from './leitner';
  *    • Mỗi câu trả lời cập nhật theo EWMA (trung bình trượt mũ): hiệu suất gần
  *      đây có sức nặng hơn. Câu khó đúng → tăng nhiều; câu dễ sai → giảm nhiều.
  *    • attempts đủ lớn mới coi là "đáng tin" (phục vụ gating Skill Tree sau này).
+ *    • Ebbinghaus Memory Decay (#018): điểm số suy giảm nhẹ dần về 50 nếu
+ *      kỹ năng không được ôn luyện trong thời gian dài.
  *
  *  Server-authoritative: mastery CHỈ được cập nhật ở server từ kết quả trả lời
  *  đã xác thực (nhất quán với §9.1) — client không ghi thẳng điểm mastery.
@@ -29,6 +31,10 @@ export interface SkillMastery {
   correct: number;     // số câu đúng
   lastSeen: string;    // ISO timestamp lần cập nhật gần nhất
   /**
+   * ISO timestamp lần luyện tập gần nhất (alias/tương thích với lastSeen).
+   */
+  lastPracticed?: string;
+  /**
    * Độ tin cậy của mastery (0..1). Tăng theo số câu đã làm + độ tươi (ôn gần
    * đây), giảm khi lâu không ôn. Optional (dữ liệu cũ pre-migration không có →
    * derive = attempts/RELIABLE_ATTEMPTS). Dùng cho RPG 60/40: chỉ tin mastery
@@ -42,11 +48,17 @@ export interface SkillMastery {
    * mastered đã đạt để tránh khóa Skill Tree — pattern gate permanent).
    */
   firstCorrectDay?: string;
+  /**
+   * Ngày (YYYY-MM-DD VN) của lần ĐÚNG gần nhất.
+   */
+  lastCorrectDay?: string;
 }
 
 export interface MasteryStore {
   skills: Record<string, SkillMastery>;
 }
+
+export type MasteryState = MasteryStore | Record<string, SkillMastery>;
 
 /** Trọng số học theo độ khó: câu khó tác động mạnh hơn câu dễ. */
 const DIFFICULTY_WEIGHT: Record<Difficulty, number> = {
@@ -78,6 +90,25 @@ export const CONFIDENCE_HALF_LIFE_DAYS = 30;
 
 function emptySkill(): SkillMastery {
   return { score: 0, attempts: 0, correct: 0, lastSeen: '', confidence: 0, firstCorrectDay: undefined };
+}
+
+/**
+ * Áp dụng mô hình suy giảm trí nhớ Ebbinghaus về mốc trung tính 50 (Fix #018).
+ * - Nếu không có timestamp hoặc score <= 50: không suy giảm.
+ * - 24 giờ đầu tiên sau khi luyện (daysSince < 1): giữ nguyên 100% điểm số.
+ * - Sau 24h: suy giảm dần theo hàm mũ Math.exp(-daysSince / 45) về mốc 50.
+ */
+export function applyMemoryDecay(
+  score: number,
+  lastPracticedIso?: string | null,
+  nowMs: number = Date.now()
+): number {
+  if (!lastPracticedIso || score <= 50) return score;
+  const lastMs = Date.parse(lastPracticedIso);
+  if (!Number.isFinite(lastMs)) return score;
+  const daysSince = Math.max(0, (nowMs - lastMs) / 86_400_000);
+  if (daysSince < 1) return score;
+  return Math.round(50 + (score - 50) * Math.exp(-daysSince / 45));
 }
 
 /**
@@ -126,7 +157,7 @@ export function hasRetention(
 
 /**
  * Cập nhật mastery của 1 skill sau khi trả lời.
- * Trả về store mới (đã ghi xuống đĩa).
+ * Trả về store mới (đã ghi xuống đĩa) và serialize theo user để chống Lost Update (Fix #019).
  */
 export async function recordAnswer(
   userId: string,
@@ -138,49 +169,52 @@ export async function recordAnswer(
     throw new Error(`skillId không hợp lệ: ${skillId}`);
   }
 
-  const store = await loadMastery(userId);
-  if (!store.skills) store.skills = {};
+  return enqueueUserMasteryUpdate(userId, async () => {
+    const store = await loadMastery(userId);
+    if (!store.skills) store.skills = {};
 
-  const cur = store.skills[skillId] ?? emptySkill();
-  const alpha = DIFFICULTY_WEIGHT[difficulty];
+    const cur = store.skills[skillId] ?? emptySkill();
+    const alpha = DIFFICULTY_WEIGHT[difficulty];
 
-  // EWMA hướng tới 100 (đúng) hoặc 0 (sai); câu khó kéo mạnh hơn.
-  const target = isCorrect ? 100 : 0;
-  const newScore = Math.round(cur.score + alpha * (target - cur.score));
+    // EWMA hướng tới 100 (đúng) hoặc 0 (sai); câu khó kéo mạnh hơn.
+    const target = isCorrect ? 100 : 0;
+    const newScore = Math.round(cur.score + alpha * (target - cur.score));
 
-  const nowISO = new Date().toISOString();
-  const todayVN = todayStr();
+    const nowISO = new Date().toISOString();
+    const todayVN = todayStr();
 
-  // Retention: ghi ngày ĐÚNG đầu tiên (chỉ đặt 1 lần) + ngày ĐÚNG cuối cùng
-  // (cập nhật = hôm nay VN khi đúng; giữ nguyên khi sai). hasRetention so 2 ngày.
-  const prevLastCorrect = (cur as SkillMastery & { lastCorrectDay?: string }).lastCorrectDay ?? '';
-  const firstCorrectDay = cur.firstCorrectDay ?? (isCorrect ? todayVN : undefined);
-  const lastCorrectDay = isCorrect ? todayVN : prevLastCorrect;
+    // Retention: ghi ngày ĐÚNG đầu tiên (chỉ đặt 1 lần) + ngày ĐÚNG cuối cùng
+    // (cập nhật = hôm nay VN khi đúng; giữ nguyên khi sai). hasRetention so 2 ngày.
+    const prevLastCorrect = (cur as SkillMastery & { lastCorrectDay?: string }).lastCorrectDay ?? '';
+    const firstCorrectDay = cur.firstCorrectDay ?? (isCorrect ? todayVN : undefined);
+    const lastCorrectDay = isCorrect ? todayVN : prevLastCorrect;
 
-  const updated: SkillMastery = {
-    score: Math.min(100, Math.max(0, newScore)),
-    attempts: cur.attempts + 1,
-    correct: cur.correct + (isCorrect ? 1 : 0),
-    lastSeen: nowISO,
-    confidence: computeConfidence(cur.attempts + 1, nowISO),
-    ...(firstCorrectDay ? { firstCorrectDay } : {}),
-    ...({ lastCorrectDay } as { lastCorrectDay?: string }),
-  };
+    const updated: SkillMastery = {
+      score: Math.min(100, Math.max(0, newScore)),
+      attempts: cur.attempts + 1,
+      correct: cur.correct + (isCorrect ? 1 : 0),
+      lastSeen: nowISO,
+      lastPracticed: nowISO,
+      confidence: computeConfidence(cur.attempts + 1, nowISO),
+      ...(firstCorrectDay ? { firstCorrectDay } : {}),
+      ...({ lastCorrectDay } as { lastCorrectDay?: string }),
+    };
 
-  store.skills[skillId] = updated;
+    store.skills[skillId] = updated;
 
-  // Gộp đếm câu đúng tích lũy cho cooldown thi lại VÀO CÙNG lần ghi này (tránh
-  // race read-modify-write thứ 2 trên cùng dòng user_mastery). `store.skills`
-  // round-trip cả `__gates__` nên bump trực tiếp ở đây là an toàn.
-  if (isCorrect) {
-    const domain = getDomainOfSkill(skillId);
-    if (domain) {
-      bumpDomainGateProgress(store.skills as Record<string, unknown>, domain.id);
+    // Gộp đếm câu đúng tích lũy cho cooldown thi lại VÀO CÙNG lần ghi này (tránh
+    // race read-modify-write thứ 2 trên cùng dòng user_mastery). `store.skills`
+    // round-trip cả `__gates__` nên bump trực tiếp ở đây là an toàn.
+    if (isCorrect) {
+      const domain = getDomainOfSkill(skillId);
+      if (domain) {
+        bumpDomainGateProgress(store.skills as Record<string, unknown>, domain.id);
+      }
     }
-  }
 
-  await saveMastery(userId, store);
-  return updated;
+    await saveMastery(userId, store);
+    return updated;
+  });
 }
 
 /**
@@ -221,6 +255,7 @@ export interface MasterySummary {
     id: string;
     label: string;
     score: number;
+    rawScore?: number;
     attempts: number;
     correct: number;
     reliable: boolean;
@@ -236,6 +271,18 @@ export interface MasterySummary {
   bySubject: Record<Subject, number>;
   /** Mastery tổng thể toàn bộ skill (0..100). */
   overall: number;
+  /**
+   * Danh sách kỹ năng yếu nhất (đã luyện nhưng điểm thấp hoặc lâu ngày không ôn
+   * bị suy giảm trí nhớ Ebbinghaus), ưu tiên hiển thị để gợi ý ôn tập (Fix #018).
+   */
+  weakestSkills: Array<{
+    id: string;
+    label: string;
+    score: number;
+    attempts: number;
+    subject: Subject;
+    domainLabel: string;
+  }>;
 }
 
 /**
@@ -244,26 +291,40 @@ export interface MasterySummary {
  */
 export async function getMasterySummary(userId: string): Promise<MasterySummary> {
   const store = await loadMastery(userId);
-  return summarizeMastery(store.skills ?? {});
+  return summarizeMastery(store);
+}
+
+function isMasteryStore(state: MasteryState): state is MasteryStore {
+  return typeof state === 'object' && state !== null && 'skills' in state && typeof (state as MasteryStore).skills === 'object';
 }
 
 /**
- * Tổng hợp mastery THUẦN từ map skillId→SkillMastery (không I/O). Tách khỏi
+ * Tổng hợp mastery THUẦN từ map skillId→SkillMastery hoặc MasteryStore (không I/O). Tách khỏi
  * getMasterySummary để đường phụ huynh (đọc dữ liệu con qua service-role) tái
  * dụng cùng logic mà không cần RLS session của con.
  */
-export function summarizeMastery(skillsData: Record<string, SkillMastery>): MasterySummary {
+export function summarizeMastery(state: MasteryState): MasterySummary {
+  const skillsData: Record<string, SkillMastery> = isMasteryStore(state)
+    ? state.skills
+    : (state as Record<string, SkillMastery>) || {};
+
   const skills = ALL_SKILLS.map((s) => {
     const m = skillsData[s.id] ?? emptySkill();
     const domain = getDomainOfSkill(s.id);
+    const lastPracticed = m.lastPracticed ?? m.lastSeen ?? null;
+    const effectiveScore = m.attempts > 0
+      ? applyMemoryDecay(m.score, lastPracticed)
+      : m.score;
+
     return {
       id: s.id,
       label: s.label,
-      score: m.score,
+      score: effectiveScore,
+      rawScore: m.score,
       attempts: m.attempts,
       correct: m.correct,
       reliable: m.attempts >= RELIABLE_ATTEMPTS,
-      mastered: m.attempts >= RELIABLE_ATTEMPTS && m.score >= MASTERED_THRESHOLD,
+      mastered: m.attempts >= RELIABLE_ATTEMPTS && effectiveScore >= MASTERED_THRESHOLD,
       moduleType: s.moduleType,
       subject: (domain?.subject ?? 'math') as Subject,
       domainId: domain?.id ?? '',
@@ -271,16 +332,31 @@ export function summarizeMastery(skillsData: Record<string, SkillMastery>): Mast
     };
   });
 
-  // Trung bình theo môn.
+  // Trung bình theo môn (tính theo điểm hiệu dụng sau decay).
+  const scoreMap = new Map(skills.map((s) => [s.id, s.score]));
   const bySubject = { math: 0, reading: 0 } as Record<Subject, number>;
   for (const subject of ['math', 'reading'] as Subject[]) {
     const ids = SKILL_TREE.filter((d) => d.subject === subject).flatMap((d) => d.skills.map((s) => s.id));
-    const scores = ids.map((id) => skillsData[id]?.score ?? 0);
+    const scores = ids.map((id) => scoreMap.get(id) ?? 0);
     bySubject[subject] = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
   }
 
-  const allScores = ALL_SKILLS.map((s) => skillsData[s.id]?.score ?? 0);
+  const allScores = skills.map((s) => s.score);
   const overall = allScores.length ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length) : 0;
 
-  return { skills, bySubject, overall };
+  // Gợi ý ôn tập: các kỹ năng đã luyện (attempts > 0), sắp xếp tăng dần theo điểm hiệu dụng.
+  const weakestSkills = skills
+    .filter((s) => s.attempts > 0)
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 5)
+    .map((s) => ({
+      id: s.id,
+      label: s.label,
+      score: s.score,
+      attempts: s.attempts,
+      subject: s.subject,
+      domainLabel: s.domainLabel,
+    }));
+
+  return { skills, bySubject, overall, weakestSkills };
 }

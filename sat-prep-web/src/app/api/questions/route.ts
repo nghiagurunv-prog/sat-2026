@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import goldenHourQuestions from '@/data/golden_hour_questions.json';
 import { getCurrentUser } from '@/lib/auth';
 import { issueQuestion } from '@/lib/issued-questions';
@@ -26,7 +26,19 @@ interface GoldenQuestion {
  * Golden_hour không gắn skillId (type Math/Writing thô, không map taxonomy) → grade
  * không ghi mastery cho câu này (chấp nhận được), vẫn thưởng xu theo độ khó Medium.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Giới hạn count / limit truy vấn tối đa (<= 50) chống DoS/treo server (#016)
+  const countParam = request.nextUrl.searchParams.get('count') ?? request.nextUrl.searchParams.get('limit');
+  if (countParam !== null) {
+    const parsed = parseInt(countParam, 10);
+    if (isNaN(parsed) || parsed < 1 || parsed > 50) {
+      return NextResponse.json(
+        { error: 'Số lượng câu hỏi truy vấn (count/limit) tối đa là 50.' },
+        { status: 400 }
+      );
+    }
+  }
+
   const questions = goldenHourQuestions as GoldenQuestion[];
   if (!Array.isArray(questions) || questions.length === 0) {
     return NextResponse.json({ error: 'Không có câu hỏi' }, { status: 500 });

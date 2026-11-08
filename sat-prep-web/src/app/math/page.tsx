@@ -1,11 +1,22 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useGamification } from '@/context/GamificationContext';
 import { useToast } from '@/context/ToastContext';
 import { SKILL_TREE } from '@/lib/skill-taxonomy';
 import { LoadingState } from '@/components/LoadingState';
 import { matchesAnswer } from '@/lib/answer-match';
+import * as BluebookToolsModule from '@/components/BluebookTools';
+import { 
+  parseSprInput, 
+  extractTargetExpressionTrap, 
+  detectUnitConversionTrap 
+} from '@/lib/sat-tactical-helpers';
+
+// Hỗ trợ dynamic / named export an toàn cho BluebookTools
+const BluebookTools = ((BluebookToolsModule as Record<string, unknown>).BluebookTools || 
+  (BluebookToolsModule as Record<string, unknown>).default || 
+  BluebookToolsModule) as React.ComponentType<{ compact?: boolean }>;
 
 // 4 domain Toán + skill con, lấy thẳng từ skill-taxonomy (single source of truth).
 // Mỗi skill con map đúng 1 skillId → mastery phủ đủ 13 skill Toán (nền cho Skill Tree).
@@ -31,6 +42,15 @@ interface ChatMessage {
   text: string;
 }
 
+type DifficultyLevel = 'all' | 'foundation' | 'medium' | 'hard';
+
+interface DesmosCalcInstance {
+  setExpression: (expr: { id: string; latex: string; color?: string; sliderBounds?: { min: number; max: number; step?: number } }) => void;
+  removeExpression: (expr: { id: string }) => void;
+  setBlank: () => void;
+  destroy: () => void;
+}
+
 export default function MathPage() {
   const { userStats, inventory, spendCoins, registerGradedResult, practiceStreak } = useGamification();
   const { showToast } = useToast();
@@ -38,9 +58,23 @@ export default function MathPage() {
   const [currentSkillId, setCurrentSkillId] = useState<string | null>(null);
   const [lessonData, setLessonData] = useState<MathLesson | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  // Sinh bài THẤT BẠI (mạng/server) → hiện panel lỗi + nút thử lại, thay vì để
-  // vùng bài trống trơn (chỉ có toast thoáng qua rồi mất).
   const [loadError, setLoadError] = useState(false);
+
+  // Bộ lọc độ khó Toán
+  const [difficultyFilter, setDifficultyFilter] = useState<DifficultyLevel>('all');
+
+  // Chế độ Luyện Riêng Câu Tự Luận Điền Đáp Án (SPR / Grid-in Mode)
+  const [isSprMode, setIsSprMode] = useState(false);
+  const [sprAnswer, setSprAnswer] = useState("");
+  const [showChoicesInSpr, setShowChoicesInSpr] = useState(false);
+
+  // Desmos API Native Integration State
+  const [isDesmosReady, setIsDesmosReady] = useState(false);
+  const [isDesmosOffline, setIsDesmosOffline] = useState(false);
+  const desmosCalcRef = useRef<DesmosCalcInstance | null>(null);
+  const desmosContainerRef = useRef<HTMLDivElement | null>(null);
+  const desmosDetailsRef = useRef<HTMLDetailsElement | null>(null);
+  const desmosScrollTimerRef = useRef<NodeJS.Timeout | number | null>(null);
 
   // Boss / Gamification States
   const [isBossEncounter, setIsBossEncounter] = useState(false);
@@ -53,7 +87,6 @@ export default function MathPage() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [revealedCorrectChoice, setRevealedCorrectChoice] = useState<string | null>(null);
-  // ROOT A: choice_analysis KHÔNG còn trong payload → nhận từ /api/grade sau nộp.
   const [revealedAnalysis, setRevealedAnalysis] = useState<{ choice_letter: string; is_correct: boolean; analysis: string }[] | null>(null);
 
   // Chat States
@@ -61,23 +94,240 @@ export default function MathPage() {
   const [chatInput, setChatInput] = useState("");
   const [isChatting, setIsChatting] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  // Câu đã prefetch sẵn cho lượt kế (2.2). Giữ promise (có thể đang in-flight)
-  // + topic để chỉ dùng khi khớp chủ đề và không gọi OpenAI lần 2.
-  const prefetchedRef = useRef<{ topic: string; promise: Promise<MathLesson | null> } | null>(null);
+  const prefetchedRef = useRef<{ topic: string; difficulty: string; promise: Promise<MathLesson | null> } | null>(null);
+
+  // Khởi tạo Desmos API v1.9 Native
+  useEffect(() => {
+    let isMounted = true;
+
+    const initDesmos = () => {
+      if (window.Desmos && desmosContainerRef.current) {
+        try {
+          if (!desmosCalcRef.current) {
+            desmosCalcRef.current = window.Desmos.GraphingCalculator(desmosContainerRef.current, {
+              keypad: true,
+              expressions: true,
+              settingsMenu: true,
+              zoomButtons: true,
+              border: false,
+              fontSize: 13,
+            });
+          }
+          if (isMounted) {
+            setIsDesmosReady(true);
+            setIsDesmosOffline(false);
+          }
+        } catch (e) {
+          console.warn("Desmos initialization failed, using iframe fallback:", e);
+          if (isMounted) setIsDesmosOffline(true);
+        }
+      }
+    };
+
+    if (window.Desmos) {
+      initDesmos();
+      return;
+    }
+
+    const scriptSrc = 'https://www.desmos.com/api/v1.9/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6';
+    const existing = document.querySelector(`script[src*="calculator.js"]`);
+    if (existing) {
+      existing.addEventListener('load', () => {
+        if (isMounted) initDesmos();
+      });
+      existing.addEventListener('error', () => {
+        if (isMounted) setIsDesmosOffline(true);
+      });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = scriptSrc;
+    script.async = true;
+    script.onload = () => {
+      if (isMounted) initDesmos();
+    };
+    script.onerror = () => {
+      console.warn("Không tải được Desmos API SDK v1.9, chuyển sang iframe.");
+      if (isMounted) setIsDesmosOffline(true);
+    };
+    document.head.appendChild(script);
+
+    return () => {
+      isMounted = false;
+      if (desmosCalcRef.current) {
+        try {
+          desmosCalcRef.current.destroy();
+        } catch {
+          // ignore
+        }
+        desmosCalcRef.current = null;
+      }
+    };
+  }, []);
+
+  const attachDesmosContainer = useCallback((node: HTMLDivElement | null) => {
+    desmosContainerRef.current = node;
+    if (node && window.Desmos && !desmosCalcRef.current) {
+      try {
+        desmosCalcRef.current = window.Desmos.GraphingCalculator(node, {
+          keypad: true,
+          expressions: true,
+          settingsMenu: true,
+          zoomButtons: true,
+          border: false,
+          fontSize: 13,
+        });
+        setIsDesmosReady(true);
+      } catch (e) {
+        console.warn("Desmos mount error:", e);
+        setIsDesmosOffline(true);
+      }
+    }
+  }, []);
+
+  // Trích xuất phương trình toán học từ đề bài
+  const extractMathEquations = (text: string): string[] => {
+    if (!text) return [];
+    const results: string[] = [];
+
+    // Tìm các phương trình LaTeX trong \( ... \) hoặc $ ... $
+    const latexMatches = text.match(/\$([^$]+)\$|\\\((.*?)\\\)/g);
+    if (latexMatches) {
+      latexMatches.forEach(m => {
+        const cleaned = m.replace(/^\$|^\\\(|\$$|\\\)$/g, '').trim();
+        if (/[=<>~]/.test(cleaned) && cleaned.length >= 3) {
+          results.push(cleaned);
+        }
+      });
+    }
+
+    // Tách theo câu và biểu thức có dấu = hoặc bất đẳng thức
+    const chunks = text.split(/[\n,;.]|\band\b|\bvà\b|\bwhere\b/i);
+    for (const chunk of chunks) {
+      const trimmed = chunk.trim();
+      const match = trimmed.match(/([a-zA-Z0-9_\(\)\^\+\-\*\/\s]+\s*(?:=|<=|>=|<|>|~)\s*[-+]?[a-zA-Z0-9_\(\)\^\+\-\*\/\s]+)/);
+      if (match) {
+        const cand = match[1].trim();
+        if (
+          /[xyzabckmfg]/i.test(cand) && 
+          cand.length >= 3 && 
+          cand.length <= 60 &&
+          !/^(what|find|if|calculate|determine|solve|cho|biết|tính|tìm)/i.test(cand)
+        ) {
+          results.push(cand);
+        }
+      }
+    }
+
+    // Làm sạch và lọc trùng lặp
+    const unique = Array.from(new Set(results)).map(eq => 
+      eq.replace(/^(equation|function|hàm số|phương trình)\s*/i, '').trim()
+    ).filter(eq => eq.length >= 3);
+
+    return unique;
+  };
+
+  // 1-Click Bắn Phương Trình Sang Máy Tính Desmos
+  const handleSendEquationsToDesmos = () => {
+    if (!lessonData) return;
+
+    let equations = extractMathEquations(lessonData.practice_question);
+    if (equations.length === 0) {
+      equations = extractMathEquations(lessonData.sample_example);
+    }
+
+    // Tự động mở khung Desmos nếu đang đóng
+    if (desmosDetailsRef.current) {
+      desmosDetailsRef.current.open = true;
+    }
+
+    if (equations.length === 0) {
+      showToast("⚠️ Không phát hiện phương trình rõ ràng trong đề. Đã mở máy tính Desmos để bạn nhập tay!", 'info');
+      desmosDetailsRef.current?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+
+    if (desmosCalcRef.current) {
+      desmosCalcRef.current.setBlank();
+      equations.forEach((eq, idx) => {
+        const colors = ['#2563eb', '#dc2626', '#10b981', '#a855f7', '#f59e0b'];
+        desmosCalcRef.current?.setExpression({
+          id: `eq_${idx + 1}`,
+          latex: eq,
+          color: colors[idx % colors.length],
+        });
+      });
+      showToast(`📈 Đã bắn ${equations.length} phương trình vào Desmos: ${equations.join(' | ')}`, 'success');
+    } else {
+      // Fallback copy to clipboard
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(equations.join('\n'));
+        showToast(`📋 Đã sao chép phương trình: ${equations.join(' | ')} (Dán vào Desmos bằng Ctrl+V)`, 'info');
+      }
+    }
+
+    // Cuộn mượt đến khung Desmos
+    setTimeout(() => {
+      desmosDetailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  };
 
   const hasItem = (itemId: string) => inventory.some(i => (typeof i === 'string' ? i === itemId : (i as { itemId?: string }).itemId === itemId));
   const removeConsumable = (_itemId: string) => {
     // Note: Simulated usage.
   };
 
-  // Fetch thuần — chỉ trả data, không đụng React state. Dùng chung cho cả load
-  // trực tiếp lẫn prefetch (2.2). skillId tường minh giúp ghi mastery đúng skill con.
-  const fetchLesson = async (topic: string, skillId?: string): Promise<MathLesson | null> => {
+  // Phân tích SPR Input chuẩn từ @/lib/sat-tactical-helpers (bắt trọn bẫy hỗn số 3 1/2)
+  const sprAnalysis = parseSprInput(sprAnswer);
+
+  // Quét bẫy câu hỏi cuối & bẫy đổi đơn vị từ @/lib/sat-tactical-helpers
+  const targetTrapResult = lessonData ? extractTargetExpressionTrap(lessonData.practice_question) : null;
+  const unitTrapResult = lessonData ? detectUnitConversionTrap(lessonData.practice_question) : null;
+
+  const hasFinalTrap = Boolean(
+    targetTrapResult && (
+      (targetTrapResult as { hasFinalTrap?: boolean; hasTrap?: boolean; detected?: boolean }).hasFinalTrap || 
+      (targetTrapResult as { hasFinalTrap?: boolean; hasTrap?: boolean; detected?: boolean }).hasTrap || 
+      (targetTrapResult as { hasFinalTrap?: boolean; hasTrap?: boolean; detected?: boolean }).detected
+    )
+  );
+  const finalTrapMsg = 
+    (targetTrapResult as { finalTrapMsg?: string; message?: string; warning?: string })?.finalTrapMsg || 
+    (targetTrapResult as { finalTrapMsg?: string; message?: string; warning?: string })?.message || 
+    (targetTrapResult as { finalTrapMsg?: string; message?: string; warning?: string })?.warning || 
+    '';
+
+  const hasUnitTrap = Boolean(
+    unitTrapResult && (
+      (unitTrapResult as { hasUnitTrap?: boolean; hasTrap?: boolean; detected?: boolean }).hasUnitTrap || 
+      (unitTrapResult as { hasUnitTrap?: boolean; hasTrap?: boolean; detected?: boolean }).hasTrap || 
+      (unitTrapResult as { hasUnitTrap?: boolean; hasTrap?: boolean; detected?: boolean }).detected
+    )
+  );
+  const unitTrapMsg = 
+    (unitTrapResult as { unitTrapMsg?: string; message?: string; warning?: string })?.unitTrapMsg || 
+    (unitTrapResult as { unitTrapMsg?: string; message?: string; warning?: string })?.message || 
+    (unitTrapResult as { unitTrapMsg?: string; message?: string; warning?: string })?.warning || 
+    '';
+
+  // Kiểm tra cảnh báo hỗn số đặc thù của College Board
+  const isMixedNumberPattern = /\b\d+\s+\d+\/\d+\b/.test(sprAnswer.trim());
+
+  // Fetch thuần — truyền độ khó nếu được chọn
+  const fetchLesson = async (topic: string, skillId?: string, diff?: DifficultyLevel): Promise<MathLesson | null> => {
     try {
+      const selectedDiff = (diff ?? difficultyFilter);
+      const effectiveDifficulty = selectedDiff !== 'all' ? selectedDiff : undefined;
       const res = await fetch('/api/generate-practice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ moduleType: 'math', topic, skillId })
+        body: JSON.stringify({ 
+          moduleType: 'math', 
+          topic, 
+          skillId, 
+          difficulty: effectiveDifficulty 
+        })
       });
       if (res.ok) return await res.json();
       return null;
@@ -87,30 +337,35 @@ export default function MathPage() {
     }
   };
 
-  // Prefetch câu kế khi user vừa submit (đang đọc giải thích / chat) → bấm "Tải
-  // bài tiếp theo" hiện ngay. Chỉ chạy SAU submit nên không phí token: gần như
-  // chắc chắn user sẽ qua câu kế. Guard tránh gọi OpenAI lần 2 nếu đã có sẵn.
-  const prefetchNext = (topic: string, skillId?: string) => {
+  const prefetchNext = (topic: string, skillId?: string, diff?: DifficultyLevel) => {
     if (prefetchedRef.current) return;
-    prefetchedRef.current = { topic, promise: fetchLesson(topic, skillId) };
+    const curDiff = diff ?? difficultyFilter;
+    prefetchedRef.current = { 
+      topic, 
+      difficulty: curDiff,
+      promise: fetchLesson(topic, skillId, curDiff) 
+    };
   };
 
-  const handleGenerateLesson = async (topic: string, skillId?: string) => {
+  const handleGenerateLesson = async (topic: string, skillId?: string, diff?: DifficultyLevel) => {
     setCurrentTopic(topic);
     if (skillId !== undefined) setCurrentSkillId(skillId);
     const effectiveSkillId = skillId ?? currentSkillId ?? undefined;
+    const curDiff = diff ?? difficultyFilter;
+    
     setIsLoading(true);
     setLessonData(null);
     setLoadError(false);
     setIsSubmitted(false);
     setSelectedAnswer(null);
+    setSprAnswer("");
+    setShowChoicesInSpr(false);
     setRevealedCorrectChoice(null);
     setRevealedAnalysis(null);
     setChatHistory([]);
     setActiveSkills({desmos: false, focus: false});
 
-    // 15% chance of Boss Encounter. Math.random ở đây nằm trong event handler
-    // (gọi từ onClick/skip), KHÔNG phải thân render → an toàn, không bất định.
+    // 15% chance of Boss Encounter
     // eslint-disable-next-line react-hooks/purity
     const isBoss = Math.random() < 0.15;
     setIsBossEncounter(isBoss);
@@ -119,12 +374,11 @@ export default function MathPage() {
       setPlayerHearts(3);
     }
 
-    // Dùng câu đã prefetch nếu khớp topic → hiện ngay, khỏi chờ sinh mới.
     const prefetched = prefetchedRef.current;
     prefetchedRef.current = null;
-    const data = prefetched && prefetched.topic === topic
+    const data = prefetched && prefetched.topic === topic && prefetched.difficulty === curDiff
       ? await prefetched.promise
-      : await fetchLesson(topic, effectiveSkillId);
+      : await fetchLesson(topic, effectiveSkillId, curDiff);
 
     if (data) {
       setLessonData(data);
@@ -136,26 +390,31 @@ export default function MathPage() {
   };
 
   const handleSubmit = async () => {
-    // Chặn nộp trùng (double-click) — nhất quán với CorePracticeUI. Quan trọng sau
-    // H1: nộp 2 lần sẽ POST /api/cau-sai 2 lần → lưu câu sai trùng vào Sổ tay.
     if (isSubmitted) return;
-    if (!selectedAnswer || !lessonData) return;
-    setIsSubmitted(true);
+    
+    // Quyết định đáp án nộp: Nếu trong SPR Mode và có gõ chữ thì ưu tiên sprAnswer
+    const answerToSubmit = (isSprMode && sprAnswer.trim()) 
+      ? sprAnswer.trim() 
+      : selectedAnswer;
 
-    // 🔴 ROOT A: chấm + trao thưởng + ghi mastery đều ở /api/grade. correct_choice
-    // đã bị GIẤU nên KHÔNG còn chấm client-side; grade lỗi → coi như chưa đúng.
+    if (!answerToSubmit || !lessonData) return;
+    setIsSubmitted(true);
+    if (isSprMode && sprAnswer.trim() && !selectedAnswer) {
+      setSelectedAnswer(sprAnswer.trim());
+    }
+
     let isAnsCorrect = false;
     let economyState: { coins?: number; xp?: number; lastSpinDate?: string | null } | null = null;
-    // correct_choice bị GIẤU trong payload → lấy từ /api/grade để lưu Sổ tay câu sai.
     let gradeCorrectChoice: string | null = null;
     let gradeExplanation: string | null = null;
+
     if (lessonData.questionId) {
       const res = await fetch("/api/grade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           questionId: lessonData.questionId,
-          answer: selectedAnswer,
+          answer: answerToSubmit,
           streak: practiceStreak + 1,
         }),
       });
@@ -168,12 +427,11 @@ export default function MathPage() {
         if (Array.isArray(grade.choice_analysis)) setRevealedAnalysis(grade.choice_analysis);
         economyState = grade.economy ?? null;
       }
+    } else {
+      isAnsCorrect = matchesAnswer(answerToSubmit, lessonData.correct_choice);
     }
     setIsCorrect(isAnsCorrect);
 
-    // Lưu câu Toán SAI vào Sổ tay để resurfacing (mẫu CorePracticeUI.tsx:160-179).
-    // Trang math tự viết handleSubmit nên trước đây KHÔNG lưu → câu sai biến mất,
-    // đứt vòng ôn lại. Không đụng đường chấm/thưởng (đã ROOT A). Fire-and-forget.
     if (!isAnsCorrect && lessonData.questionId) {
       try {
         await fetch("/api/cau-sai", {
@@ -183,7 +441,7 @@ export default function MathPage() {
             question: lessonData.practice_question,
             choices: lessonData.choices,
             correct_choice: gradeCorrectChoice,
-            user_choice: selectedAnswer,
+            user_choice: answerToSubmit,
             explanation: gradeExplanation,
             source: "Math (Next.js)",
             skill_id: currentSkillId,
@@ -194,14 +452,10 @@ export default function MathPage() {
       }
     }
 
-    // Cập nhật streak/quest/HUD (đồng bộ coins/xp từ economy grade trả về). Mastery
-    // + phần thưởng đã do /api/grade xử lý server-side.
     registerGradedResult(isAnsCorrect, economyState);
 
     if (isBossEncounter) {
       if (isAnsCorrect) {
-        // Sát thương boss (thuần hiệu ứng RPG — KHÔNG trao thưởng tiền tệ ở client;
-        // mỗi câu boss đã được /api/grade thưởng per-câu theo độ khó lưu server).
         let damage = Math.floor(userStats.maxPower * 0.5);
         if (activeSkills.focus) {
           damage *= 2;
@@ -210,14 +464,11 @@ export default function MathPage() {
         const newHp = Math.max(0, bossHp - damage);
         setBossHp(newHp);
       } else {
-        // Lose heart
         setPlayerHearts(prev => prev - 1);
       }
     }
 
-    // Prefetch câu kế ngay khi submit (user đang đọc giải thích) → "Tải bài
-    // tiếp theo" hiện tức thì.
-    if (currentTopic) prefetchNext(currentTopic, currentSkillId ?? undefined);
+    if (currentTopic) prefetchNext(currentTopic, currentSkillId ?? undefined, difficultyFilter);
   };
 
   const handleUseHeal = () => {
@@ -262,7 +513,7 @@ export default function MathPage() {
         body: JSON.stringify({
           question: lessonData.practice_question,
           correctAnswer: lessonData.correct_choice,
-          selectedAnswer: selectedAnswer,
+          selectedAnswer: selectedAnswer || sprAnswer,
           explanation: lessonData.explanation,
           history: chatHistory,
           userMessage: chatInput
@@ -290,11 +541,8 @@ export default function MathPage() {
   const renderChoices = () => {
     let choicesToShow = lessonData!.choices;
     
-    // Skill: Nhãn Thuật Desmos removes one wrong answer
     if (activeSkills.desmos && !isSubmitted) {
       const cc = revealedCorrectChoice ?? lessonData!.correct_choice ?? '';
-      // Lựa chọn SAI = không khớp đáp án đúng (matchesAnswer: câu thô so toàn chuỗi
-      // → không nhận nhầm "x = 3" là đúng khi đáp án "x = 2").
       const wrongIndices = choicesToShow.map((c, i) => !matchesAnswer(c, cc) ? i : -1).filter(i => i !== -1);
       if (wrongIndices.length > 0) {
         const newChoices = [...choicesToShow];
@@ -320,7 +568,12 @@ export default function MathPage() {
       return (
         <div 
           key={idx} 
-          onClick={() => !isSubmitted && !isEliminated && setSelectedAnswer(choice)}
+          onClick={() => {
+            if (!isSubmitted && !isEliminated) {
+              setSelectedAnswer(choice);
+              if (isSprMode) setSprAnswer(choice.replace(/^[A-D]\.\s*/, ''));
+            }
+          }}
           className={`p-4 rounded-xl border-2 transition-all ${isEliminated ? '' : 'cursor-pointer hover:scale-[1.01]'} ${choiceClass}`}
         >
           {choice}
@@ -329,22 +582,73 @@ export default function MathPage() {
     });
   };
 
+  const getDifficultyBadge = () => {
+    if (difficultyFilter === 'hard' || lessonData?.difficulty?.toLowerCase().includes('hard')) {
+      return { text: "🔥 Hard 750–800+ (Mục tiêu 800)", style: "bg-red-950 text-red-300 border-red-700" };
+    }
+    if (difficultyFilter === 'foundation' || lessonData?.difficulty?.toLowerCase().includes('easy')) {
+      return { text: "🌱 Foundation (500–620)", style: "bg-emerald-950 text-emerald-300 border-emerald-700" };
+    }
+    return { text: "⚡ Medium (630–730)", style: "bg-amber-950 text-amber-300 border-amber-700" };
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20">
       <div className="math-academy-header epic-shake-active" style={{ background: "linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)", padding: "2rem", borderRadius: "1rem" }}>
-        <div className="flex items-center gap-4">
-          <div className="text-5xl">📐</div>
-          <div>
-            <h1 className="text-3xl font-black" style={{ background: "linear-gradient(to right, #60a5fa, #3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>CHINH PHỤC TOÁN HỌC</h1>
-            <p className="text-blue-200">Nền tảng tư duy Toán học đỉnh cao — Không gì là không thể!</p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="text-5xl">📐</div>
+            <div>
+              <h1 className="text-3xl font-black" style={{ background: "linear-gradient(to right, #60a5fa, #3b82f6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                CHINH PHỤC TOÁN HỌC (SAT BLUEBOOK 2026)
+              </h1>
+              <p className="text-blue-200">Nền tảng tư duy Toán học đỉnh cao & Tích hợp Desmos API 1-Click — Không gì là không thể!</p>
+            </div>
           </div>
+
+          {currentTopic && (
+            <div className="bg-[#0f172a]/90 border border-blue-500/40 rounded-xl p-2 shadow-lg backdrop-blur self-start md:self-auto">
+              <BluebookTools compact />
+            </div>
+          )}
         </div>
       </div>
       
       {!currentTopic ? (
-        <div className="bg-[#1b2533] border border-[#3b82f6] rounded-xl p-6 shadow-[0_0_15px_rgba(59,130,246,0.1)]">
-          <h2 className="text-2xl font-bold text-[#60a5fa] mb-2">1. Lựa Chọn Chủ Đề Toán Học</h2>
-          <p className="text-gray-400 text-sm mb-6">Chọn đúng dạng bài bạn muốn luyện — hệ thống ghi nhận mức thành thạo riêng cho từng kỹ năng.</p>
+        <div className="bg-[#1b2533] border border-[#3b82f6] rounded-xl p-6 shadow-[0_0_15px_rgba(59,130,246,0.1)] space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#262730] pb-4">
+            <div>
+              <h2 className="text-2xl font-bold text-[#60a5fa] mb-1">1. Lựa Chọn Chủ Đề Toán Học</h2>
+              <p className="text-gray-400 text-sm">Chọn đúng dạng bài bạn muốn luyện — hệ thống ghi nhận mức thành thạo riêng cho từng kỹ năng.</p>
+            </div>
+            
+            <div className="bg-[#0e1117] p-2 rounded-xl border border-[#334155] flex flex-col gap-1.5 min-w-[280px]">
+              <span className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1">
+                <span>🎯</span> Mức Độ Khó Mục Tiêu:
+              </span>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { id: 'all', label: '🎯 Adaptive (Tất cả)', color: 'border-blue-500 text-blue-300' },
+                  { id: 'foundation', label: '🌱 Foundation (500–620)', color: 'border-emerald-500 text-emerald-300' },
+                  { id: 'medium', label: '⚡ Medium (630–730)', color: 'border-amber-500 text-amber-300' },
+                  { id: 'hard', label: '🔥 Hard 750–800+', color: 'border-red-500 text-red-300' },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setDifficultyFilter(item.id as DifficultyLevel)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all text-left ${
+                      difficultyFilter === item.id 
+                        ? `bg-blue-600/30 ${item.color} shadow-[0_0_8px_rgba(59,130,246,0.3)]` 
+                        : 'bg-[#1b2533] border-gray-700 text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-6">
             {MATH_DOMAINS.map((domain) => (
               <div key={domain.id}>
@@ -369,17 +673,56 @@ export default function MathPage() {
         </div>
       ) : (
         <>
-          <div className="flex justify-between items-center bg-[#1b2533] p-4 rounded-xl border border-[#262730]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-[#1b2533] p-4 rounded-xl border border-[#262730] gap-4">
             <div>
               <span className="text-gray-400 text-sm">Chủ đề hiện tại:</span>
               <h2 className="text-xl font-bold text-[#60a5fa]">{currentTopic}</h2>
             </div>
-            <button
-              onClick={() => { setCurrentTopic(null); setCurrentSkillId(null); setLessonData(null); }}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition-colors"
-            >
-              ⬅️ Quay lại danh mục
-            </button>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1 bg-[#0e1117] px-2 py-1 rounded-lg border border-[#334155]">
+                <span className="text-xs text-gray-400 mr-1">Độ khó:</span>
+                {(['all', 'foundation', 'medium', 'hard'] as DifficultyLevel[]).map((lvl) => (
+                  <button
+                    key={lvl}
+                    onClick={() => {
+                      setDifficultyFilter(lvl);
+                      handleGenerateLesson(currentTopic, currentSkillId ?? undefined, lvl);
+                    }}
+                    className={`px-2 py-0.5 rounded text-xs font-bold transition-all ${
+                      difficultyFilter === lvl 
+                        ? 'bg-blue-600 text-white' 
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {lvl === 'all' ? 'Adaptive' : lvl === 'foundation' ? '🌱 500-620' : lvl === 'medium' ? '⚡ 630-730' : '🔥 750-800+'}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => {
+                  setIsSprMode(prev => !prev);
+                  setShowChoicesInSpr(false);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                  isSprMode 
+                    ? 'bg-purple-900/60 border-purple-500 text-purple-200 shadow-[0_0_10px_rgba(168,85,247,0.3)]' 
+                    : 'bg-[#0e1117] border-gray-700 text-gray-400 hover:text-white'
+                }`}
+                title="Bật chế độ tự điền đáp án, ẩn 4 lựa chọn A/B/C/D"
+              >
+                <span>🔢</span>
+                <span>{isSprMode ? 'Chế độ SPR: BẬT' : 'Bật SPR Mode'}</span>
+              </button>
+
+              <button
+                onClick={() => { setCurrentTopic(null); setCurrentSkillId(null); setLessonData(null); }}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition-colors"
+              >
+                ⬅️ Quay lại danh mục
+              </button>
+            </div>
           </div>
 
           {isLoading && (
@@ -387,7 +730,6 @@ export default function MathPage() {
           )}
 
           {loadError && !isLoading && !lessonData && (
-            /* Sinh bài lỗi → panel thử lại (thay vì vùng bài trống trơn). */
             <div className="bg-[#1b2533] p-8 rounded-xl border border-red-500/40 flex flex-col items-center text-center">
               <div className="text-5xl mb-3">⚠️</div>
               <h3 className="text-lg font-bold text-white mb-1">Không sinh được bài giảng</h3>
@@ -403,11 +745,18 @@ export default function MathPage() {
 
           {lessonData && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                {isBossEncounter ? <span className="text-red-500 animate-pulse">⚔️ [BOSS ĐỘT KÍCH]</span> : <span>✏️</span>} 
-                {lessonData.concept_name}
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  {isBossEncounter ? <span className="text-red-500 animate-pulse">⚔️ [BOSS ĐỘT KÍCH]</span> : <span>✏️</span>} 
+                  {lessonData.concept_name}
+                </h2>
+                
+                <span className={`text-xs px-3 py-1 rounded-full border font-bold ${getDifficultyBadge().style}`}>
+                  {getDifficultyBadge().text}
+                </span>
+              </div>
 
+              {/* 1. LÝ THUYẾT */}
               <details className="bg-[#1e293b] border border-[#334155] rounded-xl group" open>
                 <summary className="p-4 font-bold text-[#60a5fa] cursor-pointer list-none flex justify-between">
                   📚 1. LÝ THUYẾT CỐT LÕI
@@ -418,6 +767,7 @@ export default function MathPage() {
                 </div>
               </details>
 
+              {/* 2. VÍ DỤ MẪU */}
               <details className="bg-[#1e293b] border border-[#334155] rounded-xl group" open>
                 <summary className="p-4 font-bold text-[#fbbf24] cursor-pointer list-none flex justify-between">
                   💡 2. VÍ DỤ MẪU TIÊU BIỂU
@@ -428,18 +778,142 @@ export default function MathPage() {
                 </div>
               </details>
 
-              <details className="bg-[#0f172a] border border-[#1e3a8a] rounded-xl group shadow-[0_0_15px_rgba(30,58,138,0.3)]">
-                <summary className="p-4 font-bold text-green-400 cursor-pointer list-none flex justify-between">
-                  🧮 GIẢ LẬP MÁY TÍNH DESMOS INTERACTIVE
-                  <span className="group-open:rotate-180 transition-transform">▼</span>
+              {/* MÁY TÍNH DESMOS INTERACTIVE API v1.9 KÈM 1-CLICK BẮN PHƯƠNG TRÌNH */}
+              <details 
+                ref={desmosDetailsRef}
+                className="bg-[#0f172a] border border-[#1e3a8a] rounded-xl group shadow-[0_0_20px_rgba(30,58,138,0.35)]" 
+                open
+              >
+                <summary className="p-4 font-bold text-green-400 cursor-pointer list-none flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span>🧮 MÁY TÍNH DESMOS INTERACTIVE (API v1.9 NATIVE)</span>
+                    <span className="text-xs px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800 font-mono">
+                      SAT Bluebook Ready
+                    </span>
+                  </div>
+                  <span className="group-open:rotate-180 transition-transform text-gray-400">▼</span>
                 </summary>
-                <div className="p-2 border-t border-[#1e3a8a]">
-                  <iframe src="https://www.desmos.com/calculator" width="100%" height="500px" style={{border: 0, borderRadius: '8px'}} />
+                
+                <div className="p-3 border-t border-[#1e3a8a] space-y-3">
+                  {/* Toolbar Desmos Action */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 bg-[#1b2533] p-2.5 rounded-lg border border-gray-800">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleSendEquationsToDesmos}
+                        className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-lg transition-all shadow flex items-center gap-1.5 active:scale-95"
+                        title="Tự động trích xuất các phương trình trong câu hỏi và vẽ đồ thị"
+                      >
+                        <span>📈</span>
+                        <span>Bắn Phương Trình Từ Đề Bài (1-Click)</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (desmosCalcRef.current) {
+                            desmosCalcRef.current.setBlank();
+                            showToast("🧹 Đã làm sạch máy tính Desmos!", 'info');
+                          }
+                        }}
+                        className="px-2.5 py-1.5 bg-[#0e1117] hover:bg-gray-700 text-gray-300 font-bold text-xs rounded-lg border border-gray-700 transition-colors"
+                      >
+                        🧹 Xóa Trắng
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => {
+                          if (desmosCalcRef.current) {
+                            desmosCalcRef.current.setExpression({ id: 'k_slider', latex: 'k = 1', sliderBounds: { min: -10, max: 10, step: 0.1 } });
+                            showToast("🎚️ Đã thêm thanh trượt k!", 'success');
+                          }
+                        }}
+                        className="px-2 py-1 bg-purple-900/70 hover:bg-purple-800 text-purple-200 text-xs rounded border border-purple-700"
+                        title="Thêm Slider k"
+                      >
+                        🎚️ Slider k
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (desmosCalcRef.current) {
+                            desmosCalcRef.current.setExpression({ id: 'reg_demo', latex: 'y_1\\sim mx_1+b' });
+                            showToast("📊 Đã nạp cú pháp hồi quy ~", 'success');
+                          }
+                        }}
+                        className="px-2 py-1 bg-purple-900/70 hover:bg-purple-800 text-purple-200 text-xs rounded border border-purple-700"
+                        title="Nạp cú pháp hồi quy"
+                      >
+                        📊 y₁ ~ mx₁ + b
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Render Khung Desmos Native hoặc Iframe Fallback */}
+                  <div className="w-full h-[500px] rounded-lg overflow-hidden bg-white relative border border-gray-700">
+                    {!isDesmosOffline ? (
+                      <div ref={attachDesmosContainer} className="w-full h-full" />
+                    ) : (
+                      <iframe 
+                        src="https://www.desmos.com/calculator" 
+                        width="100%" 
+                        height="100%" 
+                        style={{ border: 0 }}
+                        title="Desmos Graphing Calculator"
+                      />
+                    )}
+                  </div>
                 </div>
               </details>
 
+              {/* 3. BÀI TẬP THỰC HÀNH TẠI CHỖ */}
               <div className="bg-[#1b2533] p-6 rounded-xl border border-[#262730] shadow-lg">
-                <h3 className="text-xl font-bold text-white mb-4">🎯 3. BÀI TẬP THỰC HÀNH TẠI CHỖ (Practice Check)</h3>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <span>🎯</span> 3. BÀI TẬP THỰC HÀNH TẠI CHỖ (Practice Check)
+                  </h3>
+
+                  <div className="flex items-center gap-2">
+                    {/* NÚT BẮN PHƯƠNG TRÌNH SANG DESMOS (1-CLICK) TRỰC TIẾP TẠI BÀI TẬP */}
+                    <button
+                      onClick={handleSendEquationsToDesmos}
+                      className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-lg text-xs font-bold transition-all shadow-md flex items-center gap-1.5 active:scale-95"
+                      title="Trích xuất phương trình trong bài tập và nạp thẳng vào máy tính Desmos"
+                    >
+                      <span>📈</span>
+                      <span>Bắn Phương Trình Sang Máy Tính Desmos (1-Click)</span>
+                    </button>
+
+                    {isSprMode && (
+                      <span className="text-xs bg-purple-900/80 text-purple-200 border border-purple-600 px-2.5 py-1 rounded-full font-bold">
+                        🔢 Chế độ Tự Điền (SPR)
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Cảnh báo Bẫy Câu Hỏi Cuối và Bẫy Đổi Đơn Vị (từ @/lib/sat-tactical-helpers) */}
+                {(hasFinalTrap || hasUnitTrap) && (
+                  <div className="space-y-2 mb-4">
+                    {hasFinalTrap && (
+                      <div className="p-3 bg-amber-950/60 border border-amber-600/80 rounded-lg text-amber-200 text-sm flex items-start gap-2 shadow-md">
+                        <span className="text-lg">⚠️</span>
+                        <div>
+                          <span className="font-bold text-amber-300">CẢNH BÁO BẪY CÂU HỎI CUỐI: </span>
+                          <span>{finalTrapMsg}</span>
+                        </div>
+                      </div>
+                    )}
+                    {hasUnitTrap && (
+                      <div className="p-3 bg-red-950/60 border border-red-600/80 rounded-lg text-red-200 text-sm flex items-start gap-2 shadow-md">
+                        <span className="text-lg">🚨</span>
+                        <div>
+                          <span className="font-bold text-red-300">CẢNH BÁO BẪY ĐỔI ĐƠN VỊ ĐO: </span>
+                          <span>{unitTrapMsg}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="text-white text-[18px] mb-6 font-bold whitespace-pre-wrap font-serif bg-[#0e1117] p-5 rounded-lg border-l-4 border-[#3b82f6]">
                   {lessonData.practice_question}
                 </div>
@@ -481,15 +955,110 @@ export default function MathPage() {
                   </div>
                 )}
 
-                <div className="space-y-3 mb-8">
-                  {renderChoices()}
-                </div>
+                {/* KHU VỰC ĐIỀN ĐÁP ÁN TỰ LUẬN (SPR MODE) */}
+                {isSprMode ? (
+                  <div className="space-y-4 mb-8 bg-[#0e1117] p-5 rounded-xl border border-purple-800/60 shadow-inner">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-bold text-purple-300 flex items-center gap-1.5">
+                        <span>🔢</span> Nhập Đáp Án Tự Luận (Grid-in Input):
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowChoicesInSpr(prev => !prev)}
+                        className="text-xs text-blue-400 hover:text-blue-300 underline font-semibold"
+                      >
+                        {showChoicesInSpr ? '🙈 Ẩn 4 lựa chọn A/B/C/D' : '👁️ Hiện 4 lựa chọn A/B/C/D (Xem gợi ý)'}
+                      </button>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+                      <input
+                        type="text"
+                        value={sprAnswer}
+                        onChange={(e) => setSprAnswer(e.target.value)}
+                        disabled={isSubmitted}
+                        placeholder="Ví dụ: 3/4 hoặc 0.75 hoặc -5/8"
+                        className="bg-[#1b2533] border-2 border-purple-500/70 focus:border-purple-400 rounded-xl px-4 py-3 text-xl font-mono font-bold text-amber-300 focus:outline-none flex-1 tracking-wider"
+                      />
+
+                      {/* Phím tắt ký hiệu toán */}
+                      {!isSubmitted && (
+                        <div className="flex gap-1.5">
+                          {['/', '.', '-', 'C'].map((char) => (
+                            <button
+                              key={char}
+                              type="button"
+                              onClick={() => {
+                                if (char === 'C') setSprAnswer('');
+                                else setSprAnswer(prev => prev + char);
+                              }}
+                              className="px-3 py-2 bg-[#1e293b] hover:bg-[#334155] active:scale-95 text-amber-300 font-mono font-bold rounded-lg border border-gray-600 text-base transition-transform"
+                              title={`Thêm ký tự ${char}`}
+                            >
+                              {char}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Phân tích SPR, bắt bẫy hỗn số 3 1/2 */}
+                    <div className="space-y-2">
+                      {sprAnalysis.numericValue !== null && (
+                        <div className="text-sm font-mono text-emerald-400 flex items-center gap-1.5 bg-emerald-950/40 px-3 py-1.5 rounded-lg border border-emerald-800">
+                          <span>≈ Giá trị thập phân tương đương:</span>
+                          <span className="font-bold underline text-emerald-300">{Number(sprAnalysis.numericValue.toFixed(4))}</span>
+                        </div>
+                      )}
+
+                      {/* Cảnh báo Bẫy Hỗn Số (College Board hiểu 3 1/2 là 31/2) */}
+                      {isMixedNumberPattern && (
+                        <div className="text-xs font-bold text-amber-300 bg-amber-950/70 p-2.5 rounded-lg border border-amber-600 flex items-start gap-2 shadow-md">
+                          <span className="text-base">⚠️</span>
+                          <div>
+                            <span className="font-bold text-amber-200">CẢNH BÁO BẪY HỖN SỐ BLUEBOOK: </span>
+                            Bạn đang nhập dạng hỗn số &apos;{sprAnswer.trim()}&apos;. Hệ thống chấm thi SAT College Board không hỗ trợ dấu cách và sẽ hiểu là &apos;{(sprAnswer.trim()).replace(/\s+/, '')}&apos; (tương đương {parseFloat((sprAnswer.trim()).replace(/\s+/, '').split('/')[0]) / parseFloat((sprAnswer.trim()).replace(/\s+/, '').split('/')[1] || '1')}) chứ KHÔNG PHẢI hỗn số! Hãy nhập dạng phân số tối giản (ví dụ: 7/2) hoặc số thập phân (3.5)!
+                          </div>
+                        </div>
+                      )}
+
+                      {sprAnalysis.warning && (
+                        <div className="text-xs text-red-400 font-semibold bg-red-950/40 px-3 py-1.5 rounded-lg border border-red-800">
+                          {sprAnalysis.warning}
+                        </div>
+                      )}
+
+                      <p className="text-[11px] text-gray-400">
+                        * Quy chuẩn Bluebook: Tối đa 5 ký tự đối với số dương (ví dụ: <code className="text-amber-300">12345</code> hoặc <code className="text-amber-300">3/4</code>), tối đa 6 ký tự đối với số âm. Tuyệt đối không nhập hỗn số!
+                      </p>
+                    </div>
+
+                    {/* Hiển thị 4 lựa chọn nếu mở gợi ý */}
+                    {showChoicesInSpr && (
+                      <div className="pt-3 border-t border-gray-800 space-y-3">
+                        <span className="text-xs text-gray-400 italic">Gợi ý 4 lựa chọn A/B/C/D từ đề bài:</span>
+                        {renderChoices()}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3 mb-8">
+                    {renderChoices()}
+                  </div>
+                )}
 
                 {!isSubmitted ? (
                   <button 
                     onClick={handleSubmit}
-                    disabled={!selectedAnswer || (isBossEncounter && playerHearts <= 0)}
-                    className={`w-full py-4 rounded-xl font-bold text-lg transition-all shadow-lg ${selectedAnswer && !(isBossEncounter && playerHearts <= 0) ? 'bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}>
+                    disabled={
+                      (!selectedAnswer && (!isSprMode || !sprAnswer.trim())) || 
+                      (isBossEncounter && playerHearts <= 0)
+                    }
+                    className={`w-full py-4 rounded-xl font-bold text-lg transition-all shadow-lg ${
+                      (selectedAnswer || (isSprMode && sprAnswer.trim())) && !(isBossEncounter && playerHearts <= 0) 
+                        ? 'bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white' 
+                        : 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                    }`}>
                     🚀 CHỐT ĐÁP ÁN {isBossEncounter && '& TẤN CÔNG BOSS'}
                   </button>
                 ) : (
@@ -499,6 +1068,14 @@ export default function MathPage() {
                       <div className="text-4xl">{isCorrect ? '🎉' : '❌'}</div>
                       <div>
                         <div className="font-bold text-lg">{isCorrect ? 'CHÍNH XÁC TUYỆT ĐỐI!' : 'SẬP BẪY RỒI CHIẾN BINH!'}</div>
+                        {isSprMode && (
+                          <div className="text-sm mt-0.5 text-gray-300">
+                            Đáp án bạn điền: <span className="font-mono font-bold text-amber-300">{sprAnswer || selectedAnswer}</span>
+                            {revealedCorrectChoice && (
+                              <span className="ml-3">| Đáp án đúng: <span className="font-mono font-bold text-emerald-400">{revealedCorrectChoice}</span></span>
+                            )}
+                          </div>
+                        )}
                         {isBossEncounter && isCorrect && bossHp === 0 && <div className="text-yellow-400 font-bold mt-1">Boss đã bị tiêu diệt! Nhận phần thưởng đặc biệt!</div>}
                         {isBossEncounter && !isCorrect && <div className="text-red-400 mt-1">Boss phản công! Bạn mất 1 ❤️.</div>}
                       </div>
@@ -510,9 +1087,7 @@ export default function MathPage() {
                       <div className="text-[15px] text-[#e2e8f0] leading-relaxed whitespace-pre-wrap">{lessonData.explanation}</div>
                     </div>
 
-                    {/* Phân tích TỪNG đáp án (Nhóm 7 #9) — dạy kỹ năng loại trừ bẫy.
-                        ROOT A: lấy từ /api/grade (revealedAnalysis) sau nộp, KHÔNG còn
-                        trong payload. Khớp đáp án user theo INDEX (không parse chữ cái). */}
+                    {/* Phân tích TỪNG đáp án */}
                     {Array.isArray(revealedAnalysis) && revealedAnalysis.length > 0 && (
                       <div className="bg-[#0f172a] p-5 rounded-xl border border-[#334155] shadow-lg">
                         <h4 className="text-[#fbbf24] font-bold mb-3 flex items-center gap-2">🔍 VÌ SAO CÁC ĐÁP ÁN KIA SAI?</h4>
@@ -541,21 +1116,21 @@ export default function MathPage() {
                       </div>
                     )}
 
-                    <button onClick={() => handleGenerateLesson(currentTopic)} className="w-full py-3 bg-gradient-to-r from-yellow-300 to-amber-500 hover:from-yellow-200 hover:to-amber-400 rounded-xl font-bold text-[#78350f] transition-colors">
+                    <button onClick={() => handleGenerateLesson(currentTopic, currentSkillId ?? undefined, difficultyFilter)} className="w-full py-3 bg-gradient-to-r from-yellow-300 to-amber-500 hover:from-yellow-200 hover:to-amber-400 rounded-xl font-bold text-[#78350f] transition-colors">
                       🔄 Tải Bài Giảng Tiếp Theo
                     </button>
                   </div>
                 )}
               </div>
 
-              {/* Interactive AI Chat (Cải tiến 5) */}
+              {/* Interactive AI Chat */}
               {isSubmitted && (
                 <div className="bg-[#0e1117] border border-[#262730] rounded-xl overflow-hidden mt-8 shadow-2xl">
                   <div className="bg-[#1e293b] p-4 border-b border-[#334155]">
                     <h3 className="font-bold text-white flex items-center gap-2">
                       💬 Hỏi đáp sâu với Gia sư AI
                     </h3>
-                    <p className="text-xs text-gray-400">Không hiểu tại sao câu {selectedAnswer ? selectedAnswer[0] : 'đó'} sai? Hãy hỏi AI ngay!</p>
+                    <p className="text-xs text-gray-400">Không hiểu tại sao câu {selectedAnswer ? selectedAnswer[0] : (sprAnswer || 'đó')} sai? Hãy hỏi AI ngay!</p>
                   </div>
                   
                   <div className="h-64 overflow-y-auto p-4 space-y-4">

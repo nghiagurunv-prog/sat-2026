@@ -1,8 +1,223 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useGamification } from '@/context/GamificationContext';
 import { LoadingState } from './LoadingState';
+
+/**
+ * Render an toàn biểu thức toán học và markdown inline:
+ * Hỗ trợ \frac{a}{b}, \sqrt{x}, ^2, \pm, \le, \ge, \neq, \pi, \Delta, in đậm **...**, code `...`
+ */
+function renderInlineMathAndMarkdown(text: string): ReactNode {
+  if (!text) return null;
+
+  // 1. Chuyển đổi các ký hiệu LaTeX phổ biến sang ký tự chuẩn
+  let s = text
+    .replace(/\\pm/g, '±')
+    .replace(/\\(leq|le)\b/g, '≤')
+    .replace(/\\(geq|ge)\b/g, '≥')
+    .replace(/\\(neq|ne)\b/g, '≠')
+    .replace(/\\pi\b/g, 'π')
+    .replace(/\\Delta\b/g, 'Δ')
+    .replace(/\\delta\b/g, 'δ')
+    .replace(/\\theta\b/g, 'θ')
+    .replace(/\\alpha\b/g, 'α')
+    .replace(/\\beta\b/g, 'β')
+    .replace(/\\times\b/g, '×')
+    .replace(/\\cdot\b/g, '·')
+    .replace(/\\approx\b/g, '≈')
+    .replace(/\\infty\b/g, '∞')
+    .replace(/\\degree|\^\\circ/g, '°');
+
+  // Bỏ dấu $ bao ngoài công thức nếu có ($...$)
+  s = s.replace(/\$([^\$]+)\$/g, '$1');
+
+  // Tokenize: \frac{num}{den}, \sqrt{rad}, **bold**, `code`, ^{sup} hoặc ^(\d+)
+  const regex = /(\\frac\{([^{}]+)\}\{([^{}]+)\})|(\\sqrt\{([^{}]+)\})|(\*\*([^*]+)\*\*)|(`([^`]+)`)|(\^\{([^{}]+)\}|\^([0-9a-zA-Z+-]+))/g;
+
+  const nodes: ReactNode[] = [];
+  let lastIdx = 0;
+  let m: RegExpExecArray | null;
+
+  while ((m = regex.exec(s)) !== null) {
+    if (m.index > lastIdx) {
+      nodes.push(s.substring(lastIdx, m.index));
+    }
+
+    if (m[1]) {
+      // \frac{num}{den}
+      nodes.push(
+        <span key={`frac-${m.index}`} className="inline-flex flex-col text-center align-middle mx-1 font-mono text-[0.88em] leading-tight text-amber-200">
+          <span className="border-b border-amber-300/60 pb-0.5 px-1">{m[2]}</span>
+          <span className="pt-0.5 px-1">{m[3]}</span>
+        </span>
+      );
+    } else if (m[4]) {
+      // \sqrt{rad}
+      nodes.push(
+        <span key={`sqrt-${m.index}`} className="font-mono mx-1 inline-flex items-center text-cyan-200">
+          <span className="text-amber-400 font-bold mr-0.5 text-base leading-none">√</span>
+          <span className="border-t border-cyan-300/60 pt-0.5 px-0.5">{m[5]}</span>
+        </span>
+      );
+    } else if (m[6]) {
+      // **bold**
+      nodes.push(
+        <strong key={`b-${m.index}`} className="font-bold text-white tracking-wide">
+          {m[7]}
+        </strong>
+      );
+    } else if (m[8]) {
+      // `code`
+      nodes.push(
+        <code key={`code-${m.index}`} className="bg-[#0b0f17] text-amber-300 px-1.5 py-0.5 rounded text-[13px] font-mono border border-slate-700">
+          {m[9]}
+        </code>
+      );
+    } else if (m[10]) {
+      // ^{sup} hoặc ^n
+      const supText = m[11] || m[12];
+      nodes.push(
+        <sup key={`sup-${m.index}`} className="text-[0.78em] font-mono font-bold text-cyan-300">
+          {supText}
+        </sup>
+      );
+    }
+
+    lastIdx = regex.lastIndex;
+  }
+
+  if (lastIdx < s.length) {
+    nodes.push(s.substring(lastIdx));
+  }
+
+  return nodes.length > 0 ? nodes : s;
+}
+
+/**
+ * Formatter thông minh hiển thị tin nhắn của AI Tutor:
+ * Render công thức toán học LaTeX trần, in đậm, và làm nổi bật 3 cấu trúc Socratic:
+ * 1. 💡 Điểm mấu chốt / Gợi mở Socratic
+ * 2. 🪤 Giải phẫu bẫy College Board
+ * 3. ⚡ Bí kíp thực chiến 15 giây / Mẹo Desmos
+ */
+export function renderFormattedTutorMessage(text: string): ReactNode {
+  if (!text) return null;
+
+  const lines = text.split('\n');
+
+  return (
+    <div className="space-y-2 leading-relaxed text-[14px]">
+      {lines.map((rawLine, idx) => {
+        const line = rawLine.trim();
+        if (!line) {
+          return <div key={idx} className="h-1" />;
+        }
+
+        // 1. 💡 Điểm mấu chốt / Gợi mở Socratic
+        if (line.includes('💡') || line.toLowerCase().includes('điểm mấu chốt') || line.toLowerCase().includes('gợi mở socratic')) {
+          return (
+            <div key={idx} className="bg-amber-500/10 border-l-4 border-amber-400 px-3 py-2 rounded-r-lg my-2 text-amber-100 font-medium">
+              {renderInlineMathAndMarkdown(line)}
+            </div>
+          );
+        }
+
+        // 2. 🪤 Giải phẫu bẫy College Board
+        if (line.includes('🪤') || line.toLowerCase().includes('giải phẫu bẫy') || line.toLowerCase().includes('bẫy college board')) {
+          return (
+            <div key={idx} className="bg-rose-500/10 border-l-4 border-rose-400 px-3 py-2 rounded-r-lg my-2 text-rose-100 font-medium">
+              {renderInlineMathAndMarkdown(line)}
+            </div>
+          );
+        }
+
+        // 3. ⚡ Bí kíp thực chiến 15 giây / Mẹo Desmos
+        if (line.includes('⚡') || line.toLowerCase().includes('bí kíp thực chiến') || line.toLowerCase().includes('mẹo desmos')) {
+          return (
+            <div key={idx} className="bg-emerald-500/10 border-l-4 border-emerald-400 px-3 py-2 rounded-r-lg my-2 text-emerald-100 font-medium">
+              {renderInlineMathAndMarkdown(line)}
+            </div>
+          );
+        }
+
+        // Gạch đầu dòng
+        if (line.startsWith('- ') || line.startsWith('• ') || line.startsWith('* ')) {
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-2">
+              <span className="text-amber-400 mt-1 text-xs">●</span>
+              <div className="flex-1">{renderInlineMathAndMarkdown(line.slice(2))}</div>
+            </div>
+          );
+        }
+
+        return <div key={idx}>{renderInlineMathAndMarkdown(line)}</div>;
+      })}
+    </div>
+  );
+}
+
+/**
+ * Thẻ Mở Khóa Pro Teaser cực cuốn hút khi hết hạn mức Free (429)
+ */
+function ProUnlockTeaserCard() {
+  return (
+    <div className="mt-4 p-5 rounded-2xl border-2 border-amber-400/50 bg-gradient-to-br from-[#1a1333] via-[#111827] to-[#2d1238] shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+      <div className="absolute -top-12 -right-12 w-40 h-40 bg-amber-500/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
+        <div className="flex items-start gap-3.5">
+          <div className="text-3xl p-3 bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 font-black rounded-2xl shadow-lg flex items-center justify-center">
+            👑
+          </div>
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <h4 className="text-[16px] font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 uppercase tracking-wide">
+                Nâng Cấp Pro / Ultimate — Gia Sư AI Thầy Nghĩa Guru
+              </h4>
+              <span className="text-[10px] uppercase font-bold bg-rose-500/20 border border-rose-500 text-rose-300 px-2 py-0.5 rounded-full">
+                Hết hạn mức Free
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed mb-3">
+              Bạn đã dùng hết 5 lượt hỏi miễn phí hôm nay. Đừng để đà ôn luyện bị gián đoạn, hãy mở khóa sức mạnh gia sư tối thượng!
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-200">
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-400 font-bold">✓</span>
+                <span><strong>Không giới hạn</strong> lượt hỏi &amp; đàm thoại 24/7</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-400 font-bold">✓</span>
+                <span>Mô hình <strong>GPT-4o Siêu Trí Tuệ</strong> phân tích đa tầng</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-400 font-bold">✓</span>
+                <span><strong>Giải phẫu bẫy College Board</strong> chuyên sâu</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-400 font-bold">✓</span>
+                <span>Tạo câu hỏi <strong>song sinh tương tự</strong> vô hạn</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="w-full md:w-auto flex flex-col items-center md:items-end gap-2 flex-shrink-0">
+          <a
+            href="/pricing"
+            className="w-full md:w-auto inline-flex items-center justify-center gap-2 bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 hover:from-amber-500 hover:to-yellow-600 text-slate-950 font-extrabold text-sm px-5 py-2.5 rounded-xl shadow-lg hover:shadow-amber-500/25 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+          >
+            <span>🚀 Mở Khóa Pro Ngay</span>
+            <span className="text-xs font-semibold bg-slate-950/20 px-1.5 py-0.5 rounded">Từ 49k/th</span>
+          </a>
+          <span className="text-[11px] text-amber-200/80 font-medium">Bảo đảm tiến bộ 150+ điểm SAT</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface QuestionData {
   id?: number;
@@ -33,13 +248,21 @@ export function AITutoring() {
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<{role: 'user'|'ai', text: string}[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
   // Quota AI server trả kèm mỗi reply (route.ts). remaining:Infinity được JSON
   // serialize thành null → check `limit < 0 || remaining == null` để in "không
   // giới hạn" cho premium/ultimate, KHÔNG check === Infinity (luôn false ở client).
   const [quota, setQuota] = useState<{ used: number; limit: number; remaining: number | null } | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Fetch question on mount and when questionKey changes
   useEffect(() => {
+    // Hủy request AI đang chạy (nếu có) khi chuyển câu hỏi mới
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
     const fetchQuestion = async () => {
       setIsLoading(true);
       try {
@@ -69,17 +292,34 @@ export function AITutoring() {
       setRevealedCorrect(null);
       setRevealedExplanation(null);
       setChatMessages([]);
+      setIsTyping(false);
+      setIsQuotaExceeded(false);
       setSubmitError(null);
     };
     
     fetchQuestion();
+
+    return () => {
+      // Hủy request AI khi unmount hoặc questionKey thay đổi
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
   }, [questionKey]);
 
-  const handleSendChat = async () => {
-    if (!chatInput.trim() || !currentQuestion) return;
+  const handleSendChat = async (overrideText?: string) => {
+    const textToSend = (overrideText ?? chatInput).trim();
+    if (!textToSend || !currentQuestion || isTyping) return;
     
-    const userText = chatInput;
-    const userMessage = { role: 'user' as const, text: userText };
+    // Hủy request AI cũ nếu còn đang chạy dở trước khi tạo request mới
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const userMessage = { role: 'user' as const, text: textToSend };
     setChatMessages(prev => [...prev, userMessage]);
     setChatInput("");
     setIsTyping(true);
@@ -93,6 +333,7 @@ export function AITutoring() {
       // Server-authoritative: chỉ gửi DỮ LIỆU NGỮ CẢNH; prompt/model dựng ở server (§9.2).
       const response = await fetch("/api/chat", {
         method: "POST",
+        signal: controller.signal,
         headers: {
           "Content-Type": "application/json"
         },
@@ -103,18 +344,30 @@ export function AITutoring() {
           explanation: revealedExplanation ?? currentQuestion.explanation ?? '',
           history: chatMessages,
           userMessage: userMessage.text,
+          targetScore: 1500,
+          skillId: currentQuestion.questionId || undefined,
+          questionType: currentQuestion.type || 'SAT Mixed',
         })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        // Hết quota (429) → hiển thị thông báo thân thiện từ server.
+        // Hết quota (429) → kích hoạt Thẻ Mở Khóa Pro Teaser và hiển thị thông báo.
         setIsTyping(false);
-        setChatMessages(prev => [...prev, {
-          role: 'ai',
-          text: data?.error || "Lỗi: Không thể kết nối với server. Có thể bạn chưa thiết lập OPENAI_API_KEY trong file .env.local."
-        }]);
+        if (response.status === 429 || data?.quotaExceeded) {
+          setIsQuotaExceeded(true);
+          setQuota({ used: data?.used ?? 5, limit: data?.limit ?? 5, remaining: 0 });
+          setChatMessages(prev => [...prev, {
+            role: 'ai',
+            text: data?.error || "Bạn đã dùng hết 5 lượt hỏi Gia sư AI miễn phí hôm nay. Hãy nâng cấp Pro để hỏi không giới hạn 24/7!"
+          }]);
+        } else {
+          setChatMessages(prev => [...prev, {
+            role: 'ai',
+            text: data?.error || "Lỗi: Không thể kết nối với server. Có thể bạn chưa thiết lập OPENAI_API_KEY trong file .env.local."
+          }]);
+        }
         return;
       }
 
@@ -123,9 +376,17 @@ export function AITutoring() {
 
       setIsTyping(false);
       setChatMessages(prev => [...prev, { role: 'ai', text: aiText }]);
-    } catch {
+    } catch (err: unknown) {
+      // Bỏ qua lỗi AbortError khi unmount, đổi câu hoặc hủy request cũ để không hiện thông báo lỗi giả
+      if ((err as Error)?.name === 'AbortError') {
+        return;
+      }
       setIsTyping(false);
       setChatMessages(prev => [...prev, { role: 'ai', text: "Lỗi: Không thể kết nối với server. Có thể bạn chưa thiết lập OPENAI_API_KEY trong file .env.local." }]);
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
     }
   };
 
@@ -349,8 +610,8 @@ export function AITutoring() {
                 </button>
               </div>
             </h4>
-            <div className="text-sm text-[#e2e8f0] leading-relaxed whitespace-pre-wrap">
-              {revealedExplanation ?? 'Lời giải sẽ hiển thị sau khi bạn nộp bài.'}
+            <div className="text-sm text-[#e2e8f0] leading-relaxed">
+              {revealedExplanation ? renderFormattedTutorMessage(revealedExplanation) : 'Lời giải sẽ hiển thị sau khi bạn nộp bài.'}
             </div>
           </div>
 
@@ -372,6 +633,32 @@ export function AITutoring() {
                 </span>
               </div>
             )}
+            {/* 1-Click Prompt Chips (Điểm 74) */}
+            <div className="mb-3">
+              <div className="text-[12px] font-bold text-amber-300 mb-1.5 flex items-center gap-1.5">
+                <span>⚡ Gợi ý câu hỏi nhanh (1-Click Prompt):</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { label: '🇻🇳 Dịch sát nghĩa câu khó nhất trong bài', text: 'Hãy dịch sát nghĩa và phân tích ngữ pháp câu khó nhất trong đoạn văn/đề bài này giúp em.' },
+                  { label: '🧮 Chỉ em cách bấm Desmos câu này trong 15s', text: 'Chỉ em từng bước bấm Desmos để giải nhanh câu này trong 15 giây (cách đặt hàm, tìm giao điểm).' },
+                  { label: '🪤 Vì sao đáp án em chọn là bẫy?', text: 'Vì sao đáp án em chọn lại là bẫy? Thuộc dạng bẫy kinh điển nào (Out of Scope / Extreme / Half-Right / Reversed)?' },
+                  { label: '🔑 Tóm tắt công thức / quy tắc cốt lõi', text: 'Tóm tắt ngắn gọn 1-2 công thức Toán hoặc quy tắc ngữ pháp cốt lõi để làm dạng bài này.' },
+                  { label: '📝 Cho em 1 câu tương tự để làm thử', text: 'Hãy tạo cho em 1 câu hỏi tương tự cùng dạng bài này (có 4 đáp án A, B, C, D) để em luyện tập ngay!' },
+                ].map((chip, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    disabled={isTyping}
+                    onClick={() => handleSendChat(chip.text)}
+                    className="text-xs bg-[#0f172a] hover:bg-[#1e293b] border border-[#334155] hover:border-amber-400/50 text-[#cbd5e1] hover:text-white px-2.5 py-1.5 rounded-lg transition-all active:scale-95 disabled:opacity-50 text-left font-medium shadow-sm flex items-center gap-1"
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-3 mb-4">
               {chatMessages.length === 0 && !isTyping ? (
                 <div className="bg-[rgba(59,130,246,0.1)] border border-[rgba(59,130,246,0.2)] p-3 rounded text-sm text-[#e2e8f0]">
@@ -380,7 +667,8 @@ export function AITutoring() {
               ) : (
                 chatMessages.map((msg, idx) => (
                   <div key={idx} className={`p-3 rounded text-sm ${msg.role === 'user' ? 'bg-[#2563eb] text-white ml-8' : 'bg-[#334155] text-[#e2e8f0] mr-8'}`}>
-                    <strong>{msg.role === 'user' ? 'Bạn' : 'Gia sư AI'}:</strong> {msg.text}
+                    <div className="font-bold text-xs mb-1 opacity-90">{msg.role === 'user' ? '👤 Bạn' : '🤖 Gia sư AI (Thầy Nghĩa Guru)'}:</div>
+                    {msg.role === 'ai' ? renderFormattedTutorMessage(msg.text) : <div className="whitespace-pre-wrap">{msg.text}</div>}
                   </div>
                 ))
               )}
@@ -396,17 +684,75 @@ export function AITutoring() {
                 type="text" 
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isTyping && chatInput.trim()) {
+                    handleSendChat();
+                  }
+                }}
+                disabled={isTyping}
                 placeholder="Ví dụ: Tại sao đáp án A lại sai?"
-                className="flex-1 bg-[#0e1117] border border-[#334155] rounded px-3 py-2 text-sm text-white outline-none focus:border-[#3b82f6]"
+                className="flex-1 bg-[#0e1117] border border-[#334155] rounded px-3 py-2 text-sm text-white outline-none focus:border-[#3b82f6] disabled:opacity-50"
               />
               <button 
-                onClick={handleSendChat}
-                className="bg-[#3b82f6] hover:bg-[#2563eb] text-white px-4 py-2 rounded text-sm font-medium transition-colors"
+                type="button"
+                onClick={() => handleSendChat()}
+                disabled={isTyping || !chatInput.trim()}
+                className="bg-[#3b82f6] hover:bg-[#2563eb] disabled:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded text-sm font-medium transition-colors"
               >
                 Gửi câu hỏi
               </button>
             </div>
+
+            {/* 4 Chế độ Socratic 1-Chạm (Ngay dưới khung chat) */}
+            <div className="mt-3 pt-3 border-t border-[#334155]/60">
+              <div className="text-[12px] font-semibold text-amber-300 mb-2 flex items-center gap-1.5">
+                <span>🧭 Chế độ Socratic 1-Chạm (Thầy Nghĩa Guru):</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  {
+                    icon: '🧭',
+                    label: 'Gợi ý bước 1 (Không lộ đáp án)',
+                    prompt: '🧭 Thầy ơi, hãy cho em gợi ý bước 1 để tự tư duy câu này theo phương pháp Socratic, tuyệt đối không lộ đáp án nhé!',
+                    color: 'border-sky-500/30 hover:border-sky-400 bg-sky-950/40 hover:bg-sky-900/50 text-sky-200',
+                  },
+                  {
+                    icon: '🪤',
+                    label: 'Chỉ rõ bẫy đáp án tôi vừa chọn',
+                    prompt: `🪤 Thầy ơi, hãy chỉ rõ bẫy College Board ở phương án em vừa chọn${selectedAnswer ? ` (Đáp án ${selectedAnswer})` : ''}, tại sao học sinh lại dễ bị lừa ở đây?`,
+                    color: 'border-rose-500/30 hover:border-rose-400 bg-rose-950/40 hover:bg-rose-900/50 text-rose-200',
+                  },
+                  {
+                    icon: '⚡',
+                    label: 'Mẹo giải nhanh câu này trong 15 giây',
+                    prompt: '⚡ Thầy ơi, hãy chỉ em bí kíp thực chiến hoặc mẹo bấm Desmos trong 15 giây để xử lý câu này nhanh nhất!',
+                    color: 'border-amber-500/30 hover:border-amber-400 bg-amber-950/40 hover:bg-amber-900/50 text-amber-200',
+                  },
+                  {
+                    icon: '🔁',
+                    label: 'Tạo 1 câu mini tương tự để kiểm tra',
+                    prompt: '🔁 Thầy ơi, hãy tạo 1 câu mini tương tự (có 4 đáp án A, B, C, D) cùng dạng bài này để em kiểm tra phản xạ ngay nhé!',
+                    color: 'border-emerald-500/30 hover:border-emerald-400 bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-200',
+                  },
+                ].map((btn, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    disabled={isTyping}
+                    onClick={() => handleSendChat(btn.prompt)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-all active:scale-95 disabled:opacity-50 text-left ${btn.color}`}
+                  >
+                    <span className="text-base">{btn.icon}</span>
+                    <span className="truncate">{btn.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Thẻ Mở Khóa Pro Teaser khi hết hạn mức Free (429) */}
+            {(isQuotaExceeded || (quota && quota.limit > 0 && (quota.remaining ?? 0) <= 0)) && (
+              <ProUnlockTeaserCard />
+            )}
           </div>
         </div>
       )}

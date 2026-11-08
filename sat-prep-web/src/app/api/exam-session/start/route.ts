@@ -43,10 +43,32 @@ export async function POST(request: NextRequest) {
 
     // E2E: trả module đề TẤT ĐỊNH (bỏ OpenAI + DB) để Playwright chạy offline/nhanh.
     if (isE2E()) {
-      return NextResponse.json({ section, mode, module: e2eModule(section, 1) });
+      const e2eMod = e2eModule(section, 1);
+      const cleanQuestions = (e2eMod.questions || []).map((q: any) => {
+        const {
+          correct_choice: _c,
+          correctChoice: _cc,
+          correctAnswer: _ca,
+          correct_answer: _ca2,
+          explanation: _e,
+          explanation_vi: _evi,
+          explanationVi: _evi2,
+          difficulty: _d,
+          ...safe
+        } = q;
+        return safe;
+      });
+      return NextResponse.json({
+        section,
+        mode,
+        module: { ...e2eMod, questions: cleanQuestions },
+      });
     }
 
-    // Thi Thật (QAS): gate tier + năng lực server-side (đóng lỗ hổng gate-level client).
+    // Thi Thật (QAS): gate tier server-side. Nếu level < 7 thì gắn cờ cảnh báo khuyên dùng
+    // (Soft Warning) nhưng KHÔNG khóa cứng học viên đã mua gói Ultimate.
+    let levelWarning = false;
+    let currentLevel = 1;
     if (mode === 'real') {
       const [tier, summary, gates] = await Promise.all([
         getUserTier(user.id),
@@ -61,13 +83,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const level = buildSkillTree(summary, gates).masteredCount + 1;
-      if (level < 7) {
-        return NextResponse.json(
-          { error: 'Cần tinh thông 6 kỹ năng để mở khóa đề thi thật QAS.', reason: 'capability' },
-          { status: 403 }
-        );
-      }
+      currentLevel = buildSkillTree(summary, gates).masteredCount + 1;
+      levelWarning = currentLevel < 7;
     }
 
     const origin = request.nextUrl.origin;
@@ -82,13 +99,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Phát từng câu: lưu đáp án + độ khó server-side, trả câu đã giấu đáp án + questionId.
+    // Phát từng câu: lưu đáp án + lời giải + độ khó server-side, trả câu đã giấu đáp án + questionId.
+    // Khắc phục triệt để lỗ hổng #016: Xoá sạch mọi trường đáp án & giải thích (correct_choice,
+    // correctAnswer, explanation, explanation_vi, v.v.) trước khi trả về client.
     const safeQuestions = await Promise.all(
       generated.questions.map(async (q) => {
-        const questionId = await issueQuestion(user.id, q.correct_choice, q.skillId, q.difficulty, {
+        const correctChoice = q.correct_choice ?? (q as any).correctAnswer ?? '';
+        const explanation = q.explanation ?? (q as any).explanation_vi ?? (q as any).explanationVi ?? null;
+        const questionId = await issueQuestion(user.id, correctChoice, q.skillId, q.difficulty, {
           src: 'exam',
+          explanation,
         });
-        const { correct_choice: _c, explanation: _e, difficulty: _d, ...safe } = q;
+        const {
+          correct_choice: _c,
+          correctChoice: _cc,
+          correctAnswer: _ca,
+          correct_answer: _ca2,
+          explanation: _e,
+          explanation_vi: _evi,
+          explanationVi: _evi2,
+          difficulty: _d,
+          ...safe
+        } = q as Record<string, any>;
+
+        if (Array.isArray(safe.choices)) {
+          safe.choices = safe.choices.map((choice: any) => {
+            if (choice && typeof choice === 'object') {
+              const { isCorrect: _ic, is_correct: _ic2, correct: _cor, ...cleanChoice } = choice;
+              return cleanChoice;
+            }
+            return choice;
+          });
+        }
+
         return { ...safe, questionId };
       })
     );
@@ -96,6 +139,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       section,
       mode,
+      ...(mode === 'real' ? { levelWarning, level: currentLevel } : {}),
       module: {
         name: generated.name,
         timeMinutes: generated.timeMinutes,

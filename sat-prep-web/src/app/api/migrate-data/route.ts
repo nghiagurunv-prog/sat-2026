@@ -134,12 +134,22 @@ export async function GET() {
       }));
 
       if (insertData.length > 0) {
-        // Xóa hết câu sai cũ của user này để tránh trùng lặp
-        await supabase.from('user_mistakes').delete().eq('user_id', user.id);
-        
-        const { error } = await supabase.from('user_mistakes').insert(insertData);
-        if (!error) migratedMistakesCount = insertData.length;
-        else mistakesError = error;
+        // Lấy danh sách câu sai đã có trên DB để merge an toàn, KHÔNG xóa câu mới của user
+        const { data: existingMistakes } = await supabase
+          .from('user_mistakes')
+          .select('question')
+          .eq('user_id', user.id);
+
+        const existingSet = new Set((existingMistakes || []).map((m: { question: string }) => m.question));
+        const newMistakes = insertData.filter((item: { question: string }) => !existingSet.has(item.question));
+
+        if (newMistakes.length > 0) {
+          const { error } = await supabase.from('user_mistakes').insert(newMistakes);
+          if (!error) migratedMistakesCount = newMistakes.length;
+          else mistakesError = error;
+        } else {
+          migratedMistakesCount = 0;
+        }
       }
     } else {
       mistakesError = 'File cau_sai.json không tồn tại';
@@ -160,12 +170,22 @@ export async function GET() {
       }));
 
       if (insertData.length > 0) {
-        // Xóa hết lịch sử cũ của user
-        await supabase.from('test_history').delete().eq('user_id', user.id);
-        
-        const { error } = await supabase.from('test_history').insert(insertData);
-        if (!error) migratedHistoryCount = insertData.length;
-        else historyError = error;
+        // Lấy danh sách lịch sử thi đã có để merge an toàn, KHÔNG xóa lịch sử mới
+        const { data: existingHistory } = await supabase
+          .from('test_history')
+          .select('test_timestamp')
+          .eq('user_id', user.id);
+
+        const existingTimestamps = new Set((existingHistory || []).map((h: { test_timestamp: number }) => h.test_timestamp));
+        const newHistory = insertData.filter((item: { test_timestamp: number }) => !existingTimestamps.has(item.test_timestamp));
+
+        if (newHistory.length > 0) {
+          const { error } = await supabase.from('test_history').insert(newHistory);
+          if (!error) migratedHistoryCount = newHistory.length;
+          else historyError = error;
+        } else {
+          migratedHistoryCount = 0;
+        }
       }
     } else {
       historyError = 'File lich_su_thi.json không tồn tại';

@@ -28,19 +28,27 @@ export default function ErrorBoundary({
         <div className="bg-[#0f172a] rounded-lg p-4 mb-8 text-left overflow-x-auto border border-[#334155]">
           <div className="text-[10px] text-gray-400 mb-1 uppercase tracking-wider font-bold">Mã lỗi kỹ thuật (Error Trace):</div>
           <p className="text-xs text-[#ef4444] font-mono whitespace-pre-wrap">
-            {error.message || "Unknown Error"}
+            Đã xảy ra sự cố trong quá trình xử lý yêu cầu. Vui lòng thử lại sau.
           </p>
           {error.digest && (
             <p className="text-xs text-gray-500 mt-2">Digest ID: {error.digest}</p>
           )}
         </div>
 
-        <button
-          onClick={() => reset()}
-          className="bg-gradient-to-r from-[#ef4444] to-[#b91c1c] hover:from-[#dc2626] hover:to-[#991b1b] text-white font-bold py-3 px-8 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 mx-auto"
-        >
-          <span>🔄</span> Thử Lại (Try Again)
-        </button>
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          <button
+            onClick={() => reset()}
+            className="bg-gradient-to-r from-[#ef4444] to-[#b91c1c] hover:from-[#dc2626] hover:to-[#991b1b] text-white font-bold py-3 px-8 rounded-full shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+          >
+            <span>🔄</span> Thử Lại (Try Again)
+          </button>
+          <button
+            onClick={() => { window.location.href = '/'; }}
+            className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 font-bold py-3 px-8 rounded-full transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+          >
+            <span>🏠</span> Về Trang Chủ
+          </button>
+        </div>
         
         <div className="mt-8 text-xs font-bold" style={{ color: "#fbbf24", textShadow: "0 0 5px rgba(251, 191, 36, 0.5)" }}>
           PRODUCED BY Nghia Guru

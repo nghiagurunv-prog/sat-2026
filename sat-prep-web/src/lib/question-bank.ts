@@ -214,27 +214,80 @@ export async function poolSize(moduleType: string): Promise<number> {
 export async function getFromBank(
   moduleType: string,
   topic?: string,
-  difficulty?: string
+  difficulty?: string,
+  count: number = 1
 ): Promise<unknown | null> {
   try {
     const supabase = await createClient();
-    let query = supabase.from('questions').select('id, topic, data').eq('module_type', moduleType);
+    let query = supabase
+      .from('questions')
+      .select('*')
+      .eq('module_type', moduleType);
     if (difficulty) query = query.eq('difficulty', difficulty);
+
+    // Giới hạn tải và ưu tiên các câu ít được sử dụng để tiết kiệm RAM serverless
+    query = query
+      .order('usage_count', { ascending: true })
+      .limit(Math.max(count * 4, 40));
+
     const { data: rows, error } = await query;
     if (error || !rows || rows.length === 0) return null;
 
-    const matchTopic = topic ? rows.filter((r) => r.topic === topic) : [];
-    const pool = matchTopic.length > 0 ? matchTopic : rows;
+    const typedRows = rows as Array<{ id: string; topic: string; data: unknown }>;
+    const matchTopic = topic ? typedRows.filter((r) => r.topic === topic) : [];
+    const pool = matchTopic.length > 0 ? matchTopic : typedRows;
 
     const pick = pool[Math.floor(Math.random() * pool.length)];
-    // Đếm tái dùng (fire-and-forget, atomic qua RPC). Không await → không chặn
+    // Đếm tái dùng (fire-and-forget, atomic qua RPC hoặc fallback admin). Không await → không chặn
     // đường trả câu; nuốt lỗi để RPC-chưa-migrate / lỗi DB không vỡ luồng.
     if (pick.id) {
-      supabase
-        .rpc('increment_question_usage', { p_id: pick.id })
-        .then(({ error: rpcErr }) => {
-          if (rpcErr) console.error('increment_question_usage:', rpcErr.message);
-        });
+      const selectedIds = [pick.id];
+      (async () => {
+        try {
+          let rpcSuccess = false;
+          try {
+            // Ưu tiên gọi RPC increment_question_usage dạng mảng hoặc đơn
+            const { error: rpcErr } = await supabase.rpc('increment_question_usage', { p_ids: selectedIds });
+            if (!rpcErr) {
+              rpcSuccess = true;
+            } else {
+              const { error: singleRpcErr } = await supabase.rpc('increment_question_usage', { p_id: pick.id });
+              if (!singleRpcErr) rpcSuccess = true;
+            }
+          } catch {
+            rpcSuccess = false;
+          }
+
+          if (!rpcSuccess) {
+            // Fallback: vòng lặp update qua createAdminClient() nếu có service role key hoặc supabase hiện tại
+            let clientToUpdate = supabase;
+            if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+              try {
+                const { createAdminClient } = await import('@/lib/supabase/admin');
+                clientToUpdate = createAdminClient();
+              } catch {
+                // Ignore fallback error
+              }
+            }
+
+            for (const id of selectedIds) {
+              const { data: qRow } = await clientToUpdate
+                .from('questions')
+                .select('usage_count')
+                .eq('id', id)
+                .single();
+              const nextUsage = (qRow?.usage_count ?? 0) + 1;
+              await clientToUpdate
+                .from('questions')
+                .update({ usage_count: nextUsage })
+                .eq('id', id);
+            }
+          }
+        } catch (updateErr) {
+          // Bắt lỗi êm ái
+          console.warn('increment_question_usage fallback warning:', updateErr);
+        }
+      })();
     }
     return pick.data;
   } catch (e) {

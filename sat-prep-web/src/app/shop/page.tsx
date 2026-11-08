@@ -16,6 +16,34 @@ const STATUS_META: Record<RedemptionStatus, { label: string; cls: string }> = {
 // Thứ hạng gói để so điều kiện gate hiển thị (free < premium < ultimate).
 const TIER_RANK: Record<string, number> = { free: 0, premium: 1, ultimate: 2 };
 
+// #C073: Danh mục kho học liệu độc quyền (tải tức thì 0s)
+const STUDY_MATERIALS = [
+  {
+    id: 'mat-desmos-handbook',
+    name: 'Sổ tay Bí kíp Bấm Máy Desmos 800/800 Math',
+    desc: 'Tổng hợp 40 tuyệt chiêu đồ thị, hệ phương trình, hồi quy & tối ưu thời gian làm bài Math.',
+    cost: 150,
+    tag: 'Math 800 🔥',
+    icon: '📐',
+  },
+  {
+    id: 'mat-idioms-200',
+    name: 'Bộ 200 Idioms & Từ Vựng Cốt Lõi RW 750+',
+    desc: 'Danh mục từ vựng học thuật tần suất cao nhất trong bài thi Digital SAT kèm ngữ cảnh bẫy.',
+    cost: 120,
+    tag: 'RW 750+ 📖',
+    icon: '📚',
+  },
+  {
+    id: 'mat-evidence-50',
+    name: 'Tuyển Tập 50 Bẫy Câu Hỏi Dẫn Chứng Evidence',
+    desc: 'Bóc tách các bẫy suy diễn sai lệch, dẫn chứng thiếu sót trong Module 2 RW Hard.',
+    cost: 180,
+    tag: 'Chinh phục 1500+ 🎯',
+    icon: '🔍',
+  },
+];
+
 export default function ShopPage() {
   const { coins, buyItem, redeemReward, tier } = useGamification();
   const { showToast } = useToast();
@@ -23,6 +51,34 @@ export default function ShopPage() {
   // Quà THẬT cần xác nhận (đổi xong không hoàn) + tránh double-click khi đang gọi API.
   const [confirmReward, setConfirmReward] = useState<{ id: string; name: string; price: number } | null>(null);
   const [redeeming, setRedeeming] = useState(false);
+
+  // #C073: Quản lý học liệu đã mở khóa (lưu localStorage)
+  const [unlockedMaterials, setUnlockedMaterials] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem('sat_unlocked_materials_v1');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const handleUnlockMaterial = (item: { id: string; name: string; cost: number }) => {
+    if (unlockedMaterials.includes(item.id)) {
+      showToast(`📥 Đang tải xuống tài liệu: ${item.name}`, 'info');
+      return;
+    }
+    if (coins < item.cost) {
+      showToast(`⚠️ Bạn cần ${item.cost} Xu để đổi (hiện có ${coins} Xu). Hãy luyện tập thêm!`, 'error');
+      return;
+    }
+    const updated = [...unlockedMaterials, item.id];
+    setUnlockedMaterials(updated);
+    try {
+      localStorage.setItem('sat_unlocked_materials_v1', JSON.stringify(updated));
+    } catch {}
+    showToast(`🎉 Mở khóa thành công "${item.name}"! Bạn có thể tải ngay.`, 'success');
+  };
 
   // Lịch sử phiếu đổi quà của user (GET /api/redeem).
   const [redemptions, setRedemptions] = useState<RedemptionRecord[]>([]);
@@ -147,6 +203,98 @@ export default function ShopPage() {
             </div>
           );
         })}
+      </div>
+
+      {/* #C073: Kho Học Liệu Độc Quyền (Đổi ngay 0s) */}
+      <div className="bg-gradient-to-r from-indigo-950/60 via-slate-900/80 to-blue-950/60 border border-indigo-500/30 rounded-2xl p-6 shadow-xl space-y-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-indigo-500/20 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">📚</span>
+              <h2 className="text-xl font-black text-white">Kho Học Liệu Độc Quyền (Đổi Ngay 0s)</h2>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                Tải tức thì ⚡
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 mt-1">
+              Dùng Xu tích lũy để mở khóa ngay tài liệu PDF tuyển chọn độc quyền từ Guru SAT, không cần chờ duyệt!
+            </p>
+          </div>
+          <div className="text-xs font-semibold text-indigo-300 bg-indigo-500/10 px-3 py-1.5 rounded-lg border border-indigo-500/20 self-start md:self-auto">
+            Số dư khả dụng: <span className="text-amber-400 font-black">{coins}</span> 💰
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {STUDY_MATERIALS.map((mat) => {
+            const isUnlocked = unlockedMaterials.includes(mat.id);
+            return (
+              <div
+                key={mat.id}
+                className="bg-slate-900/80 border border-slate-800 hover:border-indigo-500/50 rounded-xl p-5 flex flex-col justify-between space-y-4 transition-all"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-3xl">{mat.icon}</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      {mat.tag}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-bold text-white leading-snug">{mat.name}</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">{mat.desc}</p>
+                </div>
+
+                <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+                  <span className="text-amber-400 font-black text-sm">{mat.cost} 💰</span>
+                  <button
+                    onClick={() => handleUnlockMaterial(mat)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      isUnlocked
+                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md'
+                        : coins >= mat.cost
+                        ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                        : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                    }`}
+                  >
+                    <span>{isUnlocked ? '📥' : '🔓'}</span>
+                    <span>{isUnlocked ? 'Tải PDF Ngay' : 'Đổi Ngay'}</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* #C076: Hộp giải thích minh bạch điều kiện Tinh thông bền vững (Durable Mastered) */}
+      <div className="bg-slate-900/60 border border-emerald-500/30 rounded-xl p-5 shadow-lg space-y-3">
+        <div className="flex items-center gap-2.5">
+          <span className="text-xl">🛡️</span>
+          <h3 className="text-base font-bold text-white">
+            Chuẩn Tinh Thông Bền Vững (Durable Mastered) — Chống Pay-to-Win 100%
+          </h3>
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded border border-emerald-500/30">
+            Học thuật thực chất
+          </span>
+        </div>
+        <p className="text-xs text-slate-300 leading-relaxed">
+          Tại SAT Guru, vật phẩm trong Cửa Hàng và Xu chỉ hỗ trợ trải nghiệm thị giác và tài liệu tham khảo bổ trợ. 
+          <strong className="text-white"> Cấp độ Tinh thông (Mastered)</strong> của mỗi chủ đề toán học và đọc hiểu KHÔNG THỂ mua bằng tiền hay xu, mà bắt buộc phải đạt đủ 3 tiêu chuẩn FSRS Spaced-Repetition:
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+          <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800 text-xs">
+            <div className="text-emerald-400 font-bold mb-1">1. Tần suất ngắt quãng</div>
+            <p className="text-slate-400 text-[11px]">Đúng tối thiểu 3 phiên làm bài ngắt quãng cách nhau ít nhất 24-48 giờ.</p>
+          </div>
+          <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800 text-xs">
+            <div className="text-emerald-400 font-bold mb-1">2. Tỉ lệ chính xác cao</div>
+            <p className="text-slate-400 text-[11px]">Độ chính xác duy trì ≥ 85% và không phạm quá 1 lỗi sai trong 7 ngày gần nhất.</p>
+          </div>
+          <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800 text-xs">
+            <div className="text-emerald-400 font-bold mb-1">3. Kháng quên thực tế</div>
+            <p className="text-slate-400 text-[11px]">Chỉ số Retrievability ≥ 0.90 trong thuật toán FSRS-4.5 của hệ thống.</p>
+          </div>
+        </div>
       </div>
 
       {/* Lịch sử đổi quà thật — user theo dõi trạng thái phiếu */}

@@ -23,14 +23,27 @@ export async function GET(request: Request) {
   const user = await getCurrentUser();
   const tier = await getUserTier(user.id);
 
-  // Free & Premium bị khóa; chỉ Ultimate xem đề xuất adaptive (không tính, không lộ). UI hiện upsell.
-  if (tier !== 'ultimate') {
+  // Chỉ khóa gói Free; cả Premium & Ultimate đều được mở khóa Luyện Mục Tiêu (Adaptive).
+  if (tier === 'free') {
     return NextResponse.json({ recommendation: null, locked: true });
   }
 
   const summary = await getMasterySummary(user.id);
 
   const params = new URL(request.url).searchParams;
+
+  // Giới hạn count / limit truy vấn tối đa (<= 50) chống DoS/treo server (#016)
+  const countParam = params.get('count') ?? params.get('limit');
+  if (countParam !== null) {
+    const parsed = parseInt(countParam, 10);
+    if (isNaN(parsed) || parsed < 1 || parsed > 50) {
+      return NextResponse.json(
+        { error: 'Số lượng đề xuất truy vấn (count/limit) tối đa là 50.' },
+        { status: 400 }
+      );
+    }
+  }
+
   const subjectParam = params.get('subject');
   const subject =
     subjectParam === 'math' || subjectParam === 'reading'

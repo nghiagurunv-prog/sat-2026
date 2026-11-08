@@ -180,6 +180,10 @@ type GamificationState = {
   setSubject: (v: string) => void;
   questionKey: number;
   incrementQuestionKey: () => void;
+
+  // Economy Helpers (#022 Chặn NaN/Âm)
+  addXp?: (amount: number) => void;
+  addCoins?: (amount: number) => void;
 };
 
 /** Ngày local YYYY-MM-DD (chỉ để reset UI nhiệm vụ ngày — tiền vẫn do server
@@ -203,6 +207,8 @@ function nextInstanceId(): string {
   instanceCounter += 1;
   return `eq_${Date.now().toString(36)}_${instanceCounter}`;
 }
+
+const GAMIFICATION_STORAGE_KEY = 'sat_prep_gamification_state';
 
 const GamificationContext = createContext<GamificationState | undefined>(undefined);
 
@@ -250,6 +256,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   // banner trước khi biết chắc — chỉ bật banner khi fetch xác nhận chưa hoàn tất.
   const [onboardingCompleted, setOnboardingCompleted] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
+  const isInitialHydratedRef = useRef(false);
 
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -259,6 +266,24 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     async function loadData() {
       try {
+        // Tải trước từ localStorage nếu có (#020)
+        try {
+          if (typeof window !== 'undefined') {
+            const cached = localStorage.getItem(GAMIFICATION_STORAGE_KEY);
+            if (cached) {
+              const parsedCache = JSON.parse(cached);
+              if (parsedCache.user_stats) {
+                setUserStats(prev => ({ ...prev, ...parsedCache.user_stats }));
+              }
+              if (Array.isArray(parsedCache.inventory)) setInventory(parsedCache.inventory);
+              if (parsedCache.practice_question) setPracticeQuestion(prev => ({ ...prev, ...parsedCache.practice_question }));
+              if (parsedCache.quests) setQuests(parsedCache.quests);
+            }
+          }
+        } catch {
+          // Bỏ qua lỗi parse cached local storage
+        }
+
         const [saveRes, ecoRes, treeRes, diagRes] = await Promise.all([
           fetch('/api/load-data'),
           fetch('/api/economy'),
@@ -350,15 +375,16 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       } catch (e) {
         console.error("Failed to load state from API", e);
       } finally {
+        isInitialHydratedRef.current = true;
         setIsLoaded(true);
       }
     }
     loadData();
   }, []);
 
-  // Save to Local API with Debounce (1.5s)
+  // Save to Local API with Debounce (1.5s) (#020 Chặn ghi đè Cloud trước khi Hydrate)
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || !isInitialHydratedRef.current) return;
     
     const limitedInventory = inventory.length > 100 ? inventory.slice(-100) : inventory;
     
@@ -368,6 +394,15 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       practice_question: practiceQuestion,
       quests: quests
     };
+
+    // Đồng bộ tức thì vào localStorage cho multi-tab (#021)
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(GAMIFICATION_STORAGE_KEY, JSON.stringify(state));
+      }
+    } catch {
+      // Bỏ qua lỗi quota storage
+    }
     
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
@@ -382,8 +417,79 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         console.error("Failed to save state to API", e);
       }
     }, 1500);
-    
+
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
   }, [userStats, inventory, practiceQuestion, quests, isLoaded]);
+
+  // Đồng bộ Đa Tab (#021 — Multi-Tab Storage Sync)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key !== GAMIFICATION_STORAGE_KEY || !e.newValue) return;
+      try {
+        const synced = JSON.parse(e.newValue);
+        if (synced?.user_stats) {
+          setUserStats(prev => {
+            const newStats = synced.user_stats;
+            return {
+              ...prev,
+              ...newStats,
+              xp: Math.max(prev.xp, Number.isFinite(newStats.xp) ? newStats.xp : prev.xp),
+              level: Math.max(prev.level, Number.isFinite(newStats.level) ? newStats.level : prev.level),
+              coins: Number.isFinite(newStats.coins) ? newStats.coins : prev.coins,
+            };
+          });
+        }
+        if (Array.isArray(synced?.inventory)) {
+          setInventory(synced.inventory);
+        }
+        if (synced?.practice_question) {
+          setPracticeQuestion(prev => ({ ...prev, ...synced.practice_question }));
+        }
+        if (synced?.quests) {
+          setQuests(synced.quests);
+        }
+      } catch (err) {
+        console.error("Failed to parse multi-tab storage sync", err);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // Flush an toàn khi đóng tab / ẩn trang (#022)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleFlush = () => {
+      if (!isInitialHydratedRef.current) return;
+      const limitedInventory = inventory.length > 100 ? inventory.slice(-100) : inventory;
+      const state = { 
+        user_stats: userStats,
+        inventory: limitedInventory, 
+        practice_question: practiceQuestion,
+        quests: quests
+      };
+
+      try {
+        localStorage.setItem(GAMIFICATION_STORAGE_KEY, JSON.stringify(state));
+      } catch {}
+
+      try {
+        if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+          const blob = new Blob([JSON.stringify(state)], { type: 'application/json' });
+          navigator.sendBeacon('/api/save-data', blob);
+        }
+      } catch {}
+    };
+
+    window.addEventListener('beforeunload', handleFlush);
+    return () => window.removeEventListener('beforeunload', handleFlush);
+  }, [userStats, inventory, practiceQuestion, quests]);
 
   // UI States
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -523,6 +629,9 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   };
 
   const buyItem = (itemId: string, price: number): BuyResult => {
+    if (!Number.isFinite(price) || price < 0) {
+      return { success: false, reason: 'insufficient' };
+    }
     // resolveBuy (thuần) quyết: đủ xu? · đồ vĩnh viễn đã sở hữu? · maxPower/shield
     // cộng thêm. Equipment/skin mua 1 LẦN (chống bơm maxPower ảo bằng mua lại);
     // consumable mua lặp. maxPower là cosmetic (không bơm lực PvP — xem rpg-rules).
@@ -611,6 +720,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   // hết xu / lỗi mạng) → caller rollback thay đổi optimistic (coins/inventory/
   // maxPower) để UI không hiện đồ user chưa thực sự sở hữu tới lần sync sau.
   const postSpend = (amount: number, itemId?: string, onReject?: () => void) => {
+    if (!Number.isFinite(amount) || amount <= 0) return;
     fetch('/api/economy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -631,12 +741,24 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       });
   };
 
+  const addXp = (amount: number) => {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    setUserStats(prev => ({ ...prev, xp: Math.max(0, prev.xp + Math.floor(amount)) }));
+  };
+
+  const addCoins = (amount: number) => {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    setUserStats(prev => ({ ...prev, coins: Math.max(0, prev.coins + Math.floor(amount)) }));
+  };
+
   const spendCoins = (amount: number) => {
-    if (userStats.coins >= amount) {
-      setUserStats(prev => ({ ...prev, coins: prev.coins - amount }));
+    if (!Number.isFinite(amount) || amount <= 0) return false;
+    const safeAmount = Math.floor(amount);
+    if (userStats.coins >= safeAmount) {
+      setUserStats(prev => ({ ...prev, coins: Math.max(0, prev.coins - safeAmount) }));
       // Server từ chối (hết xu do lệch state / lỗi) → hoàn lại amount.
-      postSpend(amount, undefined, () => {
-        setUserStats(prev => ({ ...prev, coins: prev.coins + amount }));
+      postSpend(safeAmount, undefined, () => {
+        setUserStats(prev => ({ ...prev, coins: prev.coins + safeAmount }));
       });
       return true;
     }
@@ -755,6 +877,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   // chưa có track → match theo id gốc q1/q2/q3 (tương thích ngược).
   const TRACK_LEGACY_ID: Record<QuestTrack, string> = { answer: 'q1', vocab: 'q2', exam: 'q3' };
   const updateQuestProgress = (track: QuestTrack, amount: number) => {
+    if (!Number.isFinite(amount) || amount <= 0) return;
     setQuests(prev => {
       const legacyId = TRACK_LEGACY_ID[track];
       const updatedDaily = prev.daily.map(q =>
@@ -838,7 +961,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
       unlockedBadges,
 
-      incrementCorrectAnswers, registerGradedResult, syncServerEconomy, syncDayStreak, claimDailyLogin, spinDailyWheel, buyItem, redeemReward, spendCoins, toggleBookmark, upgradeItem, fightPvP, equipPet,
+      incrementCorrectAnswers, registerGradedResult, syncServerEconomy, syncDayStreak, claimDailyLogin, spinDailyWheel, buyItem, redeemReward, spendCoins, addXp, addCoins, toggleBookmark, upgradeItem, fightPvP, equipPet,
       updateQuestProgress, claimQuest,
       soundEnabled, setSoundEnabled, focusMode, setFocusMode,
       hideBanner, setHideBanner, learningMode, setLearningMode,

@@ -61,14 +61,29 @@ export async function POST(req: Request) {
         : session.payment_intent?.id ?? '';
     const amountVnd = Number(session.amount_total ?? 0); // VND zero-decimal → = priceVnd
 
-    // 5) Xác nhận atomic (kiểm tiền + idempotent + cấp gói nguyên tử A2).
+    // 5) Xác nhận atomic (kiểm tiền + idempotent + cấp gói nguyên tử A2 + hỗ trợ pending/expired).
     const outcome = await confirmPaymentAtomic(orderId, gatewayTxnId, amountVnd);
 
-    // Lỗi tạm (confirm_unavailable / bad_status / error) → 500 để Stripe retry.
-    // amount_mismatch / not_found → 200 (không nên retry — dữ liệu sẽ không đổi).
-    if (!outcome.ok && outcome.reason !== 'amount_mismatch' && outcome.reason !== 'not_found') {
+    // 5.1) Idempotent: Đơn đã thanh toán trước đó (order.status === 'paid') → bỏ qua không cộng trùng
+    if (outcome.alreadyConfirmed) {
+      return NextResponse.json({ received: true, alreadyPaid: true });
+    }
+
+    // 5.2) Kiểm tra lỗi xác nhận
+    if (!outcome.ok) {
+      if (outcome.reason === 'amount_mismatch') {
+        console.warn(`[stripe-webhook] Số tiền không khớp hoặc không đủ cho orderId=${orderId}: nhận ${amountVnd} VND`);
+        return NextResponse.json({ received: true, reason: 'amount_mismatch' }, { status: 200 });
+      }
+      if (outcome.reason === 'not_found') {
+        console.warn(`[stripe-webhook] Không tìm thấy đơn hàng: orderId=${orderId}`);
+        return NextResponse.json({ received: true, reason: 'not_found' }, { status: 200 });
+      }
+      // Lỗi tạm (confirm_unavailable / bad_status / error) → 500 để Stripe retry.
+      console.error(`[stripe-webhook] Lỗi hệ thống khi xác nhận orderId=${orderId}:`, outcome.reason);
       return NextResponse.json({ message: 'Confirm failed, retry' }, { status: 500 });
     }
+
     return NextResponse.json({ received: true });
   } catch (error) {
     console.error('Lỗi stripe-webhook:', error);

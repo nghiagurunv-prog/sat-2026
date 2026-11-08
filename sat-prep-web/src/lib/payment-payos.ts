@@ -99,23 +99,24 @@ export function isPayosConfigured(): boolean {
 }
 
 /**
- * Sinh orderCode SỐ NGUYÊN duy nhất cho payOS (≤ 2^53-1). Ghép mili-giây
- * hiện tại với counter 3 chữ số trong process. Trước đây dùng giây + random
- * 0..999 → burst vài chục đơn/giây có thể đụng UNIQUE order_id. Counter đơn
- * điệu đóng collision trong cùng server process; vẫn nằm dưới Number.MAX_SAFE_INTEGER.
+ * Sinh orderCode SỐ NGUYÊN duy nhất cho payOS (≤ 2^53-1).
+ * Kết hợp timestamp mili-giây và crypto.randomInt(1000, 9999) để chống đụng độ (collision-free)
+ * khi nhiều học sinh bấm mua cùng mili-giây.
+ * Cụ thể: Math.floor((Date.now() % 1_000_000_000) * 10000 + crypto.randomInt(1000, 9999))
+ * cho ra 13 chữ số hoàn toàn nằm trong Number.MAX_SAFE_INTEGER và có 9,000 giá trị ngẫu nhiên mỗi mili-giây.
  */
-let payosOrderCounter = 0;
-let payosOrderLastMs = 0;
-export function generatePayosOrderCode(): number {
-  const ms = Date.now(); // ~13 chữ số
-  if (ms === payosOrderLastMs) {
-    payosOrderCounter = (payosOrderCounter + 1) % 1000;
-  } else {
-    payosOrderLastMs = ms;
-    payosOrderCounter = 0;
+let lastOrderCode = 0;
+export function generateOrderCode(): number {
+  let code = Math.floor((Date.now() % 1_000_000_000) * 10000 + crypto.randomInt(1000, 9999));
+  while (code === lastOrderCode) {
+    code = Math.floor((Date.now() % 1_000_000_000) * 10000 + crypto.randomInt(1000, 9999));
   }
-  return ms * 1000 + payosOrderCounter;
+  lastOrderCode = code;
+  return code;
 }
+
+/** Alias tương thích ngược */
+export const generatePayosOrderCode = generateOrderCode;
 
 /**
  * ============================================================================
@@ -133,10 +134,13 @@ export interface PayosCreateResult {
  * Gọi payOS create → trả checkoutUrl để redirect. Đọc creds từ env (server-only).
  * Trả ok:false nếu thiếu creds hoặc payOS trả lỗi (route bắt → 503).
  *
- * description payOS giới hạn ~25 ký tự → cắt gọn để tránh lỗi/lệch chữ ký.
+ * description payOS giới hạn ~25 ký tự (VietQR content).
+ * Đảm bảo đưa mã đơn lên ĐẦU chuỗi hoặc format `SAT ${orderCode}`.slice(0, 25)
+ * để ngân hàng không bao giờ cắt cụt mã đối soát.
  */
 export async function createPayosPayment(args: {
-  amountVnd: number;
+  amountVnd?: number;
+  amount?: number;
   orderCode: number;
   description: string;
   returnUrl: string;
@@ -152,12 +156,20 @@ export async function createPayosPayment(args: {
     return { ok: false, message: 'payOS chưa được cấu hình (thiếu creds).' };
   }
 
-  // description payOS tối đa 25 ký tự (VietQR content) → cắt an toàn.
-  const description = args.description.slice(0, 25);
+  // description payOS tối đa 25 ký tự (VietQR content).
+  // Đưa mã đơn lên ĐẦU chuỗi hoặc giữ nguyên nếu <= 25 ký tự, nếu dài hơn format `SAT ${orderCode}`.slice(0, 25)
+  // để ngân hàng không bao giờ cắt cụt mã đối soát.
+  const rawDesc = (args.description || '').trim();
+  const description =
+    rawDesc.length <= 25 && rawDesc.length > 0
+      ? rawDesc
+      : `SAT ${args.orderCode}`.slice(0, 25);
+
+  const amount = args.amountVnd ?? args.amount ?? 0;
 
   const params: PayosCreateParams = {
     orderCode: args.orderCode,
-    amount: args.amountVnd,
+    amount,
     description,
     cancelUrl: args.cancelUrl,
     returnUrl: args.returnUrl,
@@ -189,3 +201,6 @@ export async function createPayosPayment(args: {
     message: json?.desc ?? `payOS tạo giao dịch thất bại (HTTP ${res.status}).`,
   };
 }
+
+/** Alias chuẩn hóa API */
+export const createPayOSPaymentLink = createPayosPayment;

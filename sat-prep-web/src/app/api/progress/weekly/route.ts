@@ -9,17 +9,29 @@ import { computeWeeklyTrend } from '@/lib/daily-snapshot';
  * Chưa có snapshot → trend rỗng (UI báo "cần vài ngày học").
  */
 export async function GET() {
-  const user = await getCurrentUser();
+  try {
+    const user = await getCurrentUser();
 
-  const today = todayVN();
-  const since = (() => {
-    const [y, m, d] = today.split('-').map(Number);
-    const dt = new Date(Date.UTC(y, m - 1, d));
-    dt.setUTCDate(dt.getUTCDate() - 6);
-    return dt.toISOString().slice(0, 10);
-  })();
+    // Tính ngày hiện tại theo múi giờ Việt Nam (Asia/Ho_Chi_Minh, UTC+7) (#025)
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
 
-  const snapshots = await loadOwnSnapshots(user.id, since);
-  const trend = computeWeeklyTrend(snapshots, today);
-  return NextResponse.json(trend);
+    const since = (() => {
+      const [y, m, d] = today.split('-').map(Number);
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      dt.setUTCDate(dt.getUTCDate() - 6);
+      return dt.toISOString().slice(0, 10);
+    })();
+
+    const snapshots = await loadOwnSnapshots(user.id, since);
+    const trend = computeWeeklyTrend(snapshots || [], today);
+    return NextResponse.json(trend);
+  } catch (error) {
+    console.error("Lỗi lấy tiến độ tuần:", error);
+    return NextResponse.json({ error: "Lỗi hệ thống khi tải tiến độ tuần" }, { status: 500 });
+  }
 }

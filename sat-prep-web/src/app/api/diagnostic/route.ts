@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { rateLimit } from '@/lib/rate-limit';
 import { getDiagnosticQuestions, stripQuestion } from '@/lib/diagnostic';
-import { issueQuestion, countAnsweredQuestionsBySource, getIssuedSkillStateBySource } from '@/lib/issued-questions';
+import { issueQuestion, countAnsweredQuestionsBySource, getIssuedSkillStateBySource, gradeAnswer } from '@/lib/issued-questions';
 import { loadOnboarding, saveOnboardingComplete } from '@/lib/onboarding-store';
 import { setGoal, predictScore } from '@/lib/score-prediction';
 import { getUserTier } from '@/lib/subscription-store';
+import { matchesAnswer } from '@/lib/answer-match';
 
 /**
  * DIAGNOSTIC ONBOARDING — bài test xếp lớp đầu vào (§10.A.2/§10.A.5).
@@ -69,7 +70,9 @@ export async function POST(req: Request) {
         const prev = q.skillId ? issuedState[q.skillId] : undefined;
         // Câu cùng skill đã phát và CHƯA trả lời → reuse questionId (không issue mới).
         if (prev && !prev.answered) {
-          return { ...stripQuestion(q), questionId: prev.questionId };
+          const stripped = stripQuestion(q);
+          const { correct_choice: _c, explanation: _e, choice_analysis: _ca, ...safeQ } = stripped as any;
+          return { ...safeQ, questionId: prev.questionId };
         }
         // Skill đã trả lời rồi (prev.answered) HOẶC chưa từng phát → issue mới.
         // (Skill đã trả lời: câu mới vẫn phát để user làm lại, nhưng mastery
@@ -78,7 +81,9 @@ export async function POST(req: Request) {
           src: 'diagnostic',
           choiceAnalysis: q.choice_analysis,
         });
-        return { ...stripQuestion(q), questionId };
+        const stripped = stripQuestion(q);
+        const { correct_choice: _c, explanation: _e, choice_analysis: _ca, ...safeQ } = stripped as any;
+        return { ...safeQ, questionId };
       })
     );
 
@@ -116,6 +121,23 @@ export async function POST(req: Request) {
       getUserTier(user.id),
     ]);
     return NextResponse.json({ completed: true, prediction, tier });
+  }
+
+  if (action === 'grade') {
+    const { questionId, answer, userAns, correctAns } = body ?? {};
+    const submittedAns = userAns ?? answer;
+    let isCorrect = false;
+    if (questionId && submittedAns !== undefined) {
+      const res = await gradeAnswer(questionId, user.id, String(submittedAns));
+      if (res) {
+        isCorrect = res.correct;
+      } else if (correctAns !== undefined) {
+        isCorrect = matchesAnswer(String(submittedAns ?? ''), String(correctAns ?? ''));
+      }
+    } else if (submittedAns !== undefined && correctAns !== undefined) {
+      isCorrect = matchesAnswer(String(submittedAns ?? ''), String(correctAns ?? ''));
+    }
+    return NextResponse.json({ correct: isCorrect });
   }
 
   return NextResponse.json({ error: 'action không hợp lệ' }, { status: 400 });

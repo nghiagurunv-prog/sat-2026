@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { loadMistakes, addMistake, updateMistakeReview, type MistakeEntry } from '@/lib/mistakes-store';
+import { loadMistakes, addMistake, updateMistakeReview, getMistakeByIdFromDb, type MistakeEntry } from '@/lib/mistakes-store';
 import { promote, nextReview, isDue } from '@/lib/leitner';
 
 /**
@@ -50,20 +50,20 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const user = await getCurrentUser();
-    const { mistakeId, isRemembered } = await request.json();
-    if (typeof mistakeId !== 'string') {
-      return NextResponse.json({ error: "Thiếu mistakeId" }, { status: 400 });
+    const body = await request.json();
+    const targetId = typeof body.id === 'string' ? body.id : (typeof body.mistakeId === 'string' ? body.mistakeId : undefined);
+    if (!targetId) {
+      return NextResponse.json({ error: "Thiếu mistakeId hoặc id" }, { status: 400 });
     }
 
-    // Tìm bản ghi để biết box hiện tại.
-    const all = await loadMistakes(user.id);
-    const cur = all.find((m) => m.id === mistakeId);
+    // Tìm bản ghi trực tiếp theo ID O(1) thay vì tải toàn bộ bảng về RAM (#023)
+    const cur = await getMistakeByIdFromDb(user.id, targetId);
     if (!cur) {
       return NextResponse.json({ error: "Không tìm thấy câu sai" }, { status: 404 });
     }
 
-    const newBox = promote(cur.box ?? 1, !!isRemembered);
-    const updated = await updateMistakeReview(user.id, mistakeId, newBox, nextReview(newBox));
+    const newBox = promote(cur.box ?? 1, !!body.isRemembered);
+    const updated = await updateMistakeReview(user.id, targetId, newBox, nextReview(newBox));
     if (!updated) {
       return NextResponse.json({ error: "Lỗi hệ thống khi cập nhật" }, { status: 500 });
     }

@@ -34,10 +34,47 @@ create index if not exists idx_questions_module_diff on public.questions (module
 
 alter table public.questions enable row level security;
 
--- Mọi user đã đăng nhập đọc/ghi ngân hàng câu hỏi chung (KHÔNG ràng theo user_id).
+-- Mọi user đã đăng nhập đọc/thêm vào ngân hàng câu hỏi chung (KHÔNG ràng theo user_id).
+drop policy if exists "auth_read_questions" on public.questions;
 create policy "auth_read_questions"   on public.questions
   for select to authenticated using (true);
+
+drop policy if exists "auth_insert_questions" on public.questions;
 create policy "auth_insert_questions" on public.questions
   for insert to authenticated with check (true);
-create policy "auth_update_questions" on public.questions
-  for update to authenticated using (true) with check (true);
+
+-- 🔴 FIX #050 (CRITICAL SECURITY): KHÓA QUYỀN UPDATE TRỰC TIẾP TỪ CLIENT AUTHENTICATED
+-- Tuyệt đối KHÔNG cấp policy update cho authenticated (tránh bị sửa đề/đáp án ngân hàng).
+-- Update trực tiếp chỉ dành cho service_role (bypass RLS).
+drop policy if exists "auth_update_questions" on public.questions;
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- RPC increment_question_usage (ATOMIC, SECURITY DEFINER)
+-- Chỉ cho phép tăng usage_count, không cho phép sửa data / đáp án
+-- ────────────────────────────────────────────────────────────────────────────
+create or replace function public.increment_question_usage(p_ids text[])
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.questions
+     set usage_count = usage_count + 1
+   where id = any(p_ids);
+$$;
+
+create or replace function public.increment_question_usage(p_id text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.questions
+     set usage_count = usage_count + 1
+   where id = p_id;
+$$;
+
+grant execute on function public.increment_question_usage(text[]) to authenticated;
+grant execute on function public.increment_question_usage(text) to authenticated;
+grant execute on function public.increment_question_usage(text[]) to service_role;
+grant execute on function public.increment_question_usage(text) to service_role;

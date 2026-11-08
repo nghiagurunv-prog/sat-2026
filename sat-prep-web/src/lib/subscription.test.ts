@@ -6,6 +6,8 @@ import {
   computeExpiry,
   isActive,
   resolveTier,
+  validateCoupon,
+  applyCouponPrice,
   type SubscriptionRecord,
 } from './subscription.ts';
 
@@ -66,4 +68,23 @@ test('resolveTier: còn hạn → tier gói; hết hạn/null → free', () => {
   assert.equal(resolveTier(s, '2026-01-15T00:00:00.000Z'), 'ultimate');
   assert.equal(resolveTier(s, '2026-03-01T00:00:00.000Z'), 'free');
   assert.equal(resolveTier(null, '2026-01-15T00:00:00.000Z'), 'free');
+});
+
+test('validateCoupon & applyCouponPrice: giảm 10% cho mã hợp lệ và giữ nguyên khi mã sai/rỗng', () => {
+  const valid = validateCoupon('nghiaguru10');
+  assert.equal(valid.valid, true);
+  assert.equal(valid.code, 'NGHIAGURU10');
+  assert.equal(valid.discountPercent, 10);
+
+  const customValid = validateCoupon('kol2026', ['KOL2026']);
+  assert.equal(customValid.valid, true);
+  assert.equal(customValid.discountPercent, 10);
+
+  const invalid = validateCoupon('FAKECODE');
+  assert.equal(invalid.valid, false);
+  assert.equal(invalid.discountPercent, 0);
+
+  assert.equal(applyCouponPrice(199_000, 'NGHIAGURU10'), 179_100);
+  assert.equal(applyCouponPrice(199_000, 'FAKECODE'), 199_000);
+  assert.equal(applyCouponPrice(199_000, null), 199_000);
 });

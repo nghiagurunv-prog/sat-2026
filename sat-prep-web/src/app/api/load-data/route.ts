@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getCurrentUser } from '@/lib/auth';
 import { getUserDataPath } from '@/lib/user-data';
-import { loadProgressRaw } from '@/lib/progress-store';
+import { loadProgressRaw, getProgressFromDb } from '@/lib/progress-store';
 import fs from 'fs';
 
 const SECRET_KEY: string = (() => {
@@ -64,6 +64,16 @@ export async function GET() {
     if (fileContent == null) {
       const filePath = getUserDataPath(user.id, 'streak_data.json');
       if (!fs.existsSync(filePath)) {
+        // Fallback kiểm tra getProgressFromDb nếu đã được lưu dưới dạng structured progress
+        try {
+          const dbProgress = await getProgressFromDb(user.id);
+          if (dbProgress) {
+            const signature = generateSignature(dbProgress as Record<string, unknown>);
+            return NextResponse.json({ ...DEFAULT_STATE, ...dbProgress, signature });
+          }
+        } catch (dbErr) {
+          console.warn("Lỗi đọc getProgressFromDb fallback:", dbErr);
+        }
         // Người dùng mới (hoặc chưa có dữ liệu) → state mặc định.
         return NextResponse.json(DEFAULT_STATE);
       }
@@ -84,7 +94,13 @@ export async function GET() {
       return NextResponse.json(DEFAULT_STATE);
     }
 
-    return NextResponse.json(parsedData);
+    // Bảo đảm các key cấu trúc tối thiểu của DEFAULT_STATE luôn tồn tại để UI không bị crash
+    return NextResponse.json({
+      ...DEFAULT_STATE,
+      ...parsedData,
+      user_stats: { ...DEFAULT_STATE.user_stats, ...(parsedData.user_stats || {}) },
+      quests: { ...DEFAULT_STATE.quests, ...(parsedData.quests || {}) }
+    });
   } catch (error) {
     console.error("Lỗi khi load dữ liệu:", error);
     // Nếu file bị lỗi format (corrupted), reset về mặc định

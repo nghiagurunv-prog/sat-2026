@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { CorePracticeUI, type PracticeQuestion } from '@/components/CorePracticeUI';
 import { getSkill } from '@/lib/skill-taxonomy';
@@ -53,6 +53,10 @@ export default function DiagnosticPage() {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Chống double-submit khi bắt đầu và khi nộp bài
+  const isSubmittingRef = useRef(false);
+  const isStartingRef = useRef(false);
+
   useEffect(() => {
     async function checkStatus() {
       try {
@@ -71,6 +75,8 @@ export default function DiagnosticPage() {
   }, []);
 
   const startDiagnostic = async () => {
+    if (isStartingRef.current || starting) return;
+    isStartingRef.current = true;
     setStarting(true);
     setError(null);
     try {
@@ -95,11 +101,13 @@ export default function DiagnosticPage() {
       setQuestions(data.questions);
       setCurrentIdx(0);
       setAnswerLog([]);
+      isSubmittingRef.current = false;
       setPhase('fighting');
     } catch {
       setError('Không thể kết nối server.');
     } finally {
       setStarting(false);
+      isStartingRef.current = false;
     }
   };
 
@@ -108,6 +116,8 @@ export default function DiagnosticPage() {
   }, []);
 
   const finish = useCallback(async () => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setPhase('loading');
     try {
       const target = parseInt(targetScore, 10);
@@ -126,18 +136,20 @@ export default function DiagnosticPage() {
       }
       if (!res.ok) {
         setError(data?.error ?? 'Không thể lưu kết quả diagnostic. Vui lòng thử lại.');
+        isSubmittingRef.current = false;
         setPhase('fighting');
         return;
       }
       setPrediction(data.prediction ?? null);
       if (typeof data.tier === 'string') setTier(data.tier);
+      setPhase('result');
     } catch {
       setPrediction(null);
       setError('Không thể lưu kết quả diagnostic. Vui lòng thử lại.');
+      isSubmittingRef.current = false;
       setPhase('fighting');
       return;
     }
-    setPhase('result');
   }, [targetScore]);
 
   const handleNext = useCallback(() => {
@@ -258,12 +270,18 @@ export default function DiagnosticPage() {
 
   if (phase === 'fighting') {
     const currentQ = questions[currentIdx];
+    const totalQ = questions.length;
+    const progressPercent = totalQ > 0 ? Math.min(100, Math.round(((currentIdx + 1) / totalQ) * 100)) : 0;
+    const safeProgress = Number.isFinite(progressPercent) ? progressPercent : 0;
     return (
       <div className="space-y-6 animate-in fade-in duration-500 pb-20">
         <div className="flex justify-between items-center bg-[#1b2533] p-4 rounded-xl border border-indigo-500/30">
           <div>
             <span className="text-gray-400 text-sm">Test Xếp Lớp</span>
-            <h2 className="text-xl font-black text-indigo-300">Câu {currentIdx + 1} / {questions.length}</h2>
+            <h2 className="text-xl font-black text-indigo-300">
+              Câu {currentIdx + 1} / {totalQ}
+              {totalQ > 0 && <span className="text-xs font-normal text-gray-400 ml-2">({safeProgress}%)</span>}
+            </h2>
           </div>
           <div className="flex gap-2 flex-wrap max-w-[50%] justify-end">
             {questions.map((_, i) => (
@@ -285,6 +303,7 @@ export default function DiagnosticPage() {
 
         {currentQ && (
           <CorePracticeUI
+            key={`diag-q-${currentIdx}`}
             questionData={currentQ}
             isLoading={false}
             onAnswer={handleAnswer}
@@ -298,6 +317,9 @@ export default function DiagnosticPage() {
 
   if (phase === 'result') {
     const correctCount = answerLog.filter(Boolean).length;
+    const totalAnswered = answerLog.length;
+    const accuracy = totalAnswered > 0 ? Math.round((correctCount / totalAnswered) * 100) : 0;
+    const safeAccuracy = Number.isFinite(accuracy) ? accuracy : 0;
     const primaryFocus = prediction?.focusSkills[0];
     const focusRoute = primaryFocus ? routeForFocusSkill(primaryFocus.id, primaryFocus.subject) : '/skill-tree';
     return (
@@ -306,7 +328,9 @@ export default function DiagnosticPage() {
           <div className="bg-gradient-to-br from-[#0b3b2e] to-[#0f172a] p-10 rounded-xl border-2 border-emerald-500 shadow-[0_0_40px_rgba(16,185,129,0.25)]">
             <div className="text-7xl mb-4">🎉</div>
             <h2 className="text-3xl font-black text-emerald-400 mb-2">HOÀN THÀNH XẾP LỚP!</h2>
-            <p className="text-gray-300 mb-6">Bạn trả lời đúng {correctCount}/{answerLog.length} câu. Dưới đây là điểm SAT dự đoán ban đầu:</p>
+            <p className="text-gray-300 mb-6">
+              Bạn trả lời đúng {correctCount}/{totalAnswered} câu ({safeAccuracy}%). Dưới đây là điểm SAT dự đoán ban đầu:
+            </p>
 
             {prediction ? (
               <>

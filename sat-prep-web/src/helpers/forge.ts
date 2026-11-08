@@ -11,14 +11,15 @@ export interface Equipment {
 }
 
 export const getForgeCost = (tier: Tier, level: number): { coins: number; stones: number } => {
-  if (tier === 'Đồng') return { coins: level * 150, stones: level };
-  if (tier === 'Bạc') return { coins: level * 250, stones: level };
-  if (tier === 'Vàng') return { coins: level * 400, stones: level };
+  const safeLevel = Math.max(0, Math.min(20, Math.floor(Number(level) || 0)));
+  if (tier === 'Đồng') return { coins: safeLevel * 150, stones: safeLevel };
+  if (tier === 'Bạc') return { coins: safeLevel * 250, stones: safeLevel };
+  if (tier === 'Vàng') return { coins: safeLevel * 400, stones: safeLevel };
   if (tier === 'Kim Cương') {
-    if (level < 5) return { coins: level * 1000, stones: level };
-    return { coins: level * 2000, stones: level * 2 };
+    if (safeLevel < 5) return { coins: safeLevel * 1000, stones: safeLevel };
+    return { coins: safeLevel * 2000, stones: safeLevel * 2 };
   }
-  return { coins: level * 150, stones: level };
+  return { coins: safeLevel * 150, stones: safeLevel };
 };
 
 export const getMaxLevel = (tier: Tier): number => {
@@ -27,14 +28,15 @@ export const getMaxLevel = (tier: Tier): number => {
 };
 
 export const getSuccessRate = (tier: Tier, level: number): number => {
+  const safeLevel = Math.max(0, Math.min(20, Math.floor(Number(level) || 0)));
   if (tier === 'Đồng') return 100;
   if (tier === 'Bạc' || tier === 'Vàng') {
     const rates: Record<number, number> = { 1: 100, 2: 90, 3: 75, 4: 50 };
-    return rates[level] || 50;
+    return rates[safeLevel] || 50;
   }
   if (tier === 'Kim Cương') {
     const rates: Record<number, number> = { 1: 100, 2: 90, 3: 80, 4: 65, 5: 50, 6: 40, 7: 30, 8: 20, 9: 10 };
-    return rates[level] || 10;
+    return rates[safeLevel] || 10;
   }
   return 100;
 };
@@ -59,24 +61,25 @@ export const attemptUpgrade = (
   useBua: boolean = false,
   hasBua: boolean = false
 ): UpgradeResult => {
+  const safeLevel = Math.max(0, Math.min(20, Math.floor(Number(level) || 0)));
   const maxLvl = getMaxLevel(tier);
-  if (level >= maxLvl) return { success: false, message: `Trang bị đã đạt cấp tối đa (+${maxLvl})!`, newLevel: level, buaUsed: false };
+  if (safeLevel >= maxLvl) return { success: false, message: `Trang bị đã đạt cấp tối đa (+${maxLvl})!`, newLevel: safeLevel, buaUsed: false };
 
-  const rate = getSuccessRate(tier, level);
+  const rate = getSuccessRate(tier, safeLevel);
   const roll = Math.floor(Math.random() * 100) + 1; // 1 to 100
 
   if (roll <= rate) {
-    return { success: true, message: `Cường hóa thành công! Trang bị đạt cấp +${level + 1} 🎉`, newLevel: level + 1, buaUsed: false };
+    return { success: true, message: `Cường hóa thành công! Trang bị đạt cấp +${safeLevel + 1} 🎉`, newLevel: safeLevel + 1, buaUsed: false };
   }
 
   // Thất bại + BẬT bùa + còn bùa → GIỮ nguyên cấp, tiêu 1 bùa (chống rớt/vỡ).
   if (useBua && hasBua) {
-    return { success: false, message: `Cường hóa thất bại nhưng 🛡️ Bùa Bảo Hộ đã giữ nguyên cấp +${level}!`, newLevel: level, buaUsed: true };
+    return { success: false, message: `Cường hóa thất bại nhưng 🛡️ Bùa Bảo Hộ đã giữ nguyên cấp +${safeLevel}!`, newLevel: safeLevel, buaUsed: true };
   }
 
   // Thất bại thường: rớt 1 cấp (nếu >1), hoặc vỡ đá giữ nguyên cấp 1.
-  if (level > 1) {
-    return { success: false, message: `CƯỜNG HÓA THẤT BẠI! Trang bị của bạn đã bị rớt xuống cấp +${level - 1} 😭`, newLevel: level - 1, buaUsed: false };
+  if (safeLevel > 1) {
+    return { success: false, message: `CƯỜNG HÓA THẤT BẠI! Trang bị của bạn đã bị rớt xuống cấp +${safeLevel - 1} 😭`, newLevel: safeLevel - 1, buaUsed: false };
   }
-  return { success: false, message: "Cường hóa thất bại! Đá cường hóa đã bị vỡ vụn... ⚡", newLevel: level, buaUsed: false };
+  return { success: false, message: "Cường hóa thất bại! Đá cường hóa đã bị vỡ vụn... ⚡", newLevel: safeLevel, buaUsed: false };
 };

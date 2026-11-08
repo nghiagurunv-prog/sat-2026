@@ -10,6 +10,12 @@ export interface PvpOpponent {
   rankBorderClass?: string;
 }
 
+/** Hệ số quy đổi basePower (0..100) → thang lực chiến đối thủ (120..4000). */
+export const PVP_COMBAT_SCALE = 40;
+
+/** Tỉ lệ lực tối thiểu (so với đối thủ) để được phép thách đấu. */
+export const PVP_MIN_POWER_RATIO = 0.5;
+
 export const PVP_OPPONENTS: Record<number, PvpOpponent> = {
   10: { rank: 10, name: "Học Viên Tập Sự", level: 5, luc_chien: 120, max_hp: 300, icon: "🥉", reward_coins: 300, reward_xp: 200, rankBorderClass: "border-[#b45309] shadow-[0_0_10px_#b45309]" },
   9: { rank: 9, name: "Kiếm Sĩ Tập Sự", level: 12, luc_chien: 280, max_hp: 600, icon: "🗡️", reward_coins: 500, reward_xp: 350, rankBorderClass: "border-[#b45309] shadow-[0_0_10px_#b45309]" },
@@ -24,20 +30,22 @@ export const PVP_OPPONENTS: Record<number, PvpOpponent> = {
 };
 
 export const getPvpRankBorder = (rank: number): string => {
-  if (rank > 10) return "border-[#475569]"; // Mặc định cho người mới
-  return PVP_OPPONENTS[rank]?.rankBorderClass || "border-[#475569]";
+  const safeRank = Math.floor(Number(rank) || 0);
+  if (safeRank < 1 || safeRank > 10) return "border-[#475569]"; // Mặc định cho người mới
+  return PVP_OPPONENTS[safeRank]?.rankBorderClass || "border-[#475569]";
 };
 
 export const getPvpRankName = (rank: number): string => {
-  if (rank > 10) return "Tân Binh Đấu Trường";
-  const opp = PVP_OPPONENTS[rank];
+  const safeRank = Math.floor(Number(rank) || 0);
+  if (safeRank < 1 || safeRank > 10) return "Tân Binh Đấu Trường";
+  const opp = PVP_OPPONENTS[safeRank];
   if (opp) {
     let league = "";
-    if (rank >= 9) league = "Đồng";
-    else if (rank >= 7) league = "Bạc";
-    else if (rank >= 5) league = "Vàng";
-    else if (rank >= 3) league = "Bạch Kim";
-    else if (rank === 2) league = "Kim Cương";
+    if (safeRank >= 9) league = "Đồng";
+    else if (safeRank >= 7) league = "Bạc";
+    else if (safeRank >= 5) league = "Vàng";
+    else if (safeRank >= 3) league = "Bạch Kim";
+    else if (safeRank === 2) league = "Kim Cương";
     else league = "Thách Đấu";
     return `Rank ${league} - ${opp.icon} ${opp.name}`;
   }
@@ -72,4 +80,39 @@ export const PVP_RANK_DOMAIN: Record<number, string> = {
 };
 
 /** Domain của boss ở rank cho trước (null nếu rank ngoài bảng). */
-export const getPvpRankDomain = (rank: number): string | null => PVP_RANK_DOMAIN[rank] ?? null;
+export const getPvpRankDomain = (rank: number): string | null => {
+  const safeRank = Math.floor(Number(rank) || 0);
+  return PVP_RANK_DOMAIN[safeRank] ?? null;
+};
+
+/** Lấy thông tin đối thủ an toàn theo rank */
+export const getPvpOpponent = (rank: number): PvpOpponent | null => {
+  const safeRank = Math.floor(Number(rank) || 0);
+  return PVP_OPPONENTS[safeRank] || null;
+};
+
+/**
+ * Tính ước lượng tỷ lệ thắng PvP dựa trên lực chiến (0 - 100%).
+ * Đảm bảo guard chống chia cho 0 hoặc NaN khi lực chiến <= 0.
+ */
+export const calculatePvpWinChance = (userLucChien: number, opponentLucChien: number): number => {
+  const safeUser = Math.max(0, Number(userLucChien) || 0);
+  const safeOpp = Math.max(0, Number(opponentLucChien) || 0);
+  const total = safeUser + safeOpp;
+  if (total <= 0) return 50; // Guard chống chia cho 0
+  const rate = Math.round((safeUser / total) * 100);
+  return Math.min(100, Math.max(0, rate));
+};
+
+/**
+ * Tính phần thưởng PvP an toàn cho rank (thắng nhận 100%, thua nhận 20% an ủi).
+ */
+export const calculatePvpRewards = (rank: number, isWin: boolean = true): { coins: number; xp: number } => {
+  const opp = getPvpOpponent(rank);
+  if (!opp) return { coins: 0, xp: 0 };
+  const multiplier = isWin ? 1 : 0.2;
+  return {
+    coins: Math.max(0, Math.round(opp.reward_coins * multiplier)),
+    xp: Math.max(0, Math.round(opp.reward_xp * multiplier)),
+  };
+};

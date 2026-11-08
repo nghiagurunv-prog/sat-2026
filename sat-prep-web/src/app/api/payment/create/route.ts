@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { rateLimit } from '@/lib/rate-limit';
-import { getPlan } from '@/lib/subscription';
+import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
+import { getPlan, applyCouponPrice, validateCoupon } from '@/lib/subscription';
 import {
   isValidGateway,
   isValidTier,
@@ -27,9 +27,9 @@ import { createStripeCheckout, isStripeConfigured } from '@/lib/payment-stripe';
  * ============================================================================
  */
 
-/** Dựng URL gốc để cổng gọi return/ipn về. Production bắt buộc cấu hình APP_BASE_URL. */
+/** Dựng URL gốc để cổng gọi return/ipn về. Production bắt buộc cấu hình APP_BASE_URL hoặc NEXT_PUBLIC_APP_URL. */
 function baseUrl(req: Request): string | null {
-  const env = process.env.APP_BASE_URL;
+  const env = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_BASE_URL;
   if (env) return env.replace(/\/$/, '');
   if (process.env.NODE_ENV === 'production') return null;
   try {
@@ -52,10 +52,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Bạn cần đăng nhập để nâng gói.' }, { status: 401 });
     }
 
-    const rl = rateLimit(`payment-create:${user.id}`, 10, 60_000);
+    const rlKey = getRateLimitKey(req, 'payment-create', user.id);
+    const rl = rateLimit(rlKey, 10, 5 * 60_000);
     if (!rl.allowed) {
       return NextResponse.json(
-        { success: false, error: 'Quá nhiều yêu cầu. Thử lại sau.', retryAfterMs: rl.retryAfterMs },
+        { success: false, error: 'Quá nhiều yêu cầu tạo đơn. Thử lại sau.', retryAfterMs: rl.retryAfterMs },
         { status: 429 }
       );
     }
@@ -71,10 +72,17 @@ export async function POST(req: Request) {
     }
 
     // 🔴 SERVER tra giá từ PLANS — client KHÔNG gửi số tiền.
+    // Nếu có couponCode hợp lệ (KOL/Affiliate), server tự tính giá giảm 10%.
     const plan = getPlan(tier, period);
     if (!plan) {
       return NextResponse.json({ success: false, error: 'Gói không tồn tại.' }, { status: 400 });
     }
+    const rawCoupon = typeof body?.couponCode === 'string' ? body.couponCode : undefined;
+    const extraCoupons = process.env.AFFILIATE_COUPONS
+      ? process.env.AFFILIATE_COUPONS.split(',')
+      : undefined;
+    const couponCheck = validateCoupon(rawCoupon, extraCoupons);
+    const finalAmountVnd = applyCouponPrice(plan.priceVnd, rawCoupon, extraCoupons);
 
     const base = baseUrl(req);
     if (!base) {
@@ -94,25 +102,43 @@ export async function POST(req: Request) {
           { status: 503 }
         );
       }
-      const orderCode = generatePayosOrderCode();
-      const orderId = String(orderCode);
-      const orderInfoPayos = buildOrderInfo(tier, period);
-      const createdPayos = await createTransaction({
+      let orderCode = generatePayosOrderCode();
+      let orderId = String(orderCode);
+      let createdPayos = await createTransaction({
         userId: user.id,
         orderId,
         gateway,
         tier,
         period,
-        amountVnd: plan.priceVnd,
+        amountVnd: finalAmountVnd,
         durationDays: plan.durationDays,
       });
+
+      // Nếu insert payment_orders bị trùng order_code (hiếm gặp), tự động sinh lại tối đa 2 lần
+      for (let attempt = 0; !createdPayos && attempt < 2; attempt++) {
+        orderCode = generatePayosOrderCode();
+        orderId = String(orderCode);
+        createdPayos = await createTransaction({
+          userId: user.id,
+          orderId,
+          gateway,
+          tier,
+          period,
+          amountVnd: finalAmountVnd,
+          durationDays: plan.durationDays,
+        });
+      }
+
       if (!createdPayos) {
         return NextResponse.json({ success: false, error: 'Không thể khởi tạo giao dịch. Thử lại sau.' }, { status: 500 });
       }
+
+      // Đảm bảo description truyền sang PayOS ngắn gọn, chứa mã đơn ở đầu (<= 25 ký tự) để SePay/PayOS khớp lệnh
+      const payosDescription = `SAT ${orderCode}`.slice(0, 25);
       const payosRes = await createPayosPayment({
-        amountVnd: plan.priceVnd,
+        amountVnd: finalAmountVnd,
         orderCode,
-        description: orderInfoPayos,
+        description: payosDescription,
         returnUrl: `${returnUrl}?orderId=${orderId}`,
         cancelUrl: `${base}/upgrade?status=unknown&order=${orderId}`,
       });
@@ -122,7 +148,12 @@ export async function POST(req: Request) {
           { status: 503 }
         );
       }
-      return NextResponse.json({ success: true, payUrl: payosRes.payUrl, orderId });
+      return NextResponse.json({
+        success: true,
+        payUrl: payosRes.payUrl,
+        orderId,
+        ...(couponCheck.valid ? { appliedCoupon: couponCheck.code, amountVnd: finalAmountVnd } : {}),
+      });
     }
 
     const orderId = generateOrderId();
@@ -156,7 +187,7 @@ export async function POST(req: Request) {
       gateway,
       tier,
       period,
-      amountVnd: plan.priceVnd,
+      amountVnd: finalAmountVnd,
       // A2: ghi luôn số ngày để confirm_payment cấp gói NGUYÊN TỬ (server tra PLANS).
       durationDays: plan.durationDays,
     });
@@ -167,7 +198,7 @@ export async function POST(req: Request) {
     if (gateway === 'stripe') {
       const stripeRes = await createStripeCheckout({
         orderId,
-        amountVnd: plan.priceVnd,
+        amountVnd: finalAmountVnd,
         tier,
         period,
         orderInfo,
@@ -181,23 +212,33 @@ export async function POST(req: Request) {
           { status: 503 }
         );
       }
-      return NextResponse.json({ success: true, payUrl: stripeRes.payUrl, orderId });
+      return NextResponse.json({
+        success: true,
+        payUrl: stripeRes.payUrl,
+        orderId,
+        ...(couponCheck.valid ? { appliedCoupon: couponCheck.code, amountVnd: finalAmountVnd } : {}),
+      });
     }
 
     if (gateway === 'vnpay') {
       const payUrl = buildVnpayPaymentUrl({
         orderId,
-        amountVnd: plan.priceVnd,
+        amountVnd: finalAmountVnd,
         orderInfo,
         ipAddr: clientIp(req),
         returnUrl,
       });
-      return NextResponse.json({ success: true, payUrl, orderId });
+      return NextResponse.json({
+        success: true,
+        payUrl,
+        orderId,
+        ...(couponCheck.valid ? { appliedCoupon: couponCheck.code, amountVnd: finalAmountVnd } : {}),
+      });
     }
 
     // gateway === 'momo'
     const momo = await createMomoPayment({
-      amountVnd: plan.priceVnd,
+      amountVnd: finalAmountVnd,
       orderId,
       orderInfo,
       redirectUrl: returnUrl,
@@ -210,7 +251,12 @@ export async function POST(req: Request) {
         { status: 503 }
       );
     }
-    return NextResponse.json({ success: true, payUrl: momo.payUrl, orderId });
+    return NextResponse.json({
+      success: true,
+      payUrl: momo.payUrl,
+      orderId,
+      ...(couponCheck.valid ? { appliedCoupon: couponCheck.code, amountVnd: finalAmountVnd } : {}),
+    });
   } catch (error) {
     console.error('Lỗi payment/create:', error);
     return NextResponse.json({ success: false, error: 'Lỗi hệ thống' }, { status: 500 });

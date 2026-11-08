@@ -31,7 +31,12 @@ function suggestFromUser(meta: Record<string, unknown> | undefined): string {
   if (!meta) return '';
   const raw = (meta.full_name ?? meta.name ?? meta.user_name ?? '') as unknown;
   if (typeof raw !== 'string') return '';
-  return raw.trim().replace(/\s+/g, ' ').slice(0, NICKNAME_MAX);
+  return raw
+    .replace(/<[^>]*>/g, '')
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, NICKNAME_MAX || 40);
 }
 
 export function WelcomeNameModal() {
@@ -40,7 +45,7 @@ export function WelcomeNameModal() {
 
   const [open, setOpen] = useState(false);
   const [nickname, setNickname] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -83,19 +88,27 @@ export function WelcomeNameModal() {
   };
 
   const save = async () => {
-    if (saving) return;
-    const trimmed = nickname.trim();
-    if (trimmed.length < NICKNAME_MIN || trimmed.length > NICKNAME_MAX) {
+    if (isSubmitting) return;
+    const sanitized = nickname
+      .replace(/<[^>]*>/g, '')
+      .replace(/[\u0000-\u001F\u007F]/g, '')
+      .trim();
+
+    if (sanitized.length < 2 || sanitized.length > 40) {
+      setError('Tên hiển thị cần từ 2–40 ký tự.');
+      return;
+    }
+    if (sanitized.length < NICKNAME_MIN || sanitized.length > NICKNAME_MAX) {
       setError(`Tên hiển thị cần ${NICKNAME_MIN}–${NICKNAME_MAX} ký tự.`);
       return;
     }
-    setSaving(true);
+    setIsSubmitting(true);
     setError(null);
     try {
       const res = await fetch('/api/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nickname: trimmed }),
+        body: JSON.stringify({ nickname: sanitized }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -104,7 +117,7 @@ export function WelcomeNameModal() {
         } catch {
           /* bỏ qua */
         }
-        showToast(`✅ Chào ${data.nickname ?? trimmed}! Bắt đầu học thôi.`, 'success');
+        showToast(`✅ Chào ${data.nickname ?? sanitized}! Bắt đầu học thôi.`, 'success');
         setOpen(false);
       } else {
         setError(data.error ?? 'Không lưu được tên. Thử lại nhé.');
@@ -112,18 +125,26 @@ export function WelcomeNameModal() {
     } catch {
       setError('Lỗi kết nối. Thử lại nhé.');
     } finally {
-      setSaving(false);
+      setIsSubmitting(false);
     }
   };
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="welcome-modal-title"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+    >
       <div className="w-full max-w-md rounded-2xl border border-amber-400/25 bg-slate-900/95 p-7 shadow-[0_20px_60px_-10px_rgba(0,0,0,0.8)]">
         <div className="mb-5 text-center">
           <div className="mb-2 text-4xl">👋</div>
-          <h2 className="bg-gradient-to-r from-yellow-300 to-amber-500 bg-clip-text text-xl font-extrabold text-transparent">
+          <h2
+            id="welcome-modal-title"
+            className="bg-gradient-to-r from-yellow-300 to-amber-500 bg-clip-text text-xl font-extrabold text-transparent"
+          >
             Chào mừng! Bạn muốn được gọi là gì?
           </h2>
           <p className="mt-2 text-sm text-slate-400">
@@ -145,7 +166,12 @@ export function WelcomeNameModal() {
           type="text"
           value={nickname}
           onChange={(e) => setNickname(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && save()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !isSubmitting) {
+              e.preventDefault();
+              void save();
+            }
+          }}
           placeholder={`Tên hiển thị (${NICKNAME_MIN}–${NICKNAME_MAX} ký tự)`}
           maxLength={NICKNAME_MAX}
           autoFocus
@@ -159,7 +185,7 @@ export function WelcomeNameModal() {
           <button
             type="button"
             onClick={skip}
-            disabled={saving}
+            disabled={isSubmitting}
             className="flex-1 rounded-lg border border-white/10 bg-slate-800/60 px-4 py-2.5 text-sm font-semibold text-slate-300 transition hover:bg-slate-800 disabled:opacity-50"
           >
             Để sau
@@ -167,10 +193,10 @@ export function WelcomeNameModal() {
           <button
             type="button"
             onClick={save}
-            disabled={saving || nickname.trim().length < NICKNAME_MIN}
+            disabled={isSubmitting || nickname.trim().length < 2 || nickname.trim().length < NICKNAME_MIN}
             className="flex-[2] rounded-lg bg-gradient-to-r from-yellow-400 to-amber-500 px-4 py-2.5 text-sm font-bold text-slate-900 shadow-lg shadow-amber-500/20 transition hover:from-yellow-300 hover:to-amber-400 disabled:opacity-50"
           >
-            {saving ? 'Đang lưu…' : '✨ Lưu & bắt đầu'}
+            {isSubmitting ? 'Đang lưu…' : '✨ Lưu & bắt đầu'}
           </button>
         </div>
       </div>

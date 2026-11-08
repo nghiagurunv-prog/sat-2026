@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { canGeneratePracticeForTier } from './route.ts';
+import { canGeneratePracticeForTier } from '../../../lib/skill-tree.ts';
 
 // Free chỉ được đi qua các skill thuộc 2 domain mở sẵn.
 test('canGeneratePracticeForTier: free chỉ được skill trong FREE_DOMAINS', () => {

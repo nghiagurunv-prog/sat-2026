@@ -1,26 +1,46 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { loadVocab, saveVocab } from '@/lib/vocab-store';
 import { promote, nextReview, isDue } from '@/lib/leitner';
 import { loadEconomy, saveEconomy, tryClaimOnceAtomic, ensureEconomyRow } from '@/lib/economy-store';
-import { applyExamRewardFromDifficulties } from '@/lib/economy';
+import { applyExamRewardFromDifficulties, getTodayVN } from '@/lib/economy';
 import { getUserTier } from '@/lib/subscription-store';
 import { TIER_COIN_MULTIPLIER } from '@/lib/subscription';
 import { recordAnswer } from '@/lib/mastery';
 import { bumpDailyActivity } from '@/lib/daily-activity-store';
+import { matchesAnswer } from '@/lib/answer-match';
 
 // Sentinel bucket cho thưởng ôn từ vựng trong quest_claims (cùng cơ chế claim-once
 // atomic với dailyLogin/streak). itemId = `${wordId}:${next_review gốc}` → mỗi
 // due-instance của từ chỉ được thưởng 1 lần, chống 2 POST đồng thời cộng đôi.
 const VOCAB_REWARD_KEY = '__vocab_reward__';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    // Giới hạn count / limit truy vấn tối đa (<= 50) chống DoS/treo server (#016)
+    const countParam = req.nextUrl.searchParams.get('count') ?? req.nextUrl.searchParams.get('limit');
+    let limit: number | undefined;
+    if (countParam !== null) {
+      const parsed = parseInt(countParam, 10);
+      if (isNaN(parsed) || parsed < 1 || parsed > 50) {
+        return NextResponse.json(
+          { error: 'Số lượng từ vựng truy vấn (count/limit) tối đa là 50.' },
+          { status: 400 }
+        );
+      }
+      limit = parsed;
+    }
+
     const user = await getCurrentUser();
     const data = await loadVocab(user.id);
 
-    // Lọc ra các từ cần ôn tập hôm nay (Leitner — dùng helper chung).
-    const dueWords = data.words.filter((w) => isDue(w.next_review));
+    // Lọc ra các từ cần ôn tập hôm nay (Leitner — dùng helper chung, đồng bộ giờ VN #025).
+    const today = getTodayVN();
+    let dueWords = data.words.filter((w) => isDue(w.next_review, today));
+
+    if (limit !== undefined) {
+      dueWords = dueWords.slice(0, limit);
+    }
 
     return NextResponse.json({ words: dueWords });
   } catch (error) {
@@ -32,13 +52,65 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
-    const { wordId, isRemembered } = await req.json();
+    const body = await req.json();
+    let {
+      wordId,
+      isRemembered,
+      word: customWord,
+      meaning,
+      example,
+      pronunciation,
+      partOfSpeech,
+      isHarvest,
+      userAnswer,
+      correctAnswer,
+    } = body;
+
+    // Chấm đáp án trực tiếp bằng matchesAnswer nếu client gửi userAnswer (#016)
+    if (typeof userAnswer === 'string') {
+      const targetCorrect = typeof correctAnswer === 'string' ? correctAnswer : (customWord || wordId || '');
+      if (targetCorrect) {
+        isRemembered = matchesAnswer(userAnswer, targetCorrect);
+      }
+    }
 
     const data = await loadVocab(user.id);
 
-    const wordIndex = data.words.findIndex((w) => w.id === wordId);
+    let isNewWord = false;
+    let wordIndex = data.words.findIndex((w) => w.id === wordId);
+    if (wordIndex === -1 && customWord) {
+      wordIndex = data.words.findIndex(
+        (w) => String(w.word ?? '').toLowerCase() === String(customWord).toLowerCase().trim()
+      );
+    }
+
+    // Auto-Upsert: Không trả về 404 khi từ thuộc Starter Pack hoặc hái từ bài đọc
     if (wordIndex === -1) {
-      return NextResponse.json({ error: "Word not found" }, { status: 404 });
+      const canAutoUpsert = Boolean(
+        customWord ||
+          isHarvest ||
+          (typeof wordId === 'string' &&
+            /^(starter-|fb-|custom-|harvest-|rw-)/.test(wordId))
+      );
+      if (!canAutoUpsert) {
+        return NextResponse.json({ error: 'Word not found' }, { status: 404 });
+      }
+      isNewWord = true;
+      const initialBox = isRemembered ? 2 : 1;
+      const effectiveId = wordId || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const effectiveWord = customWord || (typeof wordId === 'string' && !wordId.startsWith('starter-') && !wordId.startsWith('fb-') && !wordId.startsWith('custom-') ? wordId : 'New Word');
+      const newWordEntry = {
+        id: effectiveId,
+        word: effectiveWord,
+        meaning: meaning || '',
+        example: example || '',
+        pronunciation: pronunciation || '',
+        partOfSpeech: partOfSpeech || '',
+        box: initialBox,
+        next_review: nextReview(initialBox),
+      };
+      data.words.push(newWordEntry);
+      wordIndex = data.words.length - 1;
     }
 
     const word = data.words[wordIndex];
@@ -46,12 +118,15 @@ export async function POST(req: Request) {
     // Khóa idempotent theo DUE-INSTANCE: next_review GỐC (trước khi Leitner đẩy về
     // tương lai) → 2 POST cùng wordId đồng thời chỉ thưởng 1 lần; lần due kế
     // (next_review khác) vẫn thưởng được. 'new' cho từ chưa từng ôn.
-    const dueKey = word.next_review ?? 'new';
-    const wasDue = isDue(word.next_review);
+    const today = getTodayVN();
+    const dueKey = isNewWord ? 'new' : (word.next_review ?? 'new');
+    const wasDue = isNewWord ? true : isDue(word.next_review, today);
 
     // Tính TRƯỚC trạng thái Leitner mới (CHƯA lưu) — lưu SAU khi đã chốt thưởng, để
     // rpc_error KHÔNG đẩy next_review về tương lai làm mất due-instance khi retry.
-    const newBox = promote(word.box ?? 1, !!isRemembered);
+    const newBox = isNewWord 
+      ? (isRemembered ? 2 : 1) 
+      : promote(word.box ?? 1, !!isRemembered);
     const newNextReview = nextReview(newBox);
 
     // ── THƯỞNG (chốt TRƯỚC khi advance Leitner) ──
@@ -78,7 +153,7 @@ export async function POST(req: Request) {
 
         // 🔴 ROOT C: cộng xu ATOMIC + idempotent theo due-instance (khóa dòng + kiểm
         // (bucket,itemId) 1 transaction). itemId = wordId:next_review GỐC.
-        const itemId = `${wordId}:${dueKey}`;
+        const itemId = `${word.id || wordId}:${dueKey}`;
         const atomic = await tryClaimOnceAtomic(user.id, VOCAB_REWARD_KEY, itemId, delta.coins, delta.xp);
         if (atomic) {
           if (atomic.ok) {
@@ -107,6 +182,11 @@ export async function POST(req: Request) {
     // ── ADVANCE LEITNER (SAU khi thưởng đã chốt) ──
     word.box = newBox;
     word.next_review = newNextReview;
+    if (customWord && !word.word) word.word = customWord;
+    if (meaning && !word.meaning) word.meaning = meaning;
+    if (example && !word.example) word.example = example;
+    if (pronunciation && !word.pronunciation) word.pronunciation = pronunciation;
+    if (partOfSpeech && !word.partOfSpeech) word.partOfSpeech = partOfSpeech;
     data.words[wordIndex] = word;
     await saveVocab(user.id, data);
 
@@ -125,7 +205,7 @@ export async function POST(req: Request) {
     // TỰ SỬA vì spaced-repetition: từ sẽ quay lại lượt ôn kế. recordAnswer vốn
     // best-effort (fire-and-forget) nên chưa từng bảo đảm exactly-once.
     // Fire-and-forget: try/catch nuốt lỗi để KHÔNG chặn phản hồi ôn từ.
-    const shouldRecordMastery = isRemembered ? claimedFresh : wasDue;
+    const shouldRecordMastery = isRemembered ? claimedFresh : (wasDue && !isHarvest);
     if (shouldRecordMastery) {
       try {
         await recordAnswer(user.id, 'rw.vocab', !!isRemembered, 'Easy');

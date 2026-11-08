@@ -52,7 +52,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, message: 'ignored non-success' });
     }
 
-    // 3) Xác nhận atomic (kiểm tiền + idempotent). orderCode số → String khớp order_id.
+    // 3) Xác nhận atomic (kiểm tiền + idempotent + hỗ trợ pending/expired).
+    // orderCode số → String khớp order_id.
     const orderId = String(payload.data?.orderCode ?? '');
     const gatewayTxnId = String(payload.data?.reference ?? '');
     const amountVnd = Number(payload.data?.amount ?? 0);
@@ -60,12 +61,29 @@ export async function POST(req: Request) {
 
     // 4) GÓI ĐÃ ĐƯỢC CẤP NGUYÊN TỬ trong confirm_payment RPC (cùng transaction với
     //    UPDATE status='paid') → không cấp gói tách rời ở đây.
-    //    amount_mismatch/not_found = giao dịch không hợp lệ → trả 200 + success:false để
-    //    payOS biết đã nhận (không retry vô ích). Lỗi khác → 500 để payOS retry.
-    if (!outcome.ok && outcome.reason !== 'amount_mismatch' && outcome.reason !== 'not_found') {
+    //    Hỗ trợ khôi phục đơn 'expired' khi tiền thật về, và bảo đảm idempotent.
+
+    // 4.1) Đơn đã thanh toán trước đó (order.status === 'paid') → idempotent ack, không cộng dồn trùng
+    if (outcome.alreadyConfirmed) {
+      return NextResponse.json({ success: true, received: true, alreadyPaid: true });
+    }
+
+    // 4.2) Kiểm tra lỗi xác nhận
+    if (!outcome.ok) {
+      if (outcome.reason === 'amount_mismatch') {
+        console.warn(`[payos-webhook] Số tiền chuyển không đủ hoặc không khớp: orderId=${orderId}, nhận ${amountVnd} VND`);
+        return NextResponse.json({ success: true, received: true, reason: 'amount_mismatch' }, { status: 200 });
+      }
+      if (outcome.reason === 'not_found') {
+        console.warn(`[payos-webhook] Không tìm thấy đơn hàng: orderId=${orderId}`);
+        return NextResponse.json({ success: true, received: true, reason: 'not_found' }, { status: 200 });
+      }
+      // Lỗi hệ thống / cập nhật DB thất bại → trả 500 để payOS tự động retry
+      console.error(`[payos-webhook] Lỗi hệ thống khi xác nhận thanh toán orderId=${orderId}:`, outcome.reason);
       return NextResponse.json({ success: false, message: 'Confirm failed, retry' }, { status: 500 });
     }
-    return NextResponse.json({ success: true });
+
+    return NextResponse.json({ success: true, received: true });
   } catch (error) {
     console.error('Lỗi payos-webhook:', error);
     return NextResponse.json({ success: false, message: 'Server error' }, { status: 500 });

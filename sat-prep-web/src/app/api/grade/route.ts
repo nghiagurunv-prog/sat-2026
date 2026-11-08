@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { gradeAnswer } from '@/lib/issued-questions';
-import { rateLimit } from '@/lib/rate-limit';
+import { checkRateLimit, getRateLimitKey } from '@/lib/rate-limit';
+import { matchesAnswer } from '@/lib/answer-match';
 import { loadEconomy, saveEconomy, tryBumpAnswerStreakAtomic } from '@/lib/economy-store';
 import { applyAnswerReward, type Difficulty } from '@/lib/economy';
 import { recordAnswer } from '@/lib/mastery';
@@ -29,28 +30,44 @@ export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
 
-    const rl = rateLimit(`grade:${user.id}`, 30, 60_000);
+    const rlKey = getRateLimitKey(req, 'grade-api', user?.id);
+    const rl = checkRateLimit(rlKey, 60, 60_000);
     if (!rl.allowed) {
       return NextResponse.json({ error: 'Quá nhiều request.', retryAfterMs: rl.retryAfterMs }, { status: 429 });
     }
 
-    const { questionId, answer } = await req.json();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Dữ liệu JSON không hợp lệ' }, { status: 400 });
+    }
 
-    if (typeof questionId !== 'string' || !questionId) {
+    const questionId = body?.questionId;
+    // Hỗ trợ cả userAnswer lẫn answer để tương thích ngược
+    const rawAnswer = body?.userAnswer !== undefined ? body.userAnswer : body?.answer;
+
+    if (typeof questionId !== 'string' || !questionId.trim()) {
       return NextResponse.json({ error: 'questionId bắt buộc' }, { status: 400 });
     }
     // Cho phép answer = "" (chuỗi rỗng): dùng khi HẾT GIỜ tự nộp mà chưa chọn đáp
     // án. Rỗng LUÔN chấm sai (0 thưởng) nhưng vẫn CAS answered:false→true + lộ đáp
     // án đúng — KHÔNG có lỗ farm (rỗng không bao giờ khớp correct_choice).
-    if (typeof answer !== 'string') {
-      return NextResponse.json({ error: 'answer bắt buộc' }, { status: 400 });
+    // Hỗ trợ cả số hoặc chuỗi, không crash khi userAnswer là số.
+    if (typeof rawAnswer !== 'string' && typeof rawAnswer !== 'number') {
+      return NextResponse.json({ error: 'userAnswer bắt buộc' }, { status: 400 });
     }
+    const userAnswer = String(rawAnswer);
 
-    const result = await gradeAnswer(questionId, user.id, answer);
+    const result = await gradeAnswer(questionId, user.id, userAnswer);
 
     if (!result) {
       return NextResponse.json({ error: 'Câu hỏi không hợp lệ hoặc đã trả lời' }, { status: 404 });
     }
+
+    // Đảm bảo so khớp đáp án bằng matchesAnswer từ @/lib/answer-match
+    // để chấm chính xác cả trắc nghiệm (A/B/C/D) lẫn tự điền SPR (phân số, số thập phân)
+    result.correct = matchesAnswer(String(userAnswer ?? ''), String(result.correctChoice ?? ''));
 
     // ── Phần thưởng server-authoritative (chỉ chạy khi gradeAnswer CAS thành công,
     //    tức đúng 1 lần cho mỗi câu). streak do client giữ (dùng tính combo) — KHÔNG

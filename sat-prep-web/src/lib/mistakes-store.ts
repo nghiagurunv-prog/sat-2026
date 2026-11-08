@@ -47,6 +47,34 @@ export async function loadMistakes(userId: string): Promise<MistakeEntry[]> {
   return data as MistakeEntry[];
 }
 
+/**
+ * Lấy trực tiếp 1 câu sai theo mistakeId của user (Fix #023 - Single-Row Lookup).
+ * Dùng query 1 dòng (.maybeSingle) thay vì load toàn bộ bảng về RAM.
+ */
+export async function getMistakeByIdFromDb(
+  userId: string,
+  mistakeId: string
+): Promise<MistakeEntry | null> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('user_mistakes')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('id', mistakeId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Lỗi khi tìm câu sai theo id:', error);
+      return null;
+    }
+    return data as MistakeEntry | null;
+  } catch (e) {
+    console.error('Lỗi khi truy vấn getMistakeByIdFromDb:', e);
+    return null;
+  }
+}
+
 /** Thêm một câu trả lời sai vào sổ tay (kèm metadata SRS: box 1 + lịch ôn). */
 export async function addMistake(
   userId: string,
@@ -54,6 +82,30 @@ export async function addMistake(
   srs?: { box: number; next_review: string }
 ): Promise<MistakeEntry | null> {
   const supabase = await createClient();
+
+  // Chống trùng lặp câu hỏi (Fix #023 - Deduplication):
+  // Kiểm tra xem học sinh đã có câu hỏi cùng question (hoặc cùng id) chưa
+  try {
+    let checkQuery = supabase
+      .from('user_mistakes')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (mistake.id) {
+      checkQuery = checkQuery.eq('id', mistake.id);
+    } else if (mistake.question) {
+      checkQuery = checkQuery.eq('question', mistake.question);
+    }
+
+    const { data: existing } = await checkQuery.maybeSingle();
+    if (existing) {
+      // Đã tồn tại bản ghi câu sai này -> trả về bản ghi hiện tại để tránh duplicate rows
+      return existing as MistakeEntry;
+    }
+  } catch (checkErr) {
+    console.warn('Lỗi kiểm tra trùng lặp câu sai (bỏ qua deduplication check):', checkErr);
+  }
+
   const { data, error } = await supabase
     .from('user_mistakes')
     .insert({
@@ -78,6 +130,9 @@ export async function addMistake(
   }
   return data as MistakeEntry;
 }
+
+/** Alias của addMistake (Fix #023) phục vụ export thống nhất */
+export const addMistakeToDb = addMistake;
 
 /** Cập nhật trạng thái ôn tập SRS của 1 câu sai (box + lịch ôn kế). */
 export async function updateMistakeReview(

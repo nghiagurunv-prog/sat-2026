@@ -10,9 +10,11 @@ import { isE2E, E2E_COOKIE } from '@/lib/e2e'
  */
 const PUBLIC_PREFIXES = [
   '/login',
+  '/diagnostic',
+  '/leaderboard',
   '/auth', // OAuth / email-confirm callback (đổi ?code= lấy session) — phải public để không bị chặn trước khi có session
   '/parent', // trang phụ huynh đọc ?code= (no-auth) — /parent-share (học sinh) KHÔNG khớp vì cần đúng prefix + '/'
-  '/admin', // tự bảo vệ bằng ADMIN_SECRET, không dùng user-session
+  '/admin', // tự bảo vệ 2 lớp: UI cho phép nhập ADMIN_SECRET (tránh tự khóa khi chưa có session), API /api/admin tự bảo vệ bằng verifyAdminAccess
   '/api/auth',
   '/api/payment/momo-ipn',
   '/api/payment/vnpay-ipn',
@@ -20,11 +22,40 @@ const PUBLIC_PREFIXES = [
   '/api/payment/payos-webhook', // payOS gọi server-to-server, không có cookie session (chữ ký HMAC tự bảo vệ)
   '/api/payment/return',
   '/api/parent/report',
-  '/api/admin',
+  '/api/admin', // tự bảo vệ bằng verifyAdminAccess (session-admin HOẶC shared-secret timing-safe)
 ]
+
+/**
+ * Kiểm tra đường dẫn redirect nội bộ an toàn (chống Open Redirect, Null Byte, Backslash injection).
+ */
+export function isSafeRedirectPath(path: string | null | undefined): boolean {
+  return Boolean(
+    path &&
+      path.startsWith('/') &&
+      !path.startsWith('//') &&
+      !path.includes('\\') &&
+      !path.toLowerCase().includes('%5c') &&
+      !path.includes('\0')
+  )
+}
+
+/**
+ * Gắn các security headers cơ bản vào response:
+ * - X-Frame-Options: DENY (chống clickjacking)
+ * - X-Content-Type-Options: nosniff (chống MIME sniffing)
+ * - Referrer-Policy: strict-origin-when-cross-origin (bảo vệ thông tin referrer)
+ */
+function applySecurityHeaders(res: NextResponse): NextResponse {
+  res.headers.set('X-Frame-Options', 'DENY')
+  res.headers.set('X-Content-Type-Options', 'nosniff')
+  res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  return res
+}
 
 /** true nếu path là public (khớp chính path hoặc prefix + '/'). */
 function isPublicPath(path: string): boolean {
+  // Cho phép khách vãng lai học thử trang chủ '/' không bị đá sang /login ngay giây đầu
+  if (path === '/') return true
   return PUBLIC_PREFIXES.some((p) => path === p || path.startsWith(p + '/'))
 }
 
@@ -33,7 +64,7 @@ export async function updateSession(request: NextRequest) {
   // đăng nhập, cho qua thẳng (bỏ Supabase). Cần CẢ env LẪN cookie (defense-in-depth):
   // env không set trên prod → nhánh này chết; cookie thiếu → vẫn đi đường auth thật.
   if (isE2E() && request.cookies.get(E2E_COOKIE)) {
-    return NextResponse.next({ request })
+    return applySecurityHeaders(NextResponse.next({ request }))
   }
 
   let supabaseResponse = NextResponse.next({
@@ -75,20 +106,20 @@ export async function updateSession(request: NextRequest) {
       const res = NextResponse.json({ error: 'Bạn cần đăng nhập.' }, { status: 401 })
       // Bê cookie refresh của Supabase sang response mới (cạm bẫy SSR #1).
       supabaseResponse.cookies.getAll().forEach((c) => res.cookies.set(c))
-      return res
+      return applySecurityHeaders(res)
     }
 
-    // Page → redirect /login?next=<path> (chỉ giữ path nội bộ, chống open-redirect).
+    // Page → redirect /login?next=<path> (chỉ giữ path nội bộ an toàn, chống open-redirect).
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.search = ''
-    if (path.startsWith('/') && !path.startsWith('//')) {
+    if (isSafeRedirectPath(path)) {
       url.searchParams.set('next', path)
     }
     const redirect = NextResponse.redirect(url)
     supabaseResponse.cookies.getAll().forEach((c) => redirect.cookies.set(c))
-    return redirect
+    return applySecurityHeaders(redirect)
   }
 
-  return supabaseResponse
+  return applySecurityHeaders(supabaseResponse)
 }

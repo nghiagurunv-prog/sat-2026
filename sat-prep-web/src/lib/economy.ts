@@ -40,6 +40,16 @@ export const DEFAULT_ECONOMY: EconomyState = {
 };
 
 /**
+ * Lấy ngày hôm nay theo múi giờ Việt Nam (UTC+7, YYYY-MM-DD).
+ * Fix #025: Dùng cho mọi mốc reset hằng ngày (streak, spin, quest, pvp).
+ */
+export function getTodayVN(): string {
+  return new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+}
+
+export const todayVN = getTodayVN;
+
+/**
  * BẢNG THƯỞNG CỐ ĐỊNH Ở SERVER cho mỗi câu trả lời đúng, theo độ khó.
  * Client KHÔNG được phép gửi số thưởng — chỉ gửi "đúng/sai" + độ khó.
  */
@@ -496,4 +506,541 @@ export function bumpPvpCounter(fightsToday: number, lastFightDate: string, today
 export function nextPvpRank(currentRank: number, won: boolean): number {
   if (!won) return currentRank;
   return Math.max(1, currentRank - 1);
+}
+
+/**
+ * ============================================================================
+ *  ATOMIC ECONOMY OPERATIONS & CONCURRENCY CONTROLS (Fix #010, #011, #029)
+ * ============================================================================
+ *  Chống Race Condition Double-Spend khi mua đồ / quay thưởng / đổi quà:
+ *    • spendCoins / buyShopItem: Optimistic Concurrency Control (OCC) với
+ *      .eq('user_id', userId).gte('coins', cost).eq('coins', currentCoins)
+ *    • spinLuckyWheel / spin: Khóa điều kiện 1 lượt/ngày chống spam song song
+ *    • createRedemption: Trừ xu atomic trước khi tạo phiếu đổi quà
+ *    • rejectRedemption: Đánh dấu từ chối phiếu gian lận, TUYỆT ĐỐI KHÔNG hoàn xu
+ *    • cancelRedemption: Hủy phiếu và hoàn lại xu cho học sinh
+ *    • fulfillRedemption: Xác nhận giao quà thành công
+ * ============================================================================
+ */
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getAdminClient(): Promise<any> {
+  const { createAdminClient } = await import('@/lib/supabase/admin');
+  return createAdminClient();
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function ensureUserEconomy(admin: any, userId: string): Promise<void> {
+  await admin
+    .from('user_economy')
+    .upsert(
+      {
+        user_id: userId,
+        coins: DEFAULT_ECONOMY.coins,
+        xp: DEFAULT_ECONOMY.xp,
+        inventory: DEFAULT_ECONOMY.inventory,
+      },
+      { onConflict: 'user_id', ignoreDuplicates: true }
+    );
+}
+
+/**
+ * Trừ xu mua vật phẩm với khóa lạc quan (Optimistic Concurrency Control — Fix #010).
+ * Nếu 2 request song song cùng đọc `coins`, chỉ 1 request trừ tiền thành công,
+ * request kia nhận lỗi 'Insufficient coins or concurrent transaction detected'.
+ */
+export async function spendCoins(
+  userId: string,
+  cost: number,
+  itemId?: string,
+  opts?: { userTier?: SpendTier; item?: SpendItemInfo | null; itemKnown?: boolean }
+): Promise<{ ok: boolean; coins?: number; inventory?: string[]; error?: string }> {
+  if (!Number.isInteger(cost) || cost <= 0) {
+    return { ok: false, error: 'Số xu không hợp lệ' };
+  }
+
+  // Gate item validation nếu có opts
+  if (opts && itemId) {
+    if (!opts.itemKnown || !opts.item) {
+      return { ok: false, error: 'Vật phẩm không tồn tại trong cửa hàng.' };
+    }
+    if (opts.item.price !== cost) {
+      return { ok: false, error: 'Số xu không khớp giá niêm yết của vật phẩm.' };
+    }
+    if (opts.item.requiredTier && spendTierRank(opts.userTier) < spendTierRank(opts.item.requiredTier)) {
+      const label = opts.item.requiredTier === 'ultimate' ? 'Ultimate' : 'Premium';
+      return {
+        ok: false,
+        error: `Vật phẩm này chỉ dành cho gói ${label}. Hãy nâng cấp gói để mở khóa.`,
+      };
+    }
+  }
+
+  const admin = await getAdminClient();
+  await ensureUserEconomy(admin, userId);
+
+  const { data: row, error: fetchErr } = await admin
+    .from('user_economy')
+    .select('coins, inventory')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (fetchErr || !row) {
+    return { ok: false, error: 'Không tìm thấy thông tin tài khoản hoặc lỗi kết nối.' };
+  }
+
+  const currentCoins = Number(row.coins) || 0;
+  if (currentCoins < cost) {
+    return { ok: false, error: 'Không đủ xu' };
+  }
+
+  const currentInventory: string[] = Array.isArray(row.inventory) ? row.inventory : [];
+  const nextInventory = itemId ? [...currentInventory, itemId] : currentInventory;
+  const nextCoins = currentCoins - cost;
+
+  // Optimistic concurrency control (OCC):
+  // Cập nhật với điều kiện .eq('user_id', userId).gte('coins', cost).eq('coins', currentCoins)
+  // Nếu có request đồng thời trừ trước, .eq('coins', currentCoins) sẽ không match và trả về 0 rows.
+  const { data: updated, error: updateErr } = await admin
+    .from('user_economy')
+    .update({
+      coins: nextCoins,
+      inventory: nextInventory,
+    })
+    .eq('user_id', userId)
+    .gte('coins', cost)
+    .eq('coins', currentCoins)
+    .select('coins, inventory')
+    .maybeSingle();
+
+  if (updateErr) {
+    console.error('spendCoins update error:', updateErr.message);
+    return { ok: false, error: 'Lỗi giao dịch trừ xu.' };
+  }
+
+  if (!updated) {
+    return { ok: false, error: 'Insufficient coins or concurrent transaction detected' };
+  }
+
+  return { ok: true, coins: updated.coins, inventory: updated.inventory };
+}
+
+export const buyShopItem = spendCoins;
+
+/**
+ * Quay Vòng Quay May Mắn với khóa chống spam song song (Fix #011).
+ * Kiểm tra và cập nhật last_spin_date và coins với điều kiện OCC để chặn 10 request
+ * song song nhận 10 lượt quay miễn phí.
+ */
+export async function spinLuckyWheel(
+  userId: string,
+  today: string = getTodayVN(),
+  rng: () => number = Math.random
+): Promise<{
+  ok: boolean;
+  result?: SpinResult['result'];
+  state?: EconomyState;
+  error?: string;
+}> {
+  const admin = await getAdminClient();
+  await ensureUserEconomy(admin, userId);
+
+  const { data: row, error: fetchErr } = await admin
+    .from('user_economy')
+    .select('coins, xp, inventory, last_spin_date')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (fetchErr || !row) {
+    return { ok: false, error: 'Không tìm thấy thông tin tài khoản.' };
+  }
+
+  const currentCoins = Number(row.coins) || 0;
+  const currentXp = Number(row.xp) || 0;
+  const currentInventory: string[] = Array.isArray(row.inventory) ? row.inventory : [];
+  const lastSpinDate = (row.last_spin_date as string | null) ?? null;
+
+  if (lastSpinDate === today) {
+    return {
+      ok: false,
+      result: { type: 'none', message: 'Hôm nay bạn đã quay rồi. Quay lại vào ngày mai nhé!' },
+      error: 'Hôm nay bạn đã quay rồi. Quay lại vào ngày mai nhé!',
+    };
+  }
+
+  const currState: EconomyState = {
+    coins: currentCoins,
+    xp: currentXp,
+    inventory: currentInventory,
+    lastSpinDate,
+  };
+
+  const spinRes = applySpin(currState, today, rng);
+  if (!spinRes.ok) {
+    return { ok: false, result: spinRes.result, error: spinRes.result.message };
+  }
+
+  // OCC update:
+  // Cập nhật với điều kiện last_spin_date khác today (hoặc null) VÀ coins == currentCoins
+  const { data: updated, error: updateErr } = await admin
+    .from('user_economy')
+    .update({
+      coins: spinRes.state.coins,
+      inventory: spinRes.state.inventory,
+      last_spin_date: today,
+    })
+    .eq('user_id', userId)
+    .or(`last_spin_date.neq.${today},last_spin_date.is.null`)
+    .eq('coins', currentCoins)
+    .select('coins, xp, inventory, last_spin_date')
+    .maybeSingle();
+
+  if (updateErr) {
+    console.error('spinLuckyWheel update error:', updateErr.message);
+    return { ok: false, error: 'Lỗi giao dịch vòng quay.' };
+  }
+
+  if (!updated) {
+    return {
+      ok: false,
+      error: 'Insufficient coins or concurrent transaction detected',
+    };
+  }
+
+  return {
+    ok: true,
+    result: spinRes.result,
+    state: {
+      coins: updated.coins,
+      xp: updated.xp,
+      inventory: updated.inventory || [],
+      lastSpinDate: updated.last_spin_date,
+    },
+  };
+}
+
+export const spin = spinLuckyWheel;
+
+export interface RedemptionRewardInput {
+  id: string;
+  name: string;
+  costCoins?: number;
+  cost?: number;
+}
+
+/**
+ * Đổi quà thật với trừ xu atomic và OCC lock (Fix #010).
+ * Đảm bảo trừ xu atomic với .gte('coins', cost).eq('coins', currentCoins) trước khi tạo lệnh đổi quà.
+ */
+export async function createRedemption(
+  userId: string,
+  reward: RedemptionRewardInput | string,
+  rewardName?: string,
+  costCoins?: number
+): Promise<{
+  ok: boolean;
+  redemptionId?: string;
+  coins?: number;
+  error?: string;
+}> {
+  let rId: string;
+  let rName: string;
+  let cost: number;
+
+  if (typeof reward === 'object' && reward !== null) {
+    rId = reward.id;
+    rName = reward.name;
+    cost = reward.costCoins ?? reward.cost ?? 0;
+  } else if (typeof reward === 'string') {
+    rId = reward;
+    rName = rewardName || reward;
+    cost = costCoins ?? 0;
+  } else {
+    return { ok: false, error: 'Thông tin phần thưởng hoặc số xu không hợp lệ' };
+  }
+
+  if (!rId || !Number.isInteger(cost) || cost <= 0) {
+    return { ok: false, error: 'Thông tin phần thưởng hoặc số xu không hợp lệ' };
+  }
+
+  const admin = await getAdminClient();
+  await ensureUserEconomy(admin, userId);
+
+  const { data: eco, error: fetchErr } = await admin
+    .from('user_economy')
+    .select('coins')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (fetchErr || !eco) {
+    return { ok: false, error: 'Không tìm thấy thông tin tài khoản hoặc lỗi kết nối.' };
+  }
+
+  const currentCoins = Number(eco.coins) || 0;
+  if (currentCoins < cost) {
+    return { ok: false, error: 'Bạn không đủ xu để đổi phần thưởng này.' };
+  }
+
+  const nextCoins = currentCoins - cost;
+
+  // Optimistic concurrency lock: trừ xu atomic với .gte('coins', cost).eq('coins', currentCoins)
+  const { data: updated, error: deductErr } = await admin
+    .from('user_economy')
+    .update({ coins: nextCoins })
+    .eq('user_id', userId)
+    .gte('coins', cost)
+    .eq('coins', currentCoins)
+    .select('coins')
+    .maybeSingle();
+
+  if (deductErr || !updated) {
+    return { ok: false, error: 'Insufficient coins or concurrent transaction detected' };
+  }
+
+  // Tạo lệnh đổi quà trong reward_redemptions
+  const { data: inserted, error: insertErr } = await admin
+    .from('reward_redemptions')
+    .insert({
+      user_id: userId,
+      reward_id: rId,
+      reward_name: rName,
+      cost_coins: cost,
+      status: 'pending',
+    })
+    .select('id')
+    .maybeSingle();
+
+  if (insertErr || !inserted) {
+    console.error('createRedemption insert error, refunding coins:', insertErr?.message);
+    // Compensation rollback nếu insert thất bại
+    await admin
+      .from('user_economy')
+      .update({ coins: currentCoins })
+      .eq('user_id', userId);
+    return { ok: false, error: 'Không thể tạo đơn đổi quà. Xu đã được hoàn lại.' };
+  }
+
+  return {
+    ok: true,
+    redemptionId: inserted.id,
+    coins: updated.coins,
+  };
+}
+
+export interface RedemptionAdminResult {
+  ok: boolean;
+  status?: string;
+  reason?: string;
+  coins?: number;
+  error?: string;
+}
+
+/**
+ * Đánh dấu phiếu đổi quà đã hoàn thành (giao voucher/tài liệu cho học sinh).
+ * Không hoàn xu.
+ */
+export async function fulfillRedemption(
+  redemptionId: string,
+  _adminNote?: string
+): Promise<RedemptionAdminResult> {
+  const admin = await getAdminClient();
+
+  const { data: rpcData, error: rpcErr } = await admin.rpc('fulfill_redemption', {
+    p_redemption_id: redemptionId,
+  });
+
+  if (!rpcErr && rpcData) {
+    const res = rpcData as { ok?: boolean; reason?: string; status?: string };
+    return { ok: !!res.ok, status: res.status || 'fulfilled', reason: res.reason };
+  }
+
+  const { data: row, error: fetchErr } = await admin
+    .from('reward_redemptions')
+    .select('id, status')
+    .eq('id', redemptionId)
+    .maybeSingle();
+
+  if (fetchErr || !row) {
+    return { ok: false, reason: 'not_found', error: 'Không tìm thấy phiếu đổi quà' };
+  }
+
+  if (row.status === 'fulfilled') {
+    return { ok: true, status: 'fulfilled', reason: 'already' };
+  }
+
+  const { error: updateErr } = await admin
+    .from('reward_redemptions')
+    .update({
+      status: 'fulfilled',
+      fulfilled_at: new Date().toISOString(),
+    })
+    .eq('id', redemptionId);
+
+  if (updateErr) {
+    return { ok: false, reason: 'error', error: updateErr.message };
+  }
+
+  return { ok: true, status: 'fulfilled' };
+}
+
+/**
+ * Hủy phiếu đổi quà 'pending' → 'cancelled' và HOÀN LẠI XU cho học sinh.
+ * Dùng khi admin không giao được quà hợp lệ.
+ */
+export async function cancelRedemption(
+  redemptionId: string,
+  adminNote?: string
+): Promise<RedemptionAdminResult> {
+  const admin = await getAdminClient();
+
+  const { data: rpcData, error: rpcErr } = await admin.rpc('cancel_redemption', {
+    p_redemption_id: redemptionId,
+  });
+
+  if (!rpcErr && rpcData) {
+    const res = rpcData as { ok?: boolean; reason?: string; status?: string; coins?: number };
+    return { ok: !!res.ok, status: res.status || 'cancelled', reason: res.reason, coins: res.coins };
+  }
+
+  const { data: row, error: fetchErr } = await admin
+    .from('reward_redemptions')
+    .select('id, user_id, cost_coins, status')
+    .eq('id', redemptionId)
+    .maybeSingle();
+
+  if (fetchErr || !row) {
+    return { ok: false, reason: 'not_found', error: 'Không tìm thấy phiếu đổi quà' };
+  }
+
+  if (row.status === 'cancelled') {
+    return { ok: true, status: 'cancelled', reason: 'already' };
+  }
+  if (row.status !== 'pending') {
+    return { ok: false, reason: 'bad_status', error: `Phiếu ở trạng thái ${row.status}, không thể hủy.` };
+  }
+
+  // Đổi trạng thái phiếu
+  const updatePayload: Record<string, unknown> = { status: 'cancelled' };
+  if (adminNote) updatePayload.admin_note = adminNote;
+
+  const { error: cancelErr } = await admin
+    .from('reward_redemptions')
+    .update(updatePayload)
+    .eq('id', redemptionId)
+    .eq('status', 'pending');
+
+  if (cancelErr) {
+    const { error: retryErr } = await admin
+      .from('reward_redemptions')
+      .update({ status: 'cancelled' })
+      .eq('id', redemptionId)
+      .eq('status', 'pending');
+    if (retryErr) {
+      return { ok: false, reason: 'error', error: retryErr.message };
+    }
+  }
+
+  // Hoàn lại xu cho user
+  const { data: eco } = await admin
+    .from('user_economy')
+    .select('coins')
+    .eq('user_id', row.user_id)
+    .maybeSingle();
+
+  const currentCoins = Number(eco?.coins) || 0;
+  const newCoins = currentCoins + Number(row.cost_coins || 0);
+
+  const { data: refundedEco } = await admin
+    .from('user_economy')
+    .update({ coins: newCoins })
+    .eq('user_id', row.user_id)
+    .select('coins')
+    .maybeSingle();
+
+  return {
+    ok: true,
+    status: 'cancelled',
+    coins: refundedEco?.coins ?? newCoins,
+  };
+}
+
+/**
+ * Tịch thu / Từ chối phiếu đổi quà (Fix #029):
+ * Đánh dấu đơn là 'cancelled' (hoặc 'rejected') kèm admin_note: 'Rejected by admin (no refund)'
+ * TUYỆT ĐỐI KHÔNG hoàn lại xu cho tài khoản gian lận.
+ */
+export async function rejectRedemption(
+  redemptionId: string,
+  adminNote?: string
+): Promise<RedemptionAdminResult> {
+  const admin = await getAdminClient();
+  const note = adminNote || 'Rejected by admin (no refund)';
+
+  const { data: row, error: fetchErr } = await admin
+    .from('reward_redemptions')
+    .select('id, user_id, status')
+    .eq('id', redemptionId)
+    .maybeSingle();
+
+  if (fetchErr || !row) {
+    return { ok: false, reason: 'not_found', error: 'Không tìm thấy phiếu đổi quà' };
+  }
+
+  if (row.status === 'cancelled' || row.status === 'rejected') {
+    return { ok: true, status: row.status, reason: 'already' };
+  }
+  if (row.status !== 'pending') {
+    return { ok: false, reason: 'bad_status', error: `Phiếu ở trạng thái ${row.status}, không thể từ chối.` };
+  }
+
+  // Thử cập nhật status = 'cancelled' (hoặc 'rejected') kèm admin_note
+  // Chú ý: TUYỆT ĐỐI KHÔNG HOÀN LẠI XU vào user_economy
+  const updatePayload: Record<string, unknown> = {
+    status: 'cancelled',
+    admin_note: note,
+  };
+
+  const { error: updateErr } = await admin
+    .from('reward_redemptions')
+    .update(updatePayload)
+    .eq('id', redemptionId)
+    .eq('status', 'pending');
+
+  if (updateErr) {
+    const { error: retryErr } = await admin
+      .from('reward_redemptions')
+      .update({ status: 'cancelled' })
+      .eq('id', redemptionId)
+      .eq('status', 'pending');
+
+    if (retryErr) {
+      return { ok: false, reason: 'error', error: retryErr.message };
+    }
+  }
+
+  return {
+    ok: true,
+    status: 'cancelled',
+    reason: 'rejected_no_refund',
+  };
+}
+
+/**
+ * Cập nhật trạng thái phiếu đổi quà tổng quát: 'fulfill' | 'cancel' | 'reject'
+ */
+export async function updateRedemptionStatus(
+  redemptionId: string,
+  action: 'fulfill' | 'cancel' | 'reject',
+  adminNote?: string
+): Promise<RedemptionAdminResult> {
+  switch (action) {
+    case 'fulfill':
+      return fulfillRedemption(redemptionId);
+    case 'cancel':
+      return cancelRedemption(redemptionId, adminNote);
+    case 'reject':
+      return rejectRedemption(redemptionId, adminNote);
+    default:
+      return { ok: false, error: 'Hành động không hợp lệ' };
+  }
 }
