@@ -1,0 +1,377 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  applyAnswerReward,
+  applyExamRewardFromDifficulties,
+  applyQuestReward,
+  applySpend,
+  applySpin,
+  comboMultiplier,
+  resolvePvpFight,
+  PVP_COMBAT_SCALE,
+  PVP_MIN_POWER_RATIO,
+  checkPvpAttempt,
+  bumpPvpCounter,
+  nextPvpRank,
+  PVP_MAX_FIGHTS_PER_DAY,
+  ANSWER_REWARD,
+  QUEST_REWARD,
+  DEFAULT_ECONOMY,
+  SPIN_VIRTUAL_ITEMS,
+  MAX_EXAM_QUESTIONS,
+  type EconomyState,
+} from './economy.ts';
+
+function fresh(): EconomyState {
+  return { ...DEFAULT_ECONOMY, inventory: [] };
+}
+
+test('applyAnswerReward: trả lời SAI → không thưởng gì', () => {
+  const r = applyAnswerReward(fresh(), false, 'Hard', 10);
+  assert.deepEqual(r.granted, { coins: 0, xp: 0 });
+  assert.equal(r.state.coins, DEFAULT_ECONOMY.coins);
+});
+
+test('applyAnswerReward: Hard đúng → thưởng theo bảng cố định server', () => {
+  const r = applyAnswerReward(fresh(), true, 'Hard', 0);
+  assert.equal(r.granted.coins, ANSWER_REWARD.Hard.coins);
+  assert.equal(r.granted.xp, ANSWER_REWARD.Hard.xp);
+  assert.equal(r.state.coins, DEFAULT_ECONOMY.coins + ANSWER_REWARD.Hard.coins);
+});
+
+test('comboMultiplier: bậc thang <5/5-9/10-14/15+', () => {
+  assert.equal(comboMultiplier(0), 1.0);
+  assert.equal(comboMultiplier(4), 1.0);
+  assert.equal(comboMultiplier(5), 1.25);
+  assert.equal(comboMultiplier(9), 1.25);
+  assert.equal(comboMultiplier(10), 1.5);
+  assert.equal(comboMultiplier(14), 1.5);
+  assert.equal(comboMultiplier(15), 1.75);
+  assert.equal(comboMultiplier(100), 1.75);
+});
+
+test('applyAnswerReward: combo bậc thang áp dụng khi streak dài (10 → ×1.5)', () => {
+  const r = applyAnswerReward(fresh(), true, 'Medium', 10);
+  assert.equal(r.granted.coins, Math.floor(ANSWER_REWARD.Medium.coins * 1.5));
+  assert.equal(r.granted.xp, Math.floor(ANSWER_REWARD.Medium.xp * 1.5));
+});
+
+test('applyExamRewardFromDifficulties: cộng đơn giá theo ĐỘ KHÓ THẬT từng câu đúng', () => {
+  // Đề chấm server-side: mỗi câu đúng thưởng theo độ khó CỦA CÂU ĐÓ (từ đề),
+  // KHÔNG phải 1 độ khó client tự chọn cho cả bài.
+  const r = applyExamRewardFromDifficulties(fresh(), ['Easy', 'Medium', 'Hard']);
+  assert.equal(r.granted.coins, ANSWER_REWARD.Easy.coins + ANSWER_REWARD.Medium.coins + ANSWER_REWARD.Hard.coins);
+  assert.equal(r.granted.xp, ANSWER_REWARD.Easy.xp + ANSWER_REWARD.Medium.xp + ANSWER_REWARD.Hard.xp);
+  assert.equal(r.state.coins, DEFAULT_ECONOMY.coins + r.granted.coins);
+});
+
+test('applyExamRewardFromDifficulties: mảng rỗng / không phải mảng → không thưởng', () => {
+  assert.deepEqual(applyExamRewardFromDifficulties(fresh(), []).granted, { coins: 0, xp: 0 });
+  // @ts-expect-error test truyền sai kiểu cố ý
+  assert.deepEqual(applyExamRewardFromDifficulties(fresh(), null).granted, { coins: 0, xp: 0 });
+});
+
+test('applyExamRewardFromDifficulties: KẸP số câu về trần (chống mảng phi lý)', () => {
+  const huge = Array.from({ length: 1000 }, () => 'Hard' as const);
+  const r = applyExamRewardFromDifficulties(fresh(), huge);
+  assert.equal(r.granted.coins, ANSWER_REWARD.Hard.coins * MAX_EXAM_QUESTIONS);
+  assert.equal(r.granted.xp, ANSWER_REWARD.Hard.xp * MAX_EXAM_QUESTIONS);
+});
+
+// ── coinMultiplier: hệ số nhân xu theo gói (phễu RPG 2026-07-06) ──
+// Bất biến CHUNG: hệ số CHỈ nhân XU (coins), KHÔNG nhân XP. Mặc định 1 (free).
+
+test('coinMultiplier: mặc định 1 → hành vi cũ không đổi (free)', () => {
+  // Không truyền hệ số → giống hệt trước khi thêm tính năng.
+  const a = applyAnswerReward(fresh(), true, 'Hard', 0);
+  assert.equal(a.granted.coins, ANSWER_REWARD.Hard.coins);
+  const q = applyQuestReward(fresh(), 'q1');
+  const q2 = applyQuestReward(fresh(), 'q1', 1);
+  assert.deepEqual(q.granted, q2.granted);
+});
+
+test('applyAnswerReward: hệ số 2 (ultimate) → xu ×2, XP GIỮ NGUYÊN', () => {
+  const r = applyAnswerReward(fresh(), true, 'Hard', 0, 2);
+  assert.equal(r.granted.coins, ANSWER_REWARD.Hard.coins * 2);
+  assert.equal(r.granted.xp, ANSWER_REWARD.Hard.xp, 'XP không bị nhân');
+});
+
+test('applyAnswerReward: hệ số 1.5 (premium) chồng với combo 1.5 (floor)', () => {
+  // streak 10-14 → combo 1.5; tier premium 1.5 → tổng 2.25×, floor.
+  const r = applyAnswerReward(fresh(), true, 'Medium', 10, 1.5);
+  assert.equal(r.granted.coins, Math.floor(ANSWER_REWARD.Medium.coins * 1.5 * 1.5));
+  assert.equal(r.granted.xp, Math.floor(ANSWER_REWARD.Medium.xp * 1.5), 'XP chỉ áp combo, KHÔNG áp hệ số gói');
+});
+
+test('applyExamRewardFromDifficulties: hệ số 1.5 nhân TỔNG xu (floor sau khi cộng dồn)', () => {
+  const r = applyExamRewardFromDifficulties(fresh(), ['Easy', 'Medium', 'Hard'], 1.5);
+  const baseCoins = ANSWER_REWARD.Easy.coins + ANSWER_REWARD.Medium.coins + ANSWER_REWARD.Hard.coins;
+  const baseXp = ANSWER_REWARD.Easy.xp + ANSWER_REWARD.Medium.xp + ANSWER_REWARD.Hard.xp;
+  assert.equal(r.granted.coins, Math.floor(baseCoins * 1.5));
+  assert.equal(r.granted.xp, baseXp, 'XP không bị nhân');
+});
+
+test('applyQuestReward: hệ số 2 → xu ×2, XP giữ nguyên; questId lạ vẫn 0 dù hệ số', () => {
+  const r = applyQuestReward(fresh(), 'q1', 2);
+  assert.equal(r.granted.coins, QUEST_REWARD.q1.coins * 2);
+  assert.equal(r.granted.xp, QUEST_REWARD.q1.xp);
+  assert.deepEqual(applyQuestReward(fresh(), 'khong-ton-tai', 2).granted, { coins: 0, xp: 0 });
+});
+
+test('resolvePvpFight: hệ số 2 → thưởng xu thắng ×2, XP giữ nguyên', () => {
+  // basePower cao để chắc thắng (rng=0 → luôn thắng khi eligible).
+  const r = resolvePvpFight(fresh(), { basePower: 100, opponentPower: 100, rewardCoins: 500, rewardXp: 300 }, () => 0, 2);
+  assert.equal(r.won, true);
+  assert.equal(r.granted.coins, 1000, 'xu ×2');
+  assert.equal(r.granted.xp, 300, 'XP không bị nhân');
+});
+
+test('applyExamRewardFromDifficulties: độ khó lạ → fallback Medium (không cộng NaN)', () => {
+  // @ts-expect-error test truyền độ khó không hợp lệ cố ý
+  const r = applyExamRewardFromDifficulties(fresh(), ['Bogus']);
+  assert.equal(r.granted.coins, ANSWER_REWARD.Medium.coins);
+  assert.equal(r.granted.xp, ANSWER_REWARD.Medium.xp);
+});
+
+test('applyQuestReward: questId hợp lệ → thưởng theo bảng cố định server', () => {
+  const r = applyQuestReward(fresh(), 'q3');
+  assert.equal(r.granted.coins, QUEST_REWARD.q3.coins);
+  assert.equal(r.granted.xp, QUEST_REWARD.q3.xp);
+  assert.equal(r.state.coins, DEFAULT_ECONOMY.coins + QUEST_REWARD.q3.coins);
+  assert.equal(r.state.xp, DEFAULT_ECONOMY.xp + QUEST_REWARD.q3.xp);
+});
+
+test('applyQuestReward: questId lạ → không thưởng (đóng vector bơm tùy ý)', () => {
+  assert.deepEqual(applyQuestReward(fresh(), 'q999').granted, { coins: 0, xp: 0 });
+  assert.deepEqual(applyQuestReward(fresh(), '').granted, { coins: 0, xp: 0 });
+});
+
+test('applySpend: đủ xu → trừ đúng, thêm item vào túi', () => {
+  const s = { ...fresh(), coins: 100 };
+  const r = applySpend(s, 30, 'skin_1');
+  assert.equal(r.ok, true);
+  assert.equal(r.state.coins, 70);
+  assert.ok(r.state.inventory.includes('skin_1'));
+});
+
+test('applySpend: KHÔNG đủ xu → từ chối, state không đổi', () => {
+  const s = { ...fresh(), coins: 10 };
+  const r = applySpend(s, 50);
+  assert.equal(r.ok, false);
+  assert.equal(r.state.coins, 10);
+});
+
+test('applySpend: số tiền không hợp lệ (âm/không nguyên) → từ chối', () => {
+  assert.equal(applySpend({ ...fresh(), coins: 100 }, -5).ok, false);
+  assert.equal(applySpend({ ...fresh(), coins: 100 }, 3.5).ok, false);
+});
+
+test('applySpin: đã quay hôm nay → từ chối', () => {
+  const s = { ...fresh(), lastSpinDate: '2026-06-27' };
+  const r = applySpin(s, '2026-06-27', () => 0.5);
+  assert.equal(r.ok, false);
+  assert.equal(r.result.type, 'none');
+});
+
+test('applySpin: roll < 80 → thưởng xu (đồ ảo, không quà thật)', () => {
+  // rng đầu = 0.1 (roll=10 → nhánh coins), rng sau = 0 → coins = 50.
+  const seq = [0.1, 0];
+  let i = 0;
+  const r = applySpin(fresh(), '2026-06-27', () => seq[i++]);
+  assert.equal(r.ok, true);
+  assert.equal(r.result.type, 'coins');
+  assert.equal(r.state.lastSpinDate, '2026-06-27');
+});
+
+test('applySpin: roll cao → trúng cực phẩm, item nằm trong DANH SÁCH ẢO', () => {
+  // rng đầu = 0.99 (roll=99 → nhánh epic), rng sau = 0 → item đầu danh sách.
+  const seq = [0.99, 0];
+  let i = 0;
+  const r = applySpin(fresh(), '2026-06-27', () => seq[i++]);
+  assert.equal(r.result.type, 'epic');
+  assert.ok(SPIN_VIRTUAL_ITEMS.includes(r.result.itemId!), 'phải là đồ ảo');
+});
+
+test('applySpin: KHÔNG có nhánh nào trao quà thật (rw_*/voucher)', () => {
+  // Quét mọi roll: không item nào có tiền tố quà thật.
+  for (let roll = 0; roll < 100; roll += 1) {
+    const seq = [roll / 100, 0];
+    let i = 0;
+    const r = applySpin(fresh(), '2026-06-27', () => seq[i++]);
+    if (r.result.itemId) {
+      assert.ok(!r.result.itemId.startsWith('rw_'), `loot box quà thật rò rỉ: ${r.result.itemId}`);
+    }
+  }
+});
+
+// ─── PvP COMBAT (server-authoritative) ─────────────────────────────────────
+
+function pvpInput(basePower: number, opponentPower: number, rewardCoins = 1000, rewardXp = 800) {
+  return { basePower, opponentPower, rewardCoins, rewardXp };
+}
+
+test('resolvePvpFight: lực YẾU dưới cổng → KHÔNG đủ điều kiện, không thưởng', () => {
+  // basePower 1 → combatPower 40; đối thủ 4000 → cần >= 2000. Trượt cổng.
+  const r = resolvePvpFight(fresh(), pvpInput(1, 4000), () => 0);
+  assert.equal(r.eligible, false);
+  assert.equal(r.won, false);
+  assert.deepEqual(r.granted, { coins: 0, xp: 0 });
+  assert.equal(r.state.coins, DEFAULT_ECONOMY.coins, 'state không đổi khi không đủ điều kiện');
+  assert.ok(r.reason && r.reason.length > 0, 'phải có lý do hướng dẫn');
+});
+
+test('resolvePvpFight: combatPower = basePower × PVP_COMBAT_SCALE', () => {
+  const r = resolvePvpFight(fresh(), pvpInput(50, 120), () => 0.99);
+  assert.equal(r.combatPower, 50 * PVP_COMBAT_SCALE);
+});
+
+test('resolvePvpFight: cổng đúng ngưỡng PVP_MIN_POWER_RATIO (biên)', () => {
+  // Chọn opp sao cho combatPower == opp * ratio (đủ điều kiện, không trượt).
+  const basePower = 25; // combatPower = 1000
+  const opp = Math.floor((basePower * PVP_COMBAT_SCALE) / PVP_MIN_POWER_RATIO); // 2000
+  const r = resolvePvpFight(fresh(), pvpInput(basePower, opp), () => 0); // rng=0 → chắc thắng nếu winProb>0
+  assert.equal(r.eligible, true, 'đúng ngưỡng vẫn đủ điều kiện (>=)');
+});
+
+test('resolvePvpFight: đủ điều kiện + THẮNG → cộng đúng phần thưởng đối thủ', () => {
+  // basePower cao → combatPower lớn → winProb cao; rng=0 → luôn thắng.
+  const r = resolvePvpFight(fresh(), pvpInput(80, 300, 1200, 900), () => 0);
+  assert.equal(r.eligible, true);
+  assert.equal(r.won, true);
+  assert.deepEqual(r.granted, { coins: 1200, xp: 900 });
+  assert.equal(r.state.coins, DEFAULT_ECONOMY.coins + 1200);
+  assert.equal(r.state.xp, DEFAULT_ECONOMY.xp + 900);
+});
+
+test('resolvePvpFight: đủ điều kiện nhưng THUA (rng cao) → không thưởng, state nguyên', () => {
+  // combatPower 40*40=1600 vs opp 1600 → winProb 0.5; rng=0.99 → thua.
+  const r = resolvePvpFight(fresh(), pvpInput(40, 1600), () => 0.99);
+  assert.equal(r.eligible, true);
+  assert.equal(r.won, false);
+  assert.deepEqual(r.granted, { coins: 0, xp: 0 });
+  assert.equal(r.state.coins, DEFAULT_ECONOMY.coins);
+});
+
+test('resolvePvpFight: lực cao hơn → xác suất thắng cao hơn (winProb tăng theo basePower)', () => {
+  // Đếm số thắng trên dãy rng cố định: basePower lớn phải thắng nhiều hơn.
+  const rolls = Array.from({ length: 100 }, (_, i) => i / 100);
+  const countWins = (basePower: number) => {
+    let wins = 0;
+    for (const roll of rolls) {
+      const r = resolvePvpFight(fresh(), pvpInput(basePower, 1600), () => roll);
+      if (r.eligible && r.won) wins += 1;
+    }
+    return wins;
+  };
+  assert.ok(countWins(80) > countWins(40), 'basePower cao hơn → thắng nhiều hơn');
+});
+
+test('resolvePvpFight: KHÔNG ăn thưởng âm/biến dạng (reward kẹp >= 0, làm tròn xuống)', () => {
+  const r = resolvePvpFight(fresh(), pvpInput(80, 300, -50, 12.9), () => 0);
+  assert.deepEqual(r.granted, { coins: 0, xp: 12 });
+});
+
+// ─── PvP ANTI-FAUCET: rank validity + cap/ngày ─────────────────────────────
+
+const TODAY = '2026-07-01';
+
+test('checkPvpAttempt: CHỈ cho đánh đối thủ kế trên (targetRank === rank-1)', () => {
+  // rank 11 → chỉ được đánh 10.
+  assert.equal(checkPvpAttempt(11, 10, 0, '', TODAY).allowed, true);
+  // Nhảy thẳng rank 1 (jackpot) từ rank 11 → CHẶN (chống faucet).
+  const skip = checkPvpAttempt(11, 1, 0, '', TODAY);
+  assert.equal(skip.allowed, false);
+  assert.match(skip.reason!, /tuần tự|kế tiếp/i);
+  // Đánh hạng đã qua / thấp hơn → chặn.
+  assert.equal(checkPvpAttempt(5, 8, 0, '', TODAY).allowed, false);
+});
+
+test('checkPvpAttempt: targetRank không hợp lệ (0, âm, không nguyên) → chặn', () => {
+  assert.equal(checkPvpAttempt(1, 0, 0, '', TODAY).allowed, false);   // rank 1 hết đối thủ
+  assert.equal(checkPvpAttempt(3, -1, 0, '', TODAY).allowed, false);
+  assert.equal(checkPvpAttempt(3, 1.5, 0, '', TODAY).allowed, false);
+});
+
+test('checkPvpAttempt: hết cap/ngày → chặn; còn cap → cho', () => {
+  // Đã đánh đủ trần hôm nay → chặn.
+  const full = checkPvpAttempt(11, 10, PVP_MAX_FIGHTS_PER_DAY, TODAY, TODAY);
+  assert.equal(full.allowed, false);
+  assert.equal(full.fightsRemaining, 0);
+  assert.match(full.reason!, new RegExp(`${PVP_MAX_FIGHTS_PER_DAY}`));
+  // Còn 1 lượt → cho đánh.
+  const last = checkPvpAttempt(11, 10, PVP_MAX_FIGHTS_PER_DAY - 1, TODAY, TODAY);
+  assert.equal(last.allowed, true);
+  assert.equal(last.fightsRemaining, 1);
+});
+
+test('checkPvpAttempt: bộ đếm RESET sang ngày mới (lastFightDate khác today)', () => {
+  // Hôm qua đánh kịch trần, nhưng hôm nay là ngày mới → coi như 0 trận.
+  const r = checkPvpAttempt(11, 10, PVP_MAX_FIGHTS_PER_DAY, '2026-06-30', TODAY);
+  assert.equal(r.allowed, true);
+  assert.equal(r.fightsRemaining, PVP_MAX_FIGHTS_PER_DAY);
+});
+
+test('checkPvpAttempt: cap theo GÓI (maxFights) — free 3 chặn sớm hơn trần tuyệt đối', () => {
+  // Free cap 3: đã đánh 3 trận hôm nay → chặn dù trần tuyệt đối 10 chưa tới.
+  const freeFull = checkPvpAttempt(11, 10, 3, TODAY, TODAY, 3);
+  assert.equal(freeFull.allowed, false);
+  assert.equal(freeFull.fightsRemaining, 0);
+  assert.match(freeFull.reason!, /3 trận/);
+  // Free đánh 2 trận → còn 1 lượt.
+  const freeLeft = checkPvpAttempt(11, 10, 2, TODAY, TODAY, 3);
+  assert.equal(freeLeft.allowed, true);
+  assert.equal(freeLeft.fightsRemaining, 1);
+});
+
+test('checkPvpAttempt: maxFights vượt trần tuyệt đối bị KẸP về PVP_MAX_FIGHTS_PER_DAY', () => {
+  // Caller truyền cap 999 (vd bug) → kẹp về 10, không nới rộng faucet.
+  const r = checkPvpAttempt(11, 10, PVP_MAX_FIGHTS_PER_DAY, TODAY, TODAY, 999);
+  assert.equal(r.allowed, false);
+  assert.equal(r.fightsRemaining, 0);
+});
+
+test('bumpPvpCounter: +1 trong ngày; reset về 1 khi sang ngày mới', () => {
+  assert.deepEqual(bumpPvpCounter(3, TODAY, TODAY), { fightsToday: 4, lastFightDate: TODAY });
+  // Ngày khác → đếm lại từ 1.
+  assert.deepEqual(bumpPvpCounter(9, '2026-06-30', TODAY), { fightsToday: 1, lastFightDate: TODAY });
+});
+
+test('nextPvpRank: thắng leo 1 bậc (rank giảm), sàn 1; thua giữ nguyên', () => {
+  assert.equal(nextPvpRank(11, true), 10);
+  assert.equal(nextPvpRank(2, true), 1);
+  assert.equal(nextPvpRank(1, true), 1);   // đã đỉnh, không xuống 0
+  assert.equal(nextPvpRank(7, false), 7);  // thua giữ hạng
+});
+
+// ─── PvP edge cases (khóa lại các nhánh sanitize/guard) ─────────────────────
+
+test('resolvePvpFight: combatPower=0 VÀ opp=0 → winProb 0 (KHÔNG NaN), luôn thua', () => {
+  // Cả hai bằng 0: cổng năng lực (0 < 0*0.5 = 0) là false → qua cổng (eligible),
+  // nhưng total=0 nên nhánh `total>0 ? ... : 0` chặn chia 0/0 → winProb=0 → luôn thua.
+  const r = resolvePvpFight(fresh(), pvpInput(0, 0, 500, 400), () => 0);
+  assert.equal(r.eligible, true);
+  assert.equal(r.won, false, 'rng=0 < winProb=0 là false → không thắng');
+  assert.deepEqual(r.granted, { coins: 0, xp: 0 });
+  assert.equal(r.combatPower, 0);
+});
+
+test('resolvePvpFight: basePower âm/float bị kẹp (Math.max(0, floor)) trước khi tính', () => {
+  // basePower -5 → kẹp về 0 → combatPower 0. basePower 2.9 → floor 2 → combatPower 80.
+  assert.equal(resolvePvpFight(fresh(), pvpInput(-5, 100), () => 0).combatPower, 0);
+  assert.equal(resolvePvpFight(fresh(), pvpInput(2.9, 40), () => 0).combatPower, 2 * PVP_COMBAT_SCALE);
+});
+
+test('checkPvpAttempt: fightsToday âm/không nguyên bị coi như 0 (fightsTodayEffective sanitize)', () => {
+  // fightsToday bẩn (âm hoặc float) cùng ngày → coi như 0 → còn full cap, cho đánh.
+  const neg = checkPvpAttempt(11, 10, -3, TODAY, TODAY);
+  assert.equal(neg.allowed, true);
+  assert.equal(neg.fightsRemaining, PVP_MAX_FIGHTS_PER_DAY);
+  const frac = checkPvpAttempt(11, 10, 2.7, TODAY, TODAY);
+  assert.equal(frac.allowed, true);
+  assert.equal(frac.fightsRemaining, PVP_MAX_FIGHTS_PER_DAY, 'float không nguyên → coi như 0');
+});
+
+test('bumpPvpCounter: fightsToday âm/float cùng ngày → sanitize về 0 rồi +1', () => {
+  assert.deepEqual(bumpPvpCounter(-4, TODAY, TODAY), { fightsToday: 1, lastFightDate: TODAY });
+  assert.deepEqual(bumpPvpCounter(3.9, TODAY, TODAY), { fightsToday: 1, lastFightDate: TODAY });
+});

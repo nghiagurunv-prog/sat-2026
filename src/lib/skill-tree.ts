@@ -1,0 +1,238 @@
+import type { MasterySummary } from './mastery';
+import { RETRY_CORRECT_NEEDED, type GateProgress } from './gate-exam';
+import type { AiTier } from './ai-quota';
+import { getDomainOfSkill } from './skill-taxonomy';
+
+/**
+ * ============================================================================
+ *  SKILL TREE — bản đồ năng lực SAT (implementation_plan.md §10.B.1, task #17)
+ * ============================================================================
+ *  QUYẾT ĐỊNH ĐÃ CHỐT: đây là HỆ TIẾN TRÌNH DUY NHẤT — đã bỏ Level phẳng 1-200.
+ *  Tiến trình của người chơi = độ phủ + độ thành thạo chương trình SAT thật,
+ *  KHÔNG phải một con số XP vô nghĩa.
+ *
+ *  • Mỗi NODE = một skill trong taxonomy.
+ *  • Các CHƯƠNG (domain) có quan hệ tiên quyết: Toán nâng cao / Phân tích số liệu
+ *    / Hình học cần nền Đại số trước (đúng sư phạm). Reading độc lập.
+ *  • Trạng thái node: locked → available → in_progress → mastered.
+ *
+ *  ⚠️ THUẦN (pure) — chỉ import TYPE. Tính per-domain average ngay từ
+ *  summary.skills (đã nhúng domainId) nên không cần import taxonomy → unit-test
+ *  được bằng node:test.
+ * ============================================================================
+ */
+
+/** Một chương được coi là "đạt tiên quyết" khi mastery trung bình >= ngưỡng này. */
+export const DOMAIN_UNLOCK_THRESHOLD = 40;
+
+/**
+ * PHÂN TẦNG (định giá theo phễu 2026-07-06): free mở 2 CHƯƠNG đầu — `algebra`
+ * (gốc Toán) + `reading_writing` (Đọc-Viết) — để nếm CẢ hai môn. Các chương còn
+ * lại là quyền lợi Premium+. Đây là ranh giới ĐỌC/HIỂN THỊ; mastery vẫn ghi đủ ở
+ * free (nâng cấp = mở khóa phần cây đã tích lũy sẵn). Xem applyTierGate.
+ */
+export const FREE_DOMAINS = ['algebra', 'reading_writing'];
+
+/**
+ * Tiên quyết theo CHƯƠNG (domainId → các domainId phải đạt ngưỡng trước).
+ * Đại số là gốc; Reading độc lập.
+ */
+export const DOMAIN_PREREQS: Record<string, string[]> = {
+  algebra: [],
+  advanced_math: ['algebra'],
+  data_analysis: ['algebra'],
+  geometry: ['algebra'],
+  reading_writing: [],
+};
+
+export type NodeState = 'locked' | 'available' | 'in_progress' | 'mastered';
+
+export interface SkillNode {
+  id: string;
+  label: string;
+  domainId: string;
+  domainLabel: string;
+  score: number;
+  state: NodeState;
+  /** Lý do bị khóa (nếu locked) — chương tiên quyết chưa đạt. */
+  lockedBy?: string[];
+  /** true khi node thuộc chương chỉ Premium+ (free bị khóa theo gói, KHÔNG phải tiên quyết). */
+  tierLocked?: boolean;
+}
+
+export type GateStatus = 'not_required' | 'available' | 'locked' | 'passed' | 'cooldown';
+
+export interface DomainProgress {
+  id: string;
+  label: string;
+  avgScore: number;
+  satisfied: boolean;
+  gateStatus: GateStatus;
+  correctSinceFail?: number;
+  /** true khi chương chỉ Premium+ (free thấy nhưng bị khóa theo gói). */
+  tierLocked?: boolean;
+}
+
+export interface SkillTreeView {
+  domains: DomainProgress[];
+  nodes: SkillNode[];
+  /** Số node đã mastered / tổng — thay cho "Level" cũ. */
+  masteredCount: number;
+  totalNodes: number;
+}
+
+/** Tính mastery trung bình mỗi chương từ summary (thuần). */
+function domainAverages(summary: MasterySummary): Map<string, { label: string; avg: number }> {
+  const acc = new Map<string, { label: string; sum: number; n: number }>();
+  for (const s of summary.skills) {
+    const cur = acc.get(s.domainId) ?? { label: s.domainLabel, sum: 0, n: 0 };
+    cur.sum += s.score;
+    cur.n += 1;
+    acc.set(s.domainId, cur);
+  }
+  const out = new Map<string, { label: string; avg: number }>();
+  for (const [id, v] of acc) {
+    out.set(id, { label: v.label, avg: v.n ? Math.round(v.sum / v.n) : 0 });
+  }
+  return out;
+}
+
+/** Dựng toàn bộ trạng thái Skill Tree từ mastery hiện tại. */
+export function buildSkillTree(
+  summary: MasterySummary,
+  gates: Record<string, GateProgress> = {}
+): SkillTreeView {
+  const avgs = domainAverages(summary);
+
+  // Chương đạt ngưỡng mastery avg (điều kiện CẦN để thi cổng).
+  const meetsThreshold = new Map<string, boolean>();
+  for (const [id, v] of avgs) {
+    meetsThreshold.set(id, v.avg >= DOMAIN_UNLOCK_THRESHOLD);
+  }
+
+  // Chương nào không cần gate (không có chương phụ thuộc nào nhìn vào nó).
+  const hasDependent = new Set<string>();
+  for (const prereqs of Object.values(DOMAIN_PREREQS)) {
+    for (const p of prereqs) hasDependent.add(p);
+  }
+
+  // Gate status từng chương.
+  function getGateStatus(domainId: string): GateStatus {
+    if (!hasDependent.has(domainId)) return 'not_required';
+    const gate = gates[domainId];
+    if (gate?.passed) return 'passed';
+    if (!meetsThreshold.get(domainId)) return 'locked';
+    if (!gate) return 'available';
+    // Ngưỡng thi lại DÙNG CHUNG với gate-exam.ts (gate-exam thuần, không I/O →
+    // import value an toàn; gate-store.ts + mastery.ts đã import value cùng module).
+    if (gate.correctSinceFail >= RETRY_CORRECT_NEEDED) return 'available';
+    return 'cooldown';
+  }
+
+  // "satisfied" (đạt tiên quyết cho chương SAU):
+  //   • gate 'passed' → satisfied VĨNH VIỄN. Qua cổng LÀ bằng chứng bền; mastery
+  //     decay (EWMA tụt < ngưỡng) KHÔNG được khóa lại chương đã mở — tránh tụt
+  //     tiến trình khi học sinh chuyển sang luyện chương sau, ngừng ôn chương gốc.
+  //   • 'not_required' (không chương nào phụ thuộc) → theo ngưỡng hiện tại.
+  //   • còn lại (available/locked/cooldown — chưa qua cổng) → chưa satisfied.
+  const satisfied = new Map<string, boolean>();
+  for (const [id] of avgs) {
+    const gs = getGateStatus(id);
+    if (gs === 'passed') satisfied.set(id, true);
+    else if (gs === 'not_required') satisfied.set(id, meetsThreshold.get(id)!);
+    else satisfied.set(id, false);
+  }
+
+  // Chương nào đang MỞ KHÓA (mọi tiên quyết đã satisfied).
+  function domainUnlocked(domainId: string): { unlocked: boolean; lockedBy: string[] } {
+    const prereqs = DOMAIN_PREREQS[domainId] ?? [];
+    const missing = prereqs.filter((p) => !satisfied.get(p));
+    return { unlocked: missing.length === 0, lockedBy: missing };
+  }
+
+  const nodes: SkillNode[] = summary.skills.map((s) => {
+    const { unlocked, lockedBy } = domainUnlocked(s.domainId);
+
+    let state: NodeState;
+    if (!unlocked) {
+      state = 'locked';
+    } else if (s.mastered) {
+      state = 'mastered';
+    } else if (s.attempts > 0) {
+      state = 'in_progress';
+    } else {
+      state = 'available';
+    }
+
+    const node: SkillNode = {
+      id: s.id,
+      label: s.label,
+      domainId: s.domainId,
+      domainLabel: s.domainLabel,
+      score: s.score,
+      state,
+    };
+    if (state === 'locked') {
+      node.lockedBy = lockedBy.map((id) => avgs.get(id)?.label ?? id);
+    }
+    return node;
+  });
+
+  const domains: DomainProgress[] = [...avgs.entries()].map(([id, v]) => {
+    const gs = getGateStatus(id);
+    const domain: DomainProgress = {
+      id,
+      label: v.label,
+      avgScore: v.avg,
+      satisfied: satisfied.get(id) ?? false,
+      gateStatus: gs,
+    };
+    if (gs === 'cooldown') {
+      domain.correctSinceFail = gates[id]?.correctSinceFail ?? 0;
+    }
+    return domain;
+  });
+
+  const masteredCount = nodes.filter((n) => n.state === 'mastered').length;
+
+  return { domains, nodes, masteredCount, totalNodes: nodes.length };
+}
+
+/**
+ * PHÂN TẦNG THEO GÓI (thuần). Đánh dấu các chương ngoài FREE_DOMAINS là
+ * `tierLocked` cho gói 'free' + ép node của chúng về state 'locked' (không lộ
+ * tiến trình/điểm chi tiết chương trả phí). Premium/Ultimate → trả nguyên view.
+ *
+ * ⚠️ KHÔNG xóa node (giữ totalNodes ổn định để % tiến trình không nhảy khi
+ * nâng cấp) — chỉ khóa hiển thị. masteredCount tính lại theo node CÒN thấy được
+ * (chương free) để con số "đã tinh thông" khớp phần user thực sự truy cập.
+ */
+export function applyTierGate(view: SkillTreeView, tier: AiTier): SkillTreeView {
+  if (tier !== 'free') return view;
+
+  const domains = view.domains.map((d) =>
+    FREE_DOMAINS.includes(d.id) ? d : { ...d, tierLocked: true }
+  );
+
+  const nodes = view.nodes.map((n) =>
+    FREE_DOMAINS.includes(n.domainId)
+      ? n
+      : { ...n, state: 'locked' as NodeState, tierLocked: true, score: 0, lockedBy: undefined }
+  );
+
+  const masteredCount = nodes.filter(
+    (n) => !n.tierLocked && n.state === 'mastered'
+  ).length;
+
+  return { domains, nodes, masteredCount, totalNodes: view.nodes.length };
+}
+
+/**
+ * Kiểm tra quyền luyện tập skill theo gói (Free chỉ được các skill thuộc FREE_DOMAINS).
+ */
+export function canGeneratePracticeForTier(tier: AiTier, skillId: string | undefined): boolean {
+  if (tier !== 'free') return true;
+  if (!skillId) return false;
+  const domain = getDomainOfSkill(skillId);
+  return !!domain && FREE_DOMAINS.includes(domain.id);
+}

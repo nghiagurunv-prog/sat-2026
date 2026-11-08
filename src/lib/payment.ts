@@ -1,0 +1,79 @@
+import { randomUUID } from 'crypto';
+import type { PaidTier, BillingPeriod } from './subscription';
+
+/**
+ * ============================================================================
+ *  PAYMENT CORE (thuần) — Phase 2 Bước 2: cổng thanh toán VNPay + MoMo
+ * ============================================================================
+ *  Types + validate + sinh mã giao dịch. KHÔNG I/O, KHÔNG chữ ký (chữ ký ở
+ *  payment-vnpay.ts / payment-momo.ts; I/O DB ở payment-store.ts).
+ *
+ *  🔴 Nguyên tắc money surface (giống §9.1): client gửi Ý ĐỊNH (gateway + tier +
+ *  period), SERVER quyết SỐ TIỀN (từ PLANS qua getPlan) + xác nhận giao dịch chỉ
+ *  qua IPN server-to-server đã verify chữ ký. Client KHÔNG gửi số tiền.
+ * ============================================================================
+ */
+
+/**
+ * Cổng thanh toán hỗ trợ. 'payos' (VietQR, cá nhân VN) + 'stripe' (thẻ quốc tế)
+ * bật mặc định; 'vnpay'|'momo' cũng bật (khung code có sẵn) — cổng nào chưa có
+ * env creds thì create route trả 503 (fail-safe), KHÔNG vỡ.
+ */
+export type PaymentGateway = 'vnpay' | 'momo' | 'stripe' | 'payos';
+
+/** Trạng thái 1 giao dịch (khớp CHECK của bảng payment_transactions). */
+export type TxnStatus = 'pending' | 'paid' | 'failed' | 'expired';
+
+/** 1 bản ghi giao dịch (đọc lại từ payment_transactions). */
+export interface PaymentTxn {
+  orderId: string;
+  gateway: PaymentGateway;
+  tier: PaidTier;
+  period: BillingPeriod;
+  amountVnd: number;
+  status: TxnStatus;
+  gatewayTxnId: string | null;
+  createdAt: string;
+  paidAt: string | null;
+}
+
+// Cổng hợp lệ runtime. payOS + Stripe là kênh chính (VN cá nhân + thẻ quốc tế);
+// vnpay/momo bật kèm (khung có sẵn). Cổng chưa có env creds → create route trả 503.
+const VALID_GATEWAYS: readonly PaymentGateway[] = ['stripe', 'payos', 'vnpay', 'momo'];
+const VALID_TIERS: readonly PaidTier[] = ['premium', 'ultimate'];
+const VALID_PERIODS: readonly BillingPeriod[] = ['monthly', 'quarterly', 'semiannual', 'yearly'];
+
+export function isValidGateway(g: unknown): g is PaymentGateway {
+  return typeof g === 'string' && VALID_GATEWAYS.includes(g as PaymentGateway);
+}
+export function isValidTier(t: unknown): t is PaidTier {
+  return typeof t === 'string' && VALID_TIERS.includes(t as PaidTier);
+}
+export function isValidPeriod(p: unknown): p is BillingPeriod {
+  return typeof p === 'string' && VALID_PERIODS.includes(p as BillingPeriod);
+}
+
+/**
+ * Sinh mã giao dịch merchant (vnp_TxnRef / MoMo orderId). Duy nhất, không đoán
+ * được, prefix để dễ nhận diện trong log/đối soát. Dùng làm khóa idempotency
+ * (cột order_id UNIQUE) → 1 lần "create" = 1 order = 1 lần cấp gói tối đa.
+ */
+export function generateOrderId(): string {
+  return `SAT-${randomUUID()}`;
+}
+
+/**
+ * Nội dung mô tả thanh toán (VNPay yêu cầu tiếng Việt KHÔNG dấu; giữ ASCII cho
+ * an toàn với cả 2 cổng). Không nhúng dữ liệu client — dựng từ tier/period server.
+ */
+export function buildOrderInfo(tier: PaidTier, period: BillingPeriod): string {
+  const tierLabel = tier === 'ultimate' ? 'Ultimate' : 'Premium';
+  const PERIOD_LABELS: Record<BillingPeriod, string> = {
+    monthly: 'thang',
+    quarterly: '3thang',
+    semiannual: '6thang',
+    yearly: 'nam',
+  };
+  const periodLabel = PERIOD_LABELS[period];
+  return `Nang cap goi ${tierLabel} ${periodLabel} - Gia su AI SAT`;
+}

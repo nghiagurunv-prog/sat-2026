@@ -1,0 +1,118 @@
+export interface PvpOpponent {
+  rank: number;
+  name: string;
+  level: number;
+  luc_chien: number;
+  max_hp: number;
+  icon: string;
+  reward_coins: number;
+  reward_xp: number;
+  rankBorderClass?: string;
+}
+
+/** Hệ số quy đổi basePower (0..100) → thang lực chiến đối thủ (120..4000). */
+export const PVP_COMBAT_SCALE = 40;
+
+/** Tỉ lệ lực tối thiểu (so với đối thủ) để được phép thách đấu. */
+export const PVP_MIN_POWER_RATIO = 0.5;
+
+export const PVP_OPPONENTS: Record<number, PvpOpponent> = {
+  10: { rank: 10, name: "Học Viên Tập Sự", level: 5, luc_chien: 120, max_hp: 300, icon: "🥉", reward_coins: 300, reward_xp: 200, rankBorderClass: "border-[#b45309] shadow-[0_0_10px_#b45309]" },
+  9: { rank: 9, name: "Kiếm Sĩ Tập Sự", level: 12, luc_chien: 280, max_hp: 600, icon: "🗡️", reward_coins: 500, reward_xp: 350, rankBorderClass: "border-[#b45309] shadow-[0_0_10px_#b45309]" },
+  8: { rank: 8, name: "Cung Thủ Tri Thức", level: 22, luc_chien: 480, max_hp: 1000, icon: "🏹", reward_coins: 800, reward_xp: 500, rankBorderClass: "border-[#94a3b8] shadow-[0_0_15px_#94a3b8]" },
+  7: { rank: 7, name: "Đại Pháp Sư Toán Học", level: 35, luc_chien: 750, max_hp: 1800, icon: "🧙‍♂️", reward_coins: 1200, reward_xp: 800, rankBorderClass: "border-[#94a3b8] shadow-[0_0_15px_#94a3b8]" },
+  6: { rank: 6, name: "Sát Thủ Đọc Hiểu", level: 48, luc_chien: 1100, max_hp: 3000, icon: "👤", reward_coins: 1800, reward_xp: 1200, rankBorderClass: "border-[#eab308] shadow-[0_0_20px_#eab308]" },
+  5: { rank: 5, name: "Quản Tịch Thư Viện", level: 60, luc_chien: 1500, max_hp: 5000, icon: "📚", reward_coins: 2500, reward_xp: 1800, rankBorderClass: "border-[#eab308] shadow-[0_0_20px_#eab308]" },
+  4: { rank: 4, name: "Chiến Thần Hoàn Hảo", level: 75, luc_chien: 2000, max_hp: 8000, icon: "⚡", reward_coins: 3500, reward_xp: 2500, rankBorderClass: "border-[#38bdf8] shadow-[0_0_25px_#38bdf8]" },
+  3: { rank: 3, name: "Hiệp Sĩ Oxford", level: 90, luc_chien: 2600, max_hp: 12000, icon: "🛡️", reward_coins: 5000, reward_xp: 4000, rankBorderClass: "border-[#38bdf8] shadow-[0_0_25px_#38bdf8]" },
+  2: { rank: 2, name: "Đế Vương Harvard", level: 110, luc_chien: 3200, max_hp: 20000, icon: "👑", reward_coins: 8000, reward_xp: 6000, rankBorderClass: "border-[#c084fc] shadow-[0_0_30px_#c084fc] animate-pulse" },
+  1: { rank: 1, name: "Chúa Tể SAT Quest", level: 150, luc_chien: 4000, max_hp: 35000, icon: "🌌", reward_coins: 15000, reward_xp: 10000, rankBorderClass: "border-[#fbbf24] shadow-[0_0_40px_#fbbf24] animate-bounce" }
+};
+
+export const getPvpRankBorder = (rank: number): string => {
+  const safeRank = Math.floor(Number(rank) || 0);
+  if (safeRank < 1 || safeRank > 10) return "border-[#475569]"; // Mặc định cho người mới
+  return PVP_OPPONENTS[safeRank]?.rankBorderClass || "border-[#475569]";
+};
+
+export const getPvpRankName = (rank: number): string => {
+  const safeRank = Math.floor(Number(rank) || 0);
+  if (safeRank < 1 || safeRank > 10) return "Tân Binh Đấu Trường";
+  const opp = PVP_OPPONENTS[safeRank];
+  if (opp) {
+    let league = "";
+    if (safeRank >= 9) league = "Đồng";
+    else if (safeRank >= 7) league = "Bạc";
+    else if (safeRank >= 5) league = "Vàng";
+    else if (safeRank >= 3) league = "Bạch Kim";
+    else if (safeRank === 2) league = "Kim Cương";
+    else league = "Thách Đấu";
+    return `Rank ${league} - ${opp.icon} ${opp.name}`;
+  }
+  return "Huyền Thoại Thách Đấu";
+};
+
+// (đã gỡ calculateFightResult — dead code client-side, không caller. Kết quả PvP
+//  do SERVER quyết trong resolvePvpFight (@/lib/economy) dựa lực chiến từ mastery.)
+
+/**
+ * BOSS THEO DOMAIN (RPG 60/40 — đối kháng gắn học thật): mỗi rank PvP map 1 domain
+ * SAT. Cổng năng lực của trận dùng basePower CỦA DOMAIN đó (computeDomainStats)
+ * thay vì tổng thể → muốn leo rank phải GIỎI đúng domain của boss, không thể mạnh
+ * tổng thể mà bỏ điểm yếu. domainId khớp SKILL_TREE (skill-taxonomy.ts): 5 domain
+ * (algebra, advanced_math, data_analysis, geometry, reading_writing).
+ *
+ * Rank 10→1 (dễ→khó) xoay vòng qua 5 domain; rank cao lặp lại domain nền tảng
+ * (đòi mastery cao hơn vì luc_chien đối thủ lớn hơn). rank ngoài bảng (>10 tân
+ * binh) → null → economy route fallback dùng basePower tổng thể (tương thích).
+ */
+export const PVP_RANK_DOMAIN: Record<number, string> = {
+  10: 'algebra',
+  9: 'advanced_math',
+  8: 'data_analysis',
+  7: 'geometry',
+  6: 'reading_writing',
+  5: 'algebra',
+  4: 'advanced_math',
+  3: 'data_analysis',
+  2: 'geometry',
+  1: 'reading_writing',
+};
+
+/** Domain của boss ở rank cho trước (null nếu rank ngoài bảng). */
+export const getPvpRankDomain = (rank: number): string | null => {
+  const safeRank = Math.floor(Number(rank) || 0);
+  return PVP_RANK_DOMAIN[safeRank] ?? null;
+};
+
+/** Lấy thông tin đối thủ an toàn theo rank */
+export const getPvpOpponent = (rank: number): PvpOpponent | null => {
+  const safeRank = Math.floor(Number(rank) || 0);
+  return PVP_OPPONENTS[safeRank] || null;
+};
+
+/**
+ * Tính ước lượng tỷ lệ thắng PvP dựa trên lực chiến (0 - 100%).
+ * Đảm bảo guard chống chia cho 0 hoặc NaN khi lực chiến <= 0.
+ */
+export const calculatePvpWinChance = (userLucChien: number, opponentLucChien: number): number => {
+  const safeUser = Math.max(0, Number(userLucChien) || 0);
+  const safeOpp = Math.max(0, Number(opponentLucChien) || 0);
+  const total = safeUser + safeOpp;
+  if (total <= 0) return 50; // Guard chống chia cho 0
+  const rate = Math.round((safeUser / total) * 100);
+  return Math.min(100, Math.max(0, rate));
+};
+
+/**
+ * Tính phần thưởng PvP an toàn cho rank (thắng nhận 100%, thua nhận 20% an ủi).
+ */
+export const calculatePvpRewards = (rank: number, isWin: boolean = true): { coins: number; xp: number } => {
+  const opp = getPvpOpponent(rank);
+  if (!opp) return { coins: 0, xp: 0 };
+  const multiplier = isWin ? 1 : 0.2;
+  return {
+    coins: Math.max(0, Math.round(opp.reward_coins * multiplier)),
+    xp: Math.max(0, Math.round(opp.reward_xp * multiplier)),
+  };
+};

@@ -1,0 +1,109 @@
+import { NextResponse } from 'next/server';
+import crypto from 'crypto';
+import { getCurrentUser } from '@/lib/auth';
+import { getUserDataPath } from '@/lib/user-data';
+import { loadProgressRaw, getProgressFromDb } from '@/lib/progress-store';
+import fs from 'fs';
+
+const SECRET_KEY: string = (() => {
+  const s = process.env.SAT_PREP_SECRET;
+  if (!s) {
+    throw new Error(
+      'SAT_PREP_SECRET chưa được set. Bắt buộc cấu hình biến môi trường này (không còn fallback mặc định yếu).'
+    );
+  }
+  return s;
+})();
+
+// Hàm sắp xếp key của Object (để đảm bảo JSON stringify luôn ra cùng 1 chuỗi)
+function sortKeys(obj: unknown): unknown {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(sortKeys);
+  }
+  const sortedKeys = Object.keys(obj).sort();
+  const result: { [key: string]: unknown } = {};
+  for (const key of sortedKeys) {
+    result[key] = sortKeys((obj as Record<string, unknown>)[key]);
+  }
+  return result;
+}
+
+function generateSignature(data: Record<string, unknown>): string {
+  const dataCopy = { ...data };
+  delete dataCopy.signature; // Bỏ field signature khi tính toán
+  const sortedData = sortKeys(dataCopy);
+  const dataStr = JSON.stringify(sortedData);
+  return crypto.createHmac('sha256', SECRET_KEY).update(dataStr, 'utf-8').digest('hex');
+}
+
+const DEFAULT_STATE = {
+  user_stats: { level: 1, xp: 0, coins: 100, streak: 0, shield: 0 },
+  inventory: [],
+  practice_question: { current_id: null, history: [], wrong_answers: [] },
+  quests: {
+    daily: [
+      { id: "q1", name: "Khởi động ngày mới", desc: "Làm đúng 5 câu hỏi", target: 5, progress: 0, claimed: false, xp: 50, coins: 10 },
+      { id: "q2", name: "Chúa tể ngôn từ", desc: "Học 10 từ vựng mới", target: 10, progress: 0, claimed: false, xp: 100, coins: 20 },
+      { id: "q3", name: "Kẻ hủy diệt Practice Test", desc: "Hoàn thành 1 bài thi thử", target: 1, progress: 0, claimed: false, xp: 500, coins: 100 }
+    ],
+    weekly: [],
+    monthly: []
+  }
+};
+
+export async function GET() {
+  try {
+    const user = await getCurrentUser();
+
+    // Ưu tiên đọc CHUỖI JSON đã ký từ Supabase (bền vững qua deploy). FAIL-SAFE:
+    // bảng chưa có / user không phải uuid / lỗi → null → fallback đọc file cũ.
+    let fileContent = await loadProgressRaw(user.id);
+    if (fileContent == null) {
+      const filePath = getUserDataPath(user.id, 'streak_data.json');
+      if (!fs.existsSync(filePath)) {
+        // Fallback kiểm tra getProgressFromDb nếu đã được lưu dưới dạng structured progress
+        try {
+          const dbProgress = await getProgressFromDb(user.id);
+          if (dbProgress) {
+            const signature = generateSignature(dbProgress as Record<string, unknown>);
+            return NextResponse.json({ ...DEFAULT_STATE, ...dbProgress, signature });
+          }
+        } catch (dbErr) {
+          console.warn("Lỗi đọc getProgressFromDb fallback:", dbErr);
+        }
+        // Người dùng mới (hoặc chưa có dữ liệu) → state mặc định.
+        return NextResponse.json(DEFAULT_STATE);
+      }
+      fileContent = fs.readFileSync(filePath, 'utf-8');
+    }
+
+    const parsedData = JSON.parse(fileContent);
+
+    // Kiểm tra tính toàn vẹn (HMAC-SHA256) — logic GIỮ NGUYÊN, chỉ đổi nguồn đọc.
+    if (!parsedData.signature) {
+      console.warn(`Dữ liệu user ${user.id} không có chữ ký bảo mật. Reset!`);
+      return NextResponse.json(DEFAULT_STATE);
+    }
+
+    const expectedSignature = generateSignature(parsedData);
+    if (expectedSignature !== parsedData.signature) {
+      console.warn(`🚨 PHÁT HIỆN GIAN LẬN! Chữ ký HMAC của user ${user.id} không khớp. Reset dữ liệu.`);
+      return NextResponse.json(DEFAULT_STATE);
+    }
+
+    // Bảo đảm các key cấu trúc tối thiểu của DEFAULT_STATE luôn tồn tại để UI không bị crash
+    return NextResponse.json({
+      ...DEFAULT_STATE,
+      ...parsedData,
+      user_stats: { ...DEFAULT_STATE.user_stats, ...(parsedData.user_stats || {}) },
+      quests: { ...DEFAULT_STATE.quests, ...(parsedData.quests || {}) }
+    });
+  } catch (error) {
+    console.error("Lỗi khi load dữ liệu:", error);
+    // Nếu file bị lỗi format (corrupted), reset về mặc định
+    return NextResponse.json(DEFAULT_STATE);
+  }
+}

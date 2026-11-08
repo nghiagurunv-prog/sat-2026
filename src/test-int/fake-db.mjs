@@ -1,0 +1,532 @@
+/**
+ * ============================================================================
+ *  FAKE SUPABASE DRIVER (in-memory) — dùng cho integration test endpoint kinh tế
+ * ============================================================================
+ *  Thay bảng Postgres bằng Map trong RAM để chạy THẬT route + store + pure logic
+ *  của app mà KHÔNG cần Supabase/creds. Mô phỏng query-builder tối thiểu mà các
+ *  store money-path dùng: .from().select().eq().single()/.maybeSingle()/.order(),
+ *  .insert().select().single(), .update().eq().eq().select().maybeSingle(),
+ *  .upsert(..,{onConflict}), .delete(); .rpc(name, params); .auth.getUser().
+ *
+ *  ⚠️ KHÔNG mô phỏng RLS (đã verify riêng — memory 1.3). Test ở đây soi bất biến
+ *  KINH TẾ (status code, cộng-thưởng-đúng-1-lần, không tin số client, atomic).
+ *  Random/thời gian: id tăng dần theo counter để xác định (deterministic).
+ * ============================================================================
+ */
+
+/** Trạng thái toàn cục (1 tiến trình test). Reset giữa các test bằng resetDb(). */
+const state = {
+  tables: new Map(), // tableName -> row[]
+  currentUser: null, // { id } | null  (null → getUser trả lỗi = chưa đăng nhập)
+  idCounter: 0,
+  /** Bật/tắt từng RPC để test đường "RPC chưa tồn tại" (fail-closed / fallback). */
+  rpcsDisabled: new Set(),
+  /** table -> Set(cột CHƯA tồn tại) — mô phỏng migration chưa chạy (select → 42703). */
+  missingCols: new Map(),
+};
+
+export function resetDb() {
+  state.tables = new Map();
+  state.currentUser = { id: 'test-user-0001' };
+  state.idCounter = 0;
+  state.rpcsDisabled = new Set();
+  state.missingCols = new Map();
+}
+
+/**
+ * Đánh dấu 1 số cột của bảng là CHƯA tồn tại (migration chưa chạy). Select đụng
+ * cột này → trả lỗi 42703 (undefined column), y như PostgREST thật → cho phép
+ * test đường fail-safe/fail-closed của store (vd loadPvpState → null → 503).
+ */
+export function markMissingColumns(tableName, cols) {
+  state.missingCols.set(tableName, new Set(cols));
+}
+
+export function setCurrentUser(user) {
+  state.currentUser = user; // {id} hoặc null
+}
+
+export function disableRpc(name) {
+  state.rpcsDisabled.add(name);
+}
+
+function table(name) {
+  if (!state.tables.has(name)) state.tables.set(name, []);
+  return state.tables.get(name);
+}
+
+/** Seed trực tiếp 1 dòng vào bảng (bỏ qua RLS/validation). */
+export function seed(tableName, row) {
+  table(tableName).push({ ...row });
+}
+
+export function getRows(tableName) {
+  return table(tableName).map((r) => ({ ...r }));
+}
+
+function nextId(prefix) {
+  state.idCounter += 1;
+  return `${prefix}-${String(state.idCounter).padStart(4, '0')}`;
+}
+
+function matchFilters(row, filters) {
+  return filters.every(([col, val]) => {
+    // Filter IN: spec {__in: Set} → row[col] phải nằm trong tập.
+    if (val && typeof val === 'object' && val.__in instanceof Set) {
+      return val.__in.has(row[col]);
+    }
+    // Range: {__gte} / {__lt} — so sánh trực tiếp (chuỗi ISO hoặc số).
+    if (val && typeof val === 'object' && '__gte' in val) {
+      return row[col] != null && row[col] >= val.__gte;
+    }
+    if (val && typeof val === 'object' && '__lt' in val) {
+      return row[col] != null && row[col] < val.__lt;
+    }
+    return row[col] === val;
+  });
+}
+
+/**
+ * Deep-clone tại MỌI ranh giới đọc/ghi. Mấu chốt fidelity: PostgREST trả JSON
+ * deserialize MỚI mỗi lần đọc (mutate object trả về KHÔNG đụng DB), và chỉ
+ * UPDATE/UPSERT round-trip mới persist. Nếu fake trả tham chiếu tới JSONB lồng
+ * nhau (quest_claims, vocab words, inventory) → route mutate tại chỗ sẽ "persist"
+ * cả khi save*() là no-op → test xanh giả. clone() đóng lỗ đó.
+ */
+const clone = (v) => (v == null ? v : structuredClone(v));
+
+function project(row, cols) {
+  if (!cols || cols === '*') return clone(row);
+  const wanted = cols.split(',').map((c) => c.trim().split(/\s+/)[0]);
+  const out = {};
+  for (const c of wanted) out[c] = clone(row[c] ?? null);
+  return out;
+}
+
+// ── Query builder (thenable + chainable) ────────────────────────────────────
+function makeBuilder(tableName) {
+  const q = {
+    table: tableName,
+    op: 'select',
+    filters: [],
+    payload: null,
+    cols: null,
+    wantReturn: false,
+    order: null,
+    onConflict: null,
+    limitN: null,
+  };
+
+  const builder = {
+    select(cols) {
+      if (q.op === 'select') q.cols = cols;
+      else {
+        q.wantReturn = true;
+        q.cols = cols;
+      }
+      return builder;
+    },
+    insert(payload) {
+      q.op = 'insert';
+      q.payload = payload;
+      return builder;
+    },
+    update(payload) {
+      q.op = 'update';
+      q.payload = payload;
+      return builder;
+    },
+    upsert(payload, opts) {
+      q.op = 'upsert';
+      q.payload = payload;
+      q.onConflict = opts?.onConflict ?? null;
+      q.ignoreDuplicates = opts?.ignoreDuplicates ?? false;
+      return builder;
+    },
+    delete() {
+      q.op = 'delete';
+      return builder;
+    },
+    eq(col, val) {
+      q.filters.push([col, val]);
+      return builder;
+    },
+    in(col, vals) {
+      // Filter kiểu IN: giữ nguyên hình dạng [col, spec] nhưng spec là {__in: Set}
+      // để matchFilters phân biệt với eq. Mảng rỗng → khớp 0 dòng (như PostgREST).
+      q.filters.push([col, { __in: new Set(Array.isArray(vals) ? vals : []) }]);
+      return builder;
+    },
+    gte(col, val) {
+      // Range filter: row[col] >= val (so sánh chuỗi/số như PostgREST timestamptz text).
+      q.filters.push([col, { __gte: val }]);
+      return builder;
+    },
+    lt(col, val) {
+      q.filters.push([col, { __lt: val }]);
+      return builder;
+    },
+    order(col, opts) {
+      q.order = { col, asc: opts?.ascending !== false };
+      return builder;
+    },
+    limit(n) {
+      q.limitN = n;
+      return builder;
+    },
+    single() {
+      return Promise.resolve(exec(q, 'single'));
+    },
+    maybeSingle() {
+      return Promise.resolve(exec(q, 'maybe'));
+    },
+    then(resolve, reject) {
+      return Promise.resolve(exec(q, 'many')).then(resolve, reject);
+    },
+  };
+  return builder;
+}
+
+function selectsMissingCol(tableName, cols) {
+  const missing = state.missingCols.get(tableName);
+  if (!missing || !cols || cols === '*') return null;
+  const wanted = cols.split(',').map((c) => c.trim().split(/\s+/)[0]);
+  const hit = wanted.find((c) => missing.has(c));
+  return hit ?? null;
+}
+
+function exec(q, mode) {
+  const rows = table(q.table);
+
+  if (q.op === 'select') {
+    // Migration chưa chạy: select đụng cột chưa tồn tại → 42703 (như PostgREST).
+    const missingCol = selectsMissingCol(q.table, q.cols);
+    if (missingCol) {
+      return { data: null, error: { code: '42703', message: `column "${missingCol}" does not exist` } };
+    }
+    let matched = rows.filter((r) => matchFilters(r, q.filters));
+    if (q.order) {
+      matched = [...matched].sort((a, b) => {
+        const av = a[q.order.col];
+        const bv = b[q.order.col];
+        if (av === bv) return 0;
+        const cmp = av < bv ? -1 : 1;
+        return q.order.asc ? cmp : -cmp;
+      });
+    }
+    if (typeof q.limitN === 'number' && q.limitN >= 0) matched = matched.slice(0, q.limitN);
+    const projected = matched.map((r) => project(r, q.cols));
+    if (mode === 'single') {
+      if (projected.length === 0) return { data: null, error: { code: 'PGRST116', message: 'no rows' } };
+      if (projected.length > 1) return { data: null, error: { code: 'PGRST114', message: 'multiple rows' } };
+      return { data: projected[0], error: null };
+    }
+    if (mode === 'maybe') {
+      return { data: projected[0] ?? null, error: null };
+    }
+    return { data: projected, error: null };
+  }
+
+  if (q.op === 'insert') {
+    const payloads = Array.isArray(q.payload) ? q.payload : [q.payload];
+    const inserted = payloads.map((p) => {
+      const row = clone(p);
+      if (row.id === undefined) row.id = nextId(q.table);
+      rows.push(row);
+      return row;
+    });
+    if (q.wantReturn) {
+      const projected = inserted.map((r) => project(r, q.cols));
+      if (mode === 'single') return { data: projected[0], error: null };
+      if (mode === 'maybe') return { data: projected[0] ?? null, error: null };
+      return { data: projected, error: null };
+    }
+    return { data: null, error: null };
+  }
+
+  if (q.op === 'update') {
+    const matched = rows.filter((r) => matchFilters(r, q.filters));
+    for (const r of matched) Object.assign(r, clone(q.payload));
+    if (q.wantReturn) {
+      const projected = matched.map((r) => project(r, q.cols));
+      if (mode === 'single') {
+        if (projected.length === 0) return { data: null, error: { code: 'PGRST116', message: 'no rows' } };
+        return { data: projected[0], error: null };
+      }
+      if (mode === 'maybe') return { data: projected[0] ?? null, error: null };
+      return { data: projected, error: null };
+    }
+    return { data: null, error: null };
+  }
+
+  if (q.op === 'upsert') {
+    const payloads = Array.isArray(q.payload) ? q.payload : [q.payload];
+    const conflict = q.onConflict;
+    for (const p of payloads) {
+      let existing = null;
+      if (conflict) existing = rows.find((r) => r[conflict] === p[conflict]);
+      if (existing) {
+        // ignoreDuplicates → INSERT ON CONFLICT DO NOTHING (giữ NGUYÊN dòng cũ,
+        // KHÔNG ghi đè) — khớp Postgres. Mặc định (false) = merge (DO UPDATE).
+        if (!q.ignoreDuplicates) Object.assign(existing, clone(p));
+      } else {
+        const row = clone(p);
+        if (row.id === undefined) row.id = nextId(q.table);
+        rows.push(row);
+      }
+    }
+    return { data: null, error: null };
+  }
+
+  if (q.op === 'delete') {
+    const remaining = rows.filter((r) => !matchFilters(r, q.filters));
+    state.tables.set(q.table, remaining);
+    return { data: null, error: null };
+  }
+
+  return { data: null, error: { code: 'UNKNOWN', message: 'op không hỗ trợ' } };
+}
+
+// ── RPC models (atomic mutations) ────────────────────────────────────────────
+const RPCS = {
+  // Mô phỏng claim_quest_reward (quest_claim_atomic.sql): khóa dòng + kiểm
+  // (p_today=bucketKey, p_quest_id=itemId) đã có trong quest_claims chưa →
+  // đã có: already_claimed (KHÔNG cộng); chưa: cộng coins/xp + ghi. Trả TỔNG mới.
+  // Dùng chung cho quest, dailyLogin, streak, vocab reward (qua tryClaimOnceAtomic).
+  claim_quest_reward({ p_user_id, p_quest_id, p_today, p_coins, p_xp }) {
+    const econ = table('user_economy').find((r) => r.user_id === p_user_id);
+    if (!econ) return { ok: false, reason: 'no_row', coins: 0, xp: 0 };
+    const claims = econ.quest_claims && typeof econ.quest_claims === 'object' ? econ.quest_claims : {};
+    const bucket = Array.isArray(claims[p_today]) ? claims[p_today] : [];
+    if (bucket.includes(p_quest_id)) {
+      return { ok: false, reason: 'already_claimed', coins: econ.coins, xp: econ.xp };
+    }
+    econ.coins += Math.max(0, p_coins ?? 0);
+    econ.xp += Math.max(0, p_xp ?? 0);
+    econ.quest_claims = { ...claims, [p_today]: [...bucket, p_quest_id] };
+    return { ok: true, reason: 'ok', coins: econ.coins, xp: econ.xp };
+  },
+
+  // bump_answer_streak: đếm chuỗi câu ĐÚNG liên tiếp (mirror nextAnswerStreak pure).
+  // Đúng → streak+1; sai → 0. Tạo dòng nếu chưa có. Trả jsonb {streak}.
+  bump_answer_streak({ p_user_id, p_correct }) {
+    let row = table('user_answer_streak').find((r) => r.user_id === p_user_id);
+    if (!row) {
+      row = { user_id: p_user_id, streak: 0 };
+      table('user_answer_streak').push(row);
+    }
+    const cur = Number.isFinite(row.streak) && row.streak > 0 ? Math.floor(row.streak) : 0;
+    row.streak = p_correct ? cur + 1 : 0;
+    return { streak: row.streak };
+  },
+
+  // bump_daily_activity: cộng dồn counter hoạt động theo (user, date, kind).
+  // Mirror migration_daily_activity.sql. Trả jsonb {ok, count}.
+  bump_daily_activity({ p_user_id, p_date, p_kind, p_delta }) {
+    if (p_kind !== 'vocab_review' && p_kind !== 'exam_complete') {
+      return { ok: false, reason: 'bad_kind' };
+    }
+    const delta = Math.max(0, typeof p_delta === 'number' ? p_delta : 1);
+    let row = table('user_daily_activity').find(
+      (r) => r.user_id === p_user_id && r.activity_date === p_date && r.kind === p_kind
+    );
+    if (!row) {
+      row = { user_id: p_user_id, activity_date: p_date, kind: p_kind, count: 0 };
+      table('user_daily_activity').push(row);
+    }
+    row.count += delta;
+    return { ok: true, count: row.count };
+  },
+
+  redeem_reward({ p_user_id, p_reward_id, p_reward_name, p_cost }) {
+    if (typeof p_cost !== 'number' || p_cost <= 0) return { ok: false, reason: 'bad_cost' };
+    const econ = table('user_economy').find((r) => r.user_id === p_user_id);
+    if (!econ) return { ok: false, reason: 'no_row', coins: 0 }; // khớp reward_redemptions.sql (coins:0)
+    if (econ.coins < p_cost) return { ok: false, reason: 'insufficient', coins: econ.coins };
+    econ.coins -= p_cost;
+    const id = nextId('redemption');
+    table('reward_redemptions').push({
+      id,
+      user_id: p_user_id,
+      reward_id: p_reward_id,
+      reward_name: p_reward_name,
+      cost_coins: p_cost,
+      status: 'pending',
+      created_at: new Date(state.idCounter * 1000).toISOString(),
+      fulfilled_at: null,
+    });
+    return { ok: true, reason: 'ok', coins: econ.coins, redemptionId: id };
+  },
+
+  confirm_payment({ p_order_id, p_gateway_txn_id, p_amount }) {
+    const txn = table('payment_transactions').find((r) => r.order_id === p_order_id);
+    if (!txn) return { ok: false, reason: 'not_found' };
+    const meta = { userId: txn.user_id, tier: txn.tier, period: txn.period };
+    // Kiểm tiền: p_amount > 0 và lệch → amount_mismatch (KHÔNG cấp).
+    if (p_amount > 0 && p_amount !== txn.amount_vnd) {
+      return { ok: false, reason: 'amount_mismatch', ...meta };
+    }
+    // Đã 'paid' → idempotent, KHÔNG cấp lại (return TRƯỚC insert → chống double-grant).
+    if (txn.status === 'paid') {
+      return { ok: true, alreadyConfirmed: true, ...meta };
+    }
+    // Chỉ lật từ 'pending'.
+    if (txn.status !== 'pending') {
+      return { ok: false, reason: 'bad_status', ...meta };
+    }
+    txn.status = 'paid';
+    txn.gateway_txn_id = p_gateway_txn_id || null;
+    txn.paid_at = new Date(state.idCounter * 1000).toISOString();
+    // 🔴 A3: CẤP GÓI NGUYÊN TỬ + CỘNG DỒN. Mốc bắt đầu = GREATEST(now(), max
+    // expires_at gói CÙNG TIER còn hạn). Mô phỏng INSERT user_subscriptions cùng
+    // transaction với UPDATE paid. Đơn cũ thiếu duration_days (null) → BỎ QUA.
+    if (txn.duration_days != null && txn.duration_days > 0) {
+      const nowMs = state.idCounter * 1000;
+      const nowIso = new Date(nowMs).toISOString();
+      // Gói cùng tier còn hạn → lấy expires_at lớn nhất (> now) để cộng dồn.
+      const activeMax = table('user_subscriptions')
+        .filter((s) => s.user_id === txn.user_id && s.tier === txn.tier && new Date(s.expires_at).getTime() > nowMs)
+        .reduce((max, s) => Math.max(max, new Date(s.expires_at).getTime()), nowMs);
+      const baseStartMs = Math.max(nowMs, activeMax);
+      const expiresAt = new Date(baseStartMs + txn.duration_days * 86400 * 1000).toISOString();
+      table('user_subscriptions').push({
+        id: nextId('user_subscriptions'),
+        user_id: txn.user_id,
+        tier: txn.tier,
+        period: txn.period,
+        started_at: nowIso,
+        expires_at: expiresAt,
+        created_at: nowIso,
+      });
+    }
+    return { ok: true, alreadyConfirmed: false, ...meta };
+  },
+
+  fulfill_redemption({ p_redemption_id }) {
+    const rec = table('reward_redemptions').find((r) => r.id === p_redemption_id);
+    if (!rec) return { ok: false, reason: 'not_found' };
+    if (rec.status === 'fulfilled') return { ok: true, reason: 'already', status: 'fulfilled' };
+    if (rec.status !== 'pending') return { ok: false, reason: 'bad_status', status: rec.status };
+    rec.status = 'fulfilled';
+    rec.fulfilled_at = new Date(state.idCounter * 1000).toISOString();
+    return { ok: true, reason: 'ok', status: 'fulfilled' };
+  },
+
+  cancel_redemption({ p_redemption_id }) {
+    const rec = table('reward_redemptions').find((r) => r.id === p_redemption_id);
+    if (!rec) return { ok: false, reason: 'not_found' };
+    if (rec.status === 'cancelled') return { ok: true, reason: 'already', status: 'cancelled' };
+    if (rec.status !== 'pending') return { ok: false, reason: 'bad_status', status: rec.status };
+    // Hoàn xu + đổi status (atomic trong SQL thật; ở fake single-thread = tuần tự).
+    const econ = table('user_economy').find((r) => r.user_id === rec.user_id);
+    if (econ) econ.coins += rec.cost_coins;
+    rec.status = 'cancelled';
+    return { ok: true, reason: 'ok', status: 'cancelled', coins: econ ? econ.coins : undefined };
+  },
+
+  // Mô phỏng increment_economy (migration_exam_economy_atomic.sql): khóa dòng +
+  // cộng delta coins/xp (greatest(0,…) chặn âm). no_row nếu chưa có dòng (route
+  // gọi ensureEconomyRow trước). Trả TỔNG mới. Dùng cho thưởng thi atomic (2 route).
+  increment_economy({ p_user_id, p_coins, p_xp }) {
+    const econ = table('user_economy').find((r) => r.user_id === p_user_id);
+    if (!econ) return { ok: false, reason: 'no_row', coins: 0, xp: 0 };
+    econ.coins += Math.max(0, p_coins ?? 0);
+    econ.xp += Math.max(0, p_xp ?? 0);
+    return { ok: true, reason: 'ok', coins: econ.coins, xp: econ.xp };
+  },
+
+  consume_pvp_fight({ p_user_id, p_target_rank, p_won, p_today, p_max_fights }) {
+    const econ = table('user_economy').find((r) => r.user_id === p_user_id);
+    if (!econ) return { ok: false, reason: 'no_row', pvpRank: 0, fightsToday: 0 };
+    // reset ngày mới
+    if (econ.pvp_last_fight_date !== p_today) {
+      econ.pvp_fights_today = 0;
+      econ.pvp_last_fight_date = p_today;
+    }
+    const rank = econ.pvp_rank ?? 11;
+    if (p_target_rank !== rank - 1) {
+      return { ok: false, reason: 'bad_rank', pvpRank: rank, fightsToday: econ.pvp_fights_today };
+    }
+    if (econ.pvp_fights_today >= p_max_fights) {
+      return { ok: false, reason: 'cap', pvpRank: rank, fightsToday: econ.pvp_fights_today };
+    }
+    econ.pvp_fights_today += 1;
+    if (p_won) econ.pvp_rank = p_target_rank;
+    return { ok: true, reason: 'ok', pvpRank: econ.pvp_rank, fightsToday: econ.pvp_fights_today };
+  },
+
+  // ── RESERVE-BEFORE-CALL quota AI (migration_ai_quota_reserve.sql, backlog #8) ──
+  // reserve_ai_usage: kiểm limit + tăng đúng bucket NGUYÊN TỬ (single-thread test =
+  // tuần tự → mô phỏng SELECT..FOR UPDATE). Tự tạo dòng + reset ngày mới. Trả
+  // {allowed, used, limit}. Đóng TOCTOU: 2 reserve liên tiếp thấy count tăng dần.
+  reserve_ai_usage({ p_user_id, p_kind, p_date, p_limit }) {
+    let rec = table('user_ai_usage').find((r) => r.user_id === p_user_id);
+    if (!rec) {
+      rec = { user_id: p_user_id, date: p_date, gen_count: 0, chat_count: 0, tokens_in: 0, tokens_out: 0 };
+      table('user_ai_usage').push(rec);
+    }
+    if (rec.date !== p_date) {
+      rec.date = p_date; rec.gen_count = 0; rec.chat_count = 0; rec.tokens_in = 0; rec.tokens_out = 0;
+    }
+    let used = p_kind === 'gen' ? (rec.gen_count ?? 0) : (rec.chat_count ?? 0);
+    const allowed = p_limit < 0 || used < p_limit;
+    if (allowed) {
+      if (p_kind === 'gen') rec.gen_count = used + 1; else rec.chat_count = used + 1;
+      used += 1;
+    }
+    return { allowed, used, limit: p_limit };
+  },
+
+  // refund_ai_usage: giảm 1 slot (sàn 0), chỉ khi cùng ngày → hoàn khi OpenAI lỗi.
+  refund_ai_usage({ p_user_id, p_kind, p_date }) {
+    const rec = table('user_ai_usage').find((r) => r.user_id === p_user_id);
+    if (!rec || rec.date !== p_date) return null;
+    if (p_kind === 'gen') rec.gen_count = Math.max(0, (rec.gen_count ?? 0) - 1);
+    else rec.chat_count = Math.max(0, (rec.chat_count ?? 0) - 1);
+    return null;
+  },
+
+  // add_ai_tokens: cộng token sau khi gọi xong (count đã reserve). Reset nếu khác ngày.
+  add_ai_tokens({ p_user_id, p_date, p_tokens_in, p_tokens_out }) {
+    const rec = table('user_ai_usage').find((r) => r.user_id === p_user_id);
+    if (!rec) return null;
+    if (rec.date === p_date) {
+      rec.tokens_in = (rec.tokens_in ?? 0) + (p_tokens_in ?? 0);
+      rec.tokens_out = (rec.tokens_out ?? 0) + (p_tokens_out ?? 0);
+    } else {
+      rec.tokens_in = p_tokens_in ?? 0;
+      rec.tokens_out = p_tokens_out ?? 0;
+    }
+    return null;
+  },
+};
+
+function execRpc(name, params) {
+  if (state.rpcsDisabled.has(name) || !RPCS[name]) {
+    // Migration chưa chạy: PostgREST KHÔNG thấy hàm trong schema cache → PGRST202
+    // (HTTP 404). Đây là mã PROD thật cho "function does not exist" — không phải
+    // 42883 (mã Postgres cho sai-kiểu-tham-số, ít gặp hơn). Store handle CẢ hai.
+    return { data: null, error: { code: 'PGRST202', message: `Could not find the function ${name} in the schema cache` } };
+  }
+  return { data: RPCS[name](params ?? {}), error: null };
+}
+
+// ── Client factory (anon + admin dùng chung DB; không mô phỏng RLS) ──────────
+export function makeClient() {
+  return {
+    from(tableName) {
+      return makeBuilder(tableName);
+    },
+    rpc(name, params) {
+      return Promise.resolve(execRpc(name, params));
+    },
+    auth: {
+      getUser() {
+        if (!state.currentUser) {
+          return Promise.resolve({ data: { user: null }, error: { message: 'no session' } });
+        }
+        return Promise.resolve({ data: { user: { id: state.currentUser.id } }, error: null });
+      },
+    },
+  };
+}

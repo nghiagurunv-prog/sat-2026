@@ -1,0 +1,648 @@
+{
+  "exams": [
+    {
+      "id": "mock_sat_1",
+      "title": "SAT Practice Test 1 (Bản Chuẩn College Board)",
+      "description": "Đề thi thử mô phỏng sát nhất độ khó và định dạng kỳ thi Digital SAT thực tế, phân loại đầy đủ bẫy điểm và module thích ứng (Adaptive).",
+      "total_time_minutes": 134,
+      "modules": [
+        {
+          "module_id": "rw_1",
+          "name": "Reading & Writing (Module 1 - Baseline)",
+          "time_minutes": 32,
+          "questions": [
+            {
+              "id": "q1",
+              "full_passage": "While many ancient civilizations relied on the alignment of the stars to govern their agricultural cycles, the Mayans developed an exceptionally complex calendar system. This system, known as the Haab', consisted of 365 days divided into 18 months of 20 days each, with a final short month of 5 days. Researchers argue that this level of precision indicates a deep understanding of astronomy that was unparalleled in its time.",
+              "practice_question": "Which finding, if true, would most directly undermine the researchers' claim about the Mayan understanding of astronomy?",
+              "choices": [
+                "A) The Haab' calendar was primarily used for religious ceremonies rather than agricultural planning.",
+                "B) Another civilization predating the Mayans possessed a calendar system with a remarkably similar 365-day structure.",
+                "C) The final 5-day month of the Haab' was considered unlucky and was associated with fasting and rituals.",
+                "D) The Mayans frequently adjusted the Haab' calendar by adding days to account for the slight inaccuracies in a 365-day year."
+              ],
+              "correct_choice": "B) Another civilization predating the Mayans possessed a calendar system with a remarkably similar 365-day structure.",
+              "explanation": "Câu hỏi yêu cầu tìm bằng chứng làm suy yếu quan điểm của các nhà nghiên cứu rằng kiến thức thiên văn của người Maya là 'không ai sánh kịp' (unparalleled) vào thời điểm đó. Nếu một nền văn minh khác có trước người Maya cũng sở hữu lịch 365 ngày tương tự (Đáp án B), điều đó chứng tỏ người Maya không phải là duy nhất hay đi trước thời đại về mặt này, từ đó phản bác trực tiếp lập luận của các nhà nghiên cứu.",
+              "difficulty": "Medium",
+              "trapRate": 45
+            },
+            {
+              "id": "q2",
+              "full_passage": "The works of Renaissance artist Artemisia Gentileschi often feature strong, suffering women from myth and the Bible—victims, suicides, warriors—and make a specialty of the Judith story. Her painting Judith Slaying Holofernes is noted for its visceral depiction of the event, diverging from the more passive portrayals by her male contemporaries. Some art historians attribute this raw intensity to her personal experiences with betrayal and the ensuing public trial.",
+              "practice_question": "As used in the text, what does the word \"visceral\" most nearly mean?",
+              "choices": [
+                "A) Intellectual and abstract",
+                "B) Deeply emotional and instinctive",
+                "C) Historically accurate and precise",
+                "D) Serene and idealized"
+              ],
+              "correct_choice": "B) Deeply emotional and instinctive",
+              "explanation": "Từ 'visceral' trong ngữ cảnh này dùng để mô tả một sự miêu tả thô ráp, mãnh liệt và mang tính bản năng về một sự kiện bạo lực, đối lập với sự miêu tả thụ động (passive) của các họa sĩ nam cùng thời. Do đó, 'Deeply emotional and instinctive' là nghĩa sát nhất.",
+              "difficulty": "Hard",
+              "trapRate": 72
+            },
+            {
+              "id": "m1_rw_q3",
+              "full_passage": "In 1934, archaeologist Mary Leakey uncovered fossilized hominin footprints at Laetoli in Tanzania, preserved beneath layers of volcanic ash. Dating back roughly 3.6 million years, these tracks showed clear evidence of bipedal locomotion, with heel strikes and toe-offs strikingly akin to modern humans. Prior to this discovery, conventional anthropology posited that bipedalism evolved concurrently with enlarged brain capacity. The Laetoli impressions, however, ________ this long-held hypothesis by proving upright walking predated significant cranial expansion.",
+              "practice_question": "Which choice completes the text with the most logical and precise word or phrase?",
+              "choices": [
+                "A) corroborated",
+                "B) upended",
+                "C) disseminated",
+                "D) fabricated"
+              ],
+              "correct_choice": "B) upended",
+              "explanation": "Ngữ cảnh chỉ ra rằng phát hiện dấu chân Laetoli chứng minh dáng đi thẳng đứng xuất hiện trước khi não bộ phát triển, điều này trái ngược và làm đảo lộn giả thuyết truyền thống trước đó. 'Upended' (đảo lộn/bác bỏ) là từ chính xác nhất.",
+              "difficulty": "Medium",
+              "trapRate": 38
+            },
+            {
+              "id": "m1_rw_q4",
+              "full_passage": "Researchers investigating bacterial biofilm resilience subjected colonies of Pseudomonas aeruginosa to varying concentrations of antibiotic solutions. While planktonic (free-floating) cells were eradicated within hours, cells embedded within the extracellular polymeric substance matrix remained viable. The authors conclude that physical diffusion barriers, rather than genetic mutations alone, furnish the primary defense mechanism against therapeutic agents.",
+              "practice_question": "Which statement best summarizes the main idea of the text?",
+              "choices": [
+                "A) Planktonic bacteria possess an innate immunity to antibiotics lacking in biofilm communities.",
+                "B) The protective matrix of bacterial biofilms serves as a principal physical impediment to antibiotic efficacy.",
+                "C) Genetic mutations are the sole determinant of bacterial resistance across all biological environments.",
+                "D) Biofilm structures can be dissolved instantly by escalating antibiotic dosage levels."
+              ],
+              "correct_choice": "B) The protective matrix of bacterial biofilms serves as a principal physical impediment to antibiotic efficacy.",
+              "explanation": "Đoạn văn kết luận rằng lớp màng ma trận chất nền ngoại bào tạo ra rào cản khuếch tán vật lý giúp vi khuẩn sống sót trước kháng sinh, tóm lược chính xác ở lựa chọn B.",
+              "difficulty": "Medium",
+              "trapRate": 32
+            },
+            {
+              "id": "m1_rw_q5",
+              "full_passage": "In her seminal study of urban microclimates, meteorologist Dr. Elena Vance observed that densely clustered high-rises can ______ local wind patterns, effectively creating localized wind tunnels that accelerate gusts at street level while stifling airflow in surrounding residential courtyards.",
+              "practice_question": "Which choice completes the text with the most logical and precise word or phrase?",
+              "choices": [
+                "A) alter",
+                "B) simulate",
+                "C) neutralize",
+                "D) validate"
+              ],
+              "correct_choice": "A) alter",
+              "explanation": "Ngữ cảnh mô tả cách các tòa nhà cao tầng làm thay đổi ('alter') các hình thái gió cục bộ, biến chúng thành các luồng gió xoáy hoặc cản trở không khí. 'Alter' (biến đổi, làm thay đổi) khớp chính xác với kết quả 'creating localized wind tunnels' và 'stifling airflow'. Các phương án B (mô phỏng), C (vô hiệu hóa/trung hòa), D (xác thực) đều không phù hợp ngữ cảnh.",
+              "difficulty": "Medium",
+              "trapRate": 38
+            },
+            {
+              "id": "m1_rw_q6",
+              "full_passage": "During the late nineteenth century, the expansion of the transcontinental railroad transformed American commerce. Goods that had once taken months to transport by wagon could now reach distant markets in ______ revolutionized supply chains and stimulated nationwide industrial growth.",
+              "practice_question": "Which choice completes the text so that it conforms to the conventions of Standard English?",
+              "choices": [
+                "A) days, this shift",
+                "B) days; this shift",
+                "C) days this shift",
+                "D) days, and this shift having"
+              ],
+              "correct_choice": "B) days; this shift",
+              "explanation": "Đoạn văn gồm hai mệnh đề độc lập (independent clauses): mệnh đề 1 kết thúc ở 'in days', mệnh đề 2 bắt đầu từ 'this shift revolutionized...'. Để nối hai mệnh đề độc lập mà không dùng liên từ kết hợp (FANBOYS), quy chuẩn ngữ pháp SAT bắt buộc phải sử dụng dấu chấm phẩy (semicolon). Phương án A phạm lỗi dấu phẩy nối hai mệnh đề độc lập (comma splice). Phương án C thiếu dấu ngắt câu (run-on sentence). Phương án D sai cấu trúc phân từ.",
+              "difficulty": "Medium",
+              "trapRate": 44
+            }
+          ]
+        },
+        {
+          "module_id": "rw_2",
+          "name": "Reading & Writing (Module 2 - Adaptive Hard)",
+          "time_minutes": 32,
+          "questions": [
+            {
+              "id": "m1_rw2_q1",
+              "full_passage": "Economist Thomas Sowell has persistently argued that systemic resource distribution is hindered by cognitive biases in centralized policy planning. When planners attempt to calibrate prices for agricultural commodities, they inevitably lack the localized, time-sensitive knowledge dispersed among millions of independent producers and consumers. Consequently, interventions designed to suppress inflation frequently induce supply shortages.",
+              "practice_question": "Based on the text, what fundamental limitation do centralized planners face when establishing agricultural prices?",
+              "choices": [
+                "A) An intentional disregard for basic macroeconomic principles of supply and demand.",
+                "B) An inability to aggregate real-time, decentralized information distributed across market participants.",
+                "C) A regulatory obligation to favor agricultural conglomerates over independent farmers.",
+                "D) A persistent underestimation of technological innovations in modern farming equipment."
+              ],
+              "correct_choice": "B) An inability to aggregate real-time, decentralized information distributed across market participants.",
+              "explanation": "Văn bản nêu rõ người lập kế hoạch 'inevitably lack the localized, time-sensitive knowledge dispersed among millions of independent producers and consumers', tương đương với 'inability to aggregate real-time, decentralized information'.",
+              "difficulty": "Hard",
+              "trapRate": 64
+            },
+            {
+              "id": "m1_rw2_q2",
+              "full_passage": "Although poet Emily Dickinson remained largely reclusive throughout her adult life in Amherst, Massachusetts, her correspondence reveals an intellect keenly attuned to contemporaneous intellectual currents. Her verses synthesize theological inquiry with observations of the natural world; ________ her unorthodox capitalization and punctuation alienated conservative 19th-century publishers.",
+              "practice_question": "Which choice completes the text with the most logical transition?",
+              "choices": [
+                "A) furthermore,",
+                "B) nevertheless,",
+                "C) for instance,",
+                "D) in contrast,"
+              ],
+              "correct_choice": "B) nevertheless,",
+              "explanation": "Vế trước khen ngợi tư tưởng sâu sắc và thi tài gắn liền với thời đại của bà; vế sau nêu sự thật tương phản rằng phong cách dấu câu và viết hoa độc lạ lại bị các nhà xuất bản bảo thủ thời đó xa lánh. Liên từ tương phản nhượng bộ 'nevertheless' là phù hợp nhất.",
+              "difficulty": "Hard",
+              "trapRate": 58
+            },
+            {
+              "id": "m1_rw2_q3",
+              "full_passage": "In a 2023 cognitive psychology trial, subjects memorizing paired associates while exposed to ambient white noise demonstrated negligible recall decline when tested under identical acoustic conditions. However, when tested in total silence, their retention scores dropped by 28%. This phenomenon suggests that environmental stimuli present during memory encoding can become integral cues for retrieval, a dynamic termed state-dependent learning.",
+              "practice_question": "Which hypothetical finding would provide the strongest additional support for the author's suggestion?",
+              "choices": [
+                "A) Subjects memorizing in silence perform substantially better when tested in silence than when tested amidst ambient white noise.",
+                "B) Ambient noise universally impairs retention regardless of testing conditions.",
+                "C) Subjects with musical training exhibit zero variance in test scores across all noise conditions.",
+                "D) Memory retrieval is exclusively governed by synaptic strength within the hippocampus."
+              ],
+              "correct_choice": "A) Subjects memorizing in silence perform substantially better when tested in silence than when tested amidst ambient white noise.",
+              "explanation": "Học thuyết 'state-dependent learning' khẳng định điều kiện lúc học trùng khớp với lúc thi sẽ tối ưu hóa khả năng hồi tưởng. Nếu học trong im lặng mà thi trong im lặng điểm cao hơn thi khi có tiếng ồn, điều đó củng cố trực tiếp cho cơ chế này.",
+              "difficulty": "Hard",
+              "trapRate": 61
+            },
+            {
+              "id": "m1_rw2_q4",
+              "full_passage": "Ecologist Dr. Miriam Thorne investigated whether canopy fragmentation in temperate deciduous forests reduces the nesting density of migratory songbirds. Thorne compared contiguous forest tracts (over 500 hectares) with fragmented patches (under 50 hectares). She discovered that while fragmented patches had similar overall insect prey biomass, the rate of nest predation by generalist mesopredators was nearly threefold higher in fragmented patches due to increased edge-to-interior ratios.",
+              "practice_question": "Which statement best describes the primary factor contributing to lower songbird reproductive success in fragmented patches, based on Thorne's findings?",
+              "choices": [
+                "A) A significant depletion in available insect prey biomass within fragmented forest tracts.",
+                "B) Elevated vulnerability to edge-associated nest predators despite adequate food resources.",
+                "C) The total absence of mature canopy trees suitable for nesting in tracts under 50 hectares.",
+                "D) Increased competition between migratory songbirds and resident avian generalists for territory."
+              ],
+              "correct_choice": "B) Elevated vulnerability to edge-associated nest predators despite adequate food resources.",
+              "explanation": "Dữ liệu nghiên cứu chỉ ra rằng nguồn thức ăn (insect prey biomass) giữa hai khu vực là tương đương nhau ('similar overall insect prey biomass'), nhưng tỷ lệ bị động vật săn mồi phá tổ (nest predation) ở các mảnh rừng phân mảnh cao gấp ba lần do tỷ lệ rìa rừng tăng cao (increased edge-to-interior ratios). Do đó, nguyên nhân then chốt là mức độ dễ bị tổn thương trước các loài săn mồi ở ven rìa rừng (Đáp án B).",
+              "difficulty": "Hard",
+              "trapRate": 52
+            },
+            {
+              "id": "m1_rw2_q5",
+              "full_passage": "While researching a topic, a student has taken the following notes:\n- Phytoliths are microscopic silica structures formed inside plant tissues.\n- When plants decay, durable phytoliths remain preserved in archaeological sediments for millennia.\n- In 2021, archaeologists excavated a 4,000-year-old settlement at site X in the Andes.\n- Sedimentary soil samples from site X contained dense clusters of maize (Zea mays) phytoliths.\n- The discovery confirms that inhabitants of site X practiced organized maize agriculture much earlier than previously thought.",
+              "practice_question": "The student wants to emphasize the significance of the 2021 discovery. Which choice most effectively uses the relevant information from the notes to accomplish this goal?",
+              "choices": [
+                "A) Phytoliths, which are resilient silica structures produced by plants, can survive in archaeological soils for thousands of years after organic decay.",
+                "B) Excavations in 2021 at site X in the Andes revealed microscopic silica structures known as phytoliths embedded in ancient soil layers.",
+                "C) The presence of maize phytoliths at site X demonstrates that inhabitants engaged in maize cultivation earlier than historians had previously recognized.",
+                "D) Soil samples taken from a 4,000-year-old Andean settlement contained dense clusters of both plant tissues and maize phytoliths."
+              ],
+              "correct_choice": "C) The presence of maize phytoliths at site X demonstrates that inhabitants engaged in maize cultivation earlier than historians had previously recognized.",
+              "explanation": "Mục tiêu trọng tâm của học sinh là 'nhấn mạnh tầm quan trọng của phát hiện năm 2021' (emphasize the significance of the 2021 discovery). Phát hiện này mang tính đột phá khảo cổ vì chứng minh cư dân đã trồng ngô sớm hơn nhiều so với các nhận định lịch sử trước đây ('earlier than previously thought/recognized'). Lựa chọn C đáp ứng trực tiếp và hoàn hảo nhất mục tiêu này.",
+              "difficulty": "Hard",
+              "trapRate": 48
+            }
+          ]
+        },
+        {
+          "module_id": "m_1",
+          "name": "Math (Module 1 - Baseline)",
+          "time_minutes": 35,
+          "questions": [
+            {
+              "id": "q3",
+              "full_passage": "",
+              "practice_question": "If $3x - 5 = 16$, what is the value of $6x + 2$?",
+              "choices": [
+                "A) 21",
+                "B) 42",
+                "C) 44",
+                "D) 14"
+              ],
+              "correct_choice": "C) 44",
+              "explanation": "Từ phương trình $3x - 5 = 16$, ta cộng 5 vào cả hai vế: $3x = 21$. Cần tìm $6x + 2$. Nhận thấy $6x$ gấp đôi $3x$, nên $6x = 2 \\times 21 = 42$. Do đó $6x + 2 = 42 + 2 = 44$.",
+              "difficulty": "Easy",
+              "trapRate": 12
+            },
+            {
+              "id": "q4",
+              "full_passage": "",
+              "practice_question": "A line in the $xy$-plane passes through the points $(2, 7)$ and $(5, 16)$. What is the $y$-intercept of this line?",
+              "choices": [
+                "A) $(0, 1)$",
+                "B) $(0, -1)$",
+                "C) $(0, 3)$",
+                "D) $(0, -3)$"
+              ],
+              "correct_choice": "A) $(0, 1)$",
+              "explanation": "Hệ số góc $m = \\frac{16 - 7}{5 - 2} = \\frac{9}{3} = 3$. Phương trình đường thẳng: $y = 3x + b$. Thay tọa độ $(2, 7)$ vào: $7 = 3(2) + b \\implies 7 = 6 + b \\implies b = 1$. Vậy $y$-intercept là $(0, 1)$.",
+              "difficulty": "Medium",
+              "trapRate": 25
+            },
+            {
+              "id": "m1_m1_q3",
+              "full_passage": "",
+              "practice_question": "[Student-Produced Response] A shipment contains 140 boxes of notebooks and pens. Each box of notebooks weighs 4 pounds, and each box of pens weighs 1.5 pounds. If the total weight of the shipment is 385 pounds, how many boxes of notebooks are in the shipment?",
+              "choices": [],
+              "correct_choice": "70",
+              "explanation": "Đặt $n$ là số hộp vở, $p$ là số hộp bút. Ta có hệ phương trình: \n1) $n + p = 140 \\implies p = 140 - n$\n2) $4n + 1.5p = 385$\nThay $p$ vào: $4n + 1.5(140 - n) = 385 \\implies 4n + 210 - 1.5n = 385 \\implies 2.5n = 175 \\implies n = 70$. Đáp số: 70.",
+              "difficulty": "Medium",
+              "trapRate": 34
+            },
+            {
+              "id": "m1_m1_q4",
+              "full_passage": "",
+              "practice_question": "The function $f$ is defined by $f(x) = 2x^2 - 12x + 23$. What is the minimum value of $f(x)$?",
+              "choices": [
+                "A) 3",
+                "B) 5",
+                "C) 11",
+                "D) 23"
+              ],
+              "correct_choice": "B) 5",
+              "explanation": "Tọa độ đỉnh parabol $x = -\\frac{b}{2a} = -\\frac{-12}{2(2)} = 3$. Giá trị cực tiểu $f(3) = 2(3)^2 - 12(3) + 23 = 18 - 36 + 23 = 5$.",
+              "difficulty": "Medium",
+              "trapRate": 28
+            },
+            {
+              "id": "m1_m1_q5",
+              "practice_question": "A local community theater sells adult tickets for $14 each and student tickets for $9 each. For a Saturday evening performance, a total of 250 tickets were sold, generating $2,875 in total revenue. How many adult tickets were sold?",
+              "choices": [
+                "A) 115",
+                "B) 125",
+                "C) 135",
+                "D) 140"
+              ],
+              "correct_choice": "B) 125",
+              "explanation": "Gọi $a$ là số vé người lớn và $s$ là số vé học sinh. Ta có hệ phương trình:\n1) $a + s = 250 \\implies s = 250 - a$\n2) $14a + 9s = 2875$\nThế phương trình (1) vào (2):\n$14a + 9(250 - a) = 2875 \\implies 14a + 2250 - 9a = 2875 \\implies 5a = 625 \\implies a = 125$.\n[Kiểm chứng thế ngược / Back-Substitution]:\nSố vé học sinh $s = 250 - 125 = 125$. Doanh thu: $14(125) + 9(125) = 1750 + 1125 = 2875$ (khớp 100%). Vậy số vé người lớn bán ra là 125.",
+              "difficulty": "Medium",
+              "trapRate": 36
+            },
+            {
+              "id": "m1_m1_q6",
+              "practice_question": "In the $xy$-plane, the graph of the parabola $y = -(x - 4)^2 + 25$ intersects the $x$-axis at points $(p, 0)$ and $(q, 0)$. What is the distance between the two $x$-intercepts?",
+              "choices": [
+                "A) 5",
+                "B) 8",
+                "C) 10",
+                "D) 25"
+              ],
+              "correct_choice": "C) 10",
+              "explanation": "Để tìm giao điểm với trục hoành ($x$-intercepts), đặt $y = 0$:\n$-(x - 4)^2 + 25 = 0 \\implies (x - 4)^2 = 25$.\nLấy căn bậc hai hai vế: $x - 4 = \\pm 5 \\implies x = 4 + 5 = 9$ hoặc $x = 4 - 5 = -1$.\nHai giao điểm là $(9, 0)$ và $(-1, 0)$. Khoảng cách giữa hai điểm là $|9 - (-1)| = 10$.\n[Mẹo 15 giây]: Parabol có dạng đỉnh $y = -(x - h)^2 + k$. Khoảng cách giữa 2 nghiệm luôn bằng $2\\sqrt{k} = 2\\sqrt{25} = 2(5) = 10$.",
+              "difficulty": "Medium",
+              "trapRate": 42
+            }
+          ]
+        },
+        {
+          "module_id": "m_2",
+          "name": "Math (Module 2 - Adaptive Hard)",
+          "time_minutes": 35,
+          "questions": [
+            {
+              "id": "m1_m2_q1",
+              "full_passage": "",
+              "practice_question": "In the $xy$-plane, a circle with center $(h, k)$ has radius 5. The line $y = 3$ is tangent to the circle at $(4, 3)$, and $k > 3$. What is the value of $k$?",
+              "choices": [
+                "A) 5",
+                "B) 8",
+                "C) 10",
+                "D) 12"
+              ],
+              "correct_choice": "B) 8",
+              "explanation": "Đường tiếp tuyến $y = 3$ là đường nằm ngang tiếp xúc với đường tròn tại $(4, 3)$. Đoạn nối tâm $(h, k)$ và tiếp điểm $(4, 3)$ phải vuông góc với tiếp tuyến $y = 3$, do đó $h = 4$. Bán kính bằng 5 và $k > 3$, nên tọa độ $k = 3 + 5 = 8$.",
+              "difficulty": "Hard",
+              "trapRate": 55
+            },
+            {
+              "id": "m1_m2_q2",
+              "full_passage": "",
+              "practice_question": "If $(ax + 3)(2x - 5) = 14x^2 + bx - 15$ for all values of $x$, where $a$ and $b$ are constants, what is the value of $b$?",
+              "choices": [
+                "A) -29",
+                "B) -19",
+                "C) 19",
+                "D) 29"
+              ],
+              "correct_choice": "A) -29",
+              "explanation": "Khai triển vế trái: $2a x^2 + (-5a + 6)x - 15$. Đồng nhất hệ số với $14x^2 + bx - 15$:\n$2a = 14 \\implies a = 7$.\n$b = -5a + 6 = -5(7) + 6 = -35 + 6 = -29$.",
+              "difficulty": "Hard",
+              "trapRate": 48
+            },
+            {
+              "id": "m1_m2_q3",
+              "full_passage": "",
+              "practice_question": "[Student-Produced Response] For a polynomial $P(x)$, when $P(x)$ is divided by $(x - 4)$, the remainder is 18. If $g(x) = 2P(x) - 7$, what is the remainder when $g(x)$ is divided by $(x - 4)$?",
+              "choices": [],
+              "correct_choice": "29",
+              "explanation": "Theo Định lý số dư (Remainder Theorem), số dư của $P(x)$ khi chia cho $(x - 4)$ chính là $P(4) = 18$. \nSố dư khi chia $g(x)$ cho $(x - 4)$ là $g(4) = 2P(4) - 7 = 2(18) - 7 = 36 - 7 = 29$.",
+              "difficulty": "Hard",
+              "trapRate": 60
+            },
+            {
+              "id": "m1_m2_q4",
+              "practice_question": "A radioactive isotope decays according to the formula $M(t) = 320\\left(\\frac{1}{2}\\right)^{\\frac{t}{14}}$, where $M(t)$ is the mass remaining in grams after $t$ days. After how many days will exactly 5 grams of the isotope remain?",
+              "choices": [
+                "A) 56",
+                "B) 70",
+                "C) 84",
+                "D) 98"
+              ],
+              "correct_choice": "C) 84",
+              "explanation": "Thiết lập phương trình: $320\\left(\\frac{1}{2}\\right)^{\\frac{t}{14}} = 5$.\nChia cả hai vế cho 320: $\\left(\\frac{1}{2}\\right)^{\\frac{t}{14}} = \\frac{5}{320} = \\frac{1}{64}$.\nVì $\\frac{1}{64} = \\left(\\frac{1}{2}\\right)^6$, ta có:\n$\\frac{t}{14} = 6 \\implies t = 14 \\times 6 = 84$.\n[Kiểm chứng thế ngược / Back-Substitution]: Thay $t = 84$: $M(84) = 320 \\times (1/2)^{84/14} = 320 \\times (1/2)^6 = 320 / 64 = 5$ gam (chính xác tuyệt đối).",
+              "difficulty": "Hard",
+              "trapRate": 55
+            },
+            {
+              "id": "m1_m2_q5",
+              "practice_question": "[Student-Produced Response] In the $xy$-plane, the line $3x + 4y = 48$ intersects the $x$-axis at point $A$ and the $y$-axis at point $B$. If $O$ is the origin $(0, 0)$, what is the radius of the circle inscribed inside right triangle $OAB$?",
+              "choices": [],
+              "correct_choice": "4",
+              "explanation": "Tìm giao điểm của đường thẳng với các trục tọa độ:\n- Cho $y = 0 \\implies 3x = 48 \\implies x = 16$. Điểm $A(16, 0)$, cạnh $OA = 16$.\n- Cho $x = 0 \\implies 4y = 48 \\implies y = 12$. Điểm $B(0, 12)$, cạnh $OB = 12$.\nTam giác $OAB$ vuông tại $O$. Độ dài cạnh huyền $AB = \\sqrt{16^2 + 12^2} = \\sqrt{256 + 144} = \\sqrt{400} = 20$.\nBán kính đường tròn nội tiếp tam giác vuông tính theo công thức:\n$r = \\frac{a + b - c}{2} = \\frac{16 + 12 - 20}{2} = \\frac{8}{2} = 4$.\n(Cách 2: Diện tích $S = \\frac{1}{2} \\times 16 \\times 12 = 96$. Nửa chu vi $p = \\frac{16 + 12 + 20}{2} = 24$. Bán kính $r = \\frac{S}{p} = \\frac{96}{24} = 4$). Đáp số: 4.",
+              "difficulty": "Hard",
+              "trapRate": 64
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mock_sat_2",
+      "title": "SAT Practice Test 2 (Bản Nâng Cao Phân Hóa)",
+      "description": "Đề thi thử chuyên sâu nhắm tới mục tiêu 1500+, tích hợp các dạng bẫy phức tạp về phân tích văn bản khoa học, từ vựng nâng cao và câu hỏi Toán biểu đồ & hình học không gian.",
+      "total_time_minutes": 134,
+      "modules": [
+        {
+          "module_id": "rw2_m1",
+          "name": "Reading & Writing (Module 1 - Baseline)",
+          "time_minutes": 32,
+          "questions": [
+            {
+              "id": "m2_rw1_q1",
+              "full_passage": "Botanists examining epiphytic orchids in tropical rainforest canopies observed that these plants maintain specialized velamen radicum tissue on their aerial roots. This multi-layered spongy epidermis rapidly absorbs atmospheric moisture and dissolved mineral ions during brief rainfall episodes. The researchers hypothesize that without this tissue, orchids would experience acute dehydration in canopy microclimates characterized by sporadic precipitation and intense solar exposure.",
+              "practice_question": "Which finding, if true, would most directly support the researchers' hypothesis?",
+              "choices": [
+                "A) Epiphytic orchids with surgically removed velamen radicum display severe water stress within days of dry canopy spells compared to intact control specimens.",
+                "B) Terrestrial orchids living in damp rainforest soil possess significantly thicker velamen layers than their canopy-dwelling relatives.",
+                "C) Canopies in tropical rainforests exhibit relative humidity fluctuations that remain constant throughout daylight hours.",
+                "D) The velamen radicum also provides structural anchors that prevent the orchid from sliding down vertical tree bark."
+              ],
+              "correct_choice": "A) Epiphytic orchids with surgically removed velamen radicum display severe water stress within days of dry canopy spells compared to intact control specimens.",
+              "explanation": "Giả thuyết của các nhà nghiên cứu cho rằng nếu không có mô velamen radicum thì phong lan sẽ mất nước nghiêm trọng. Bằng chứng thực nghiệm đối chứng (loại bỏ mô này khiến cây bị stress nước trầm trọng) là minh chứng trực tiếp và xác thực nhất.",
+              "difficulty": "Medium",
+              "trapRate": 40
+            },
+            {
+              "id": "m2_rw1_q2",
+              "full_passage": "During the late 19th-century Gilded Age, American municipal governance was frequently captured by political machines such as Tammany Hall in New York. While detractors castigated these organizations as hotbeds of venality and nepotism, some historians emphasize their pragmatism: bosses coordinated housing, emergency subsistence, and employment for millions of newly arrived immigrants who found official government channels wholly ________.",
+              "practice_question": "Which choice completes the text with the most logical and precise word or phrase?",
+              "choices": [
+                "A) unyielding",
+                "B) omnipotent",
+                "C) obsolete",
+                "D) transparent"
+              ],
+              "correct_choice": "A) unyielding",
+              "explanation": "Ngữ cảnh nêu ra sự tương phản: người nhập cư phải tìm tới các tổ chức chính trị bảo trợ vì các kênh chính quyền chính thức cứng nhắc, khó tiếp cận hoặc không chịu linh hoạt giúp đỡ ('unyielding').",
+              "difficulty": "Hard",
+              "trapRate": 65
+            },
+            {
+              "id": "m2_rw1_q3",
+              "full_passage": "Marine biologists tracking migration patterns of leatherback sea turtles (Dermochelys coriacea) recorded dives exceeding 1,200 meters into bathypelagic ocean zones. At these depths, water temperatures hover near 4 degrees Celsius and hydrostatic pressure surpasses 120 atmospheres. To withstand such conditions, the species possesses collapsible lungs and a thick layer of subcutaneous adipose tissue that ________ core body warmth.",
+              "practice_question": "Which choice completes the text so that it conforms to the conventions of Standard English?",
+              "choices": [
+                "A) preserve",
+                "B) preserves",
+                "C) preserving",
+                "D) have preserved"
+              ],
+              "correct_choice": "B) preserves",
+              "explanation": "Chủ ngữ của mệnh đề quan hệ 'that' là 'a thick layer' (danh từ số ít), do đó động từ vị ngữ phải chia ở dạng số ít thì hiện tại đơn: 'preserves'.",
+              "difficulty": "Medium",
+              "trapRate": 45
+            },
+            {
+              "id": "m2_rw1_q4",
+              "full_passage": "Recent neuroimaging studies show that deep reading of complex narrative prose stimulates neural networks associated with cognitive empathy and embodied simulation. When readers engage with richly nuanced character motivations, the brain's default mode network activates similarly to when people navigate real-world interpersonal interactions. Conversely, skimreaders processing fragmented digital feeds show minimal engagement in these regions.",
+              "practice_question": "Which conclusion about sustained engagement with literary fiction is most strongly supported by the passage?",
+              "choices": [
+                "A) It trains neural pathways that facilitate understanding other individuals' mental and emotional states.",
+                "B) It completely replaces the need for face-to-face social contact in developing emotional maturity.",
+                "C) It requires greater metabolic brain energy than any other type of intellectual activity.",
+                "D) It produces identical cognitive effects regardless of whether read in print or on fragmented digital feeds."
+              ],
+              "correct_choice": "A) It trains neural pathways that facilitate understanding other individuals' mental and emotional states.",
+              "explanation": "Đoạn văn nêu rõ việc đọc văn xuôi tự sự phức tạp kích thích các mạng lưới thần kinh liên quan đến sự thấu cảm nhận thức (cognitive empathy) và mô phỏng hiện thân tương tự như khi tương tác xã hội thực tế. Do đó, việc duy trì đọc văn học giúp rèn luyện các đường dẫn thần kinh hỗ trợ thấu hiểu trạng thái tâm lý và cảm xúc của người khác (Đáp án A). Các đáp án B, C, D đều chứa từ ngữ cực đoan (replaces, greater than any, identical) không có trong bài.",
+              "difficulty": "Hard",
+              "trapRate": 47
+            },
+            {
+              "id": "m2_rw1_q5",
+              "full_passage": "Originating as an adaptation to arid alpine slopes, the Andean cushion plant forms dense, low-growing domes. By trapping moisture and insulating the soil beneath ______ these resilient plants create favorable microhabitats that allow other fragile alpine flora to survive extreme frost.",
+              "practice_question": "Which choice completes the text so that it conforms to the conventions of Standard English?",
+              "choices": [
+                "A) them,",
+                "B) itself,",
+                "C) it,",
+                "D) one,"
+              ],
+              "correct_choice": "A) them,",
+              "explanation": "Đại từ cần điền đứng sau giới từ 'beneath' và chỉ về các vòm cây đệm Andes. Chủ ngữ của câu chính là 'these resilient plants' (danh từ số nhiều), do đó đại từ thay thế phải ở dạng số nhiều là 'them,'. Lựa chọn B, C, D đều ở dạng số ít nên không hợp quy chuẩn ngữ pháp tiếng Anh chuẩn mực.",
+              "difficulty": "Medium",
+              "trapRate": 41
+            }
+          ]
+        },
+        {
+          "module_id": "rw2_m2",
+          "name": "Reading & Writing (Module 2 - Adaptive Hard)",
+          "time_minutes": 32,
+          "questions": [
+            {
+              "id": "m2_rw2_q1",
+              "full_passage": "Critics of modern neuroimaging techniques in legal jurisprudence highlight the danger of the 'seductive allure' effect. Jurors presented with colorful functional MRI (fMRI) scans of a defendant's brain often assign disproportionate weight to neurological testimony, mistakenly viewing computerized representations of localized blood-oxygen levels as incontrovertible proof of premeditation or mental incapacity.",
+              "practice_question": "According to the passage, why might the use of fMRI evidence unduly sway jury deliberations?",
+              "choices": [
+                "A) Jurors conflate visual technological artifacts with definitive determinations of legal culpability.",
+                "B) Defense attorneys intentionally suppress conflicting neurological expert opinions.",
+                "C) Brain scan data is notoriously vulnerable to digital tampering during transit to courtrooms.",
+                "D) Jurors universally reject any psychological evidence not accompanied by genetic sequencing."
+              ],
+              "correct_choice": "A) Jurors conflate visual technological artifacts with definitive determinations of legal culpability.",
+              "explanation": "Văn bản nêu bồi thẩm đoàn bị thu hút bởi hình ảnh trực quan màu mè ('seductive allure') và nhầm lẫn hình ảnh phản ánh mức oxy trong máu với chứng cứ không thể chối cãi về tội trạng hoặc năng lực hành vi. Điều này tương đương với lựa chọn A.",
+              "difficulty": "Hard",
+              "trapRate": 68
+            },
+            {
+              "id": "m2_rw2_q2",
+              "full_passage": "The quantum Zeno effect posits that a quantum system's state can be arrested through continuous, uninterrupted measurement. In 1989, physicists Wayne Itano and colleagues provided experimental verification using trapped beryllium ions. When RF transitions between energy levels were probed with frequent laser pulses, the transition probability dropped asymptotically to zero. ________, the act of frequent observation effectively froze the ions in their initial ground state.",
+              "practice_question": "Which choice completes the text with the most logical transition?",
+              "choices": [
+                "A) In essence,",
+                "B) Similarly,",
+                "C) Conversely,",
+                "D) Notwithstanding,"
+              ],
+              "correct_choice": "A) In essence,",
+              "explanation": "Câu sau tóm tắt lại bản chất của thí nghiệm được giải thích ở các câu trước ('Về bản chất, việc quan sát thường xuyên đã giữ đông cứng trạng thái'). 'In essence' là lựa chọn chuyển tiếp hợp lý nhất.",
+              "difficulty": "Hard",
+              "trapRate": 52
+            },
+            {
+              "id": "m2_rw2_q3",
+              "full_passage": "In 1912, Alfred Wegener proposed the continental drift hypothesis, citing matching fossil strata across the Atlantic and the puzzle-piece fit of South American and African coastlines. For decades, the geophysical establishment dismissed his work as fringe speculation because Wegener could not identify a plausible physical mechanism capable of propelling granite continents through oceanic basalt. It was not until the 1960s discovery of seafloor spreading and mantle convection cells that plate tectonics was universally embraced.",
+              "practice_question": "Which choice best describes the overall structure of the text?",
+              "choices": [
+                "A) It introduces an innovative scientific hypothesis, describes its initial widespread rejection due to an explanatory shortcoming, and notes its eventual vindication through subsequent discoveries.",
+                "B) It presents two competing twentieth-century geological theories, contrasts their methodological approaches, and argues that both were fundamentally flawed.",
+                "C) It outlines a controversial observation, criticizes the contemporary geologists who supported it, and proposes an alternative mathematical model.",
+                "D) It celebrates a pioneer's experimental breakthrough, chronicles his career setbacks, and refutes modern skeptics who question his data."
+              ],
+              "correct_choice": "A) It introduces an innovative scientific hypothesis, describes its initial widespread rejection due to an explanatory shortcoming, and notes its eventual vindication through subsequent discoveries.",
+              "explanation": "Cấu trúc văn bản thể hiện trình tự logic 3 bước rõ ràng: 1) Giới thiệu giả thuyết trôi dạt lục địa của Wegener (innovative hypothesis); 2) Mô tả sự hoài nghi và bác bỏ của giới khoa học do thiếu cơ chế vật lý (rejection due to explanatory shortcoming); 3) Khẳng định sự công nhận rộng rãi sau phát hiện về đối lưu manti và tách giãn đáy biển thập niên 1960 (eventual vindication). Lựa chọn A bao quát hoàn hảo cấu trúc này.",
+              "difficulty": "Hard",
+              "trapRate": 53
+            },
+            {
+              "id": "m2_rw2_q4",
+              "full_passage": "Text 1\nSome behavioral economists argue that consumers act with 'bounded rationality'—relying on heuristic shortcuts rather than calculating optimal payoffs. Under this view, ubiquitous cognitive biases prevent market participants from reaching true neoclassical equilibrium.\n\nText 2\nProponents of ecological rationality contend that heuristics are not systemic flaws, but remarkably efficient evolutionary adaptations. In uncertain real-world environments with incomplete information, fast-and-frugal heuristics frequently yield decisions superior to complex statistical optimization, which often succumbs to overfitting.",
+              "practice_question": "Based on the texts, how would the author of Text 2 most likely respond to the characterization of cognitive shortcuts in Text 1?",
+              "choices": [
+                "A) By conceding that heuristics prevent consumers from making any rational economic choices.",
+                "B) By asserting that heuristics represent highly optimized adaptations rather than cognitive deficiencies.",
+                "C) By agreeing that neoclassical mathematical models perfectly predict human behavior in all settings.",
+                "D) By claiming that computational statistical optimization never suffers from data overfitting."
+              ],
+              "correct_choice": "B) By asserting that heuristics represent highly optimized adaptations rather than cognitive deficiencies.",
+              "explanation": "Tác giả Text 1 coi các lối tắt nhận thức (heuristics) là hạn chế ('bounded rationality', 'cognitive biases'). Trái lại, tác giả Text 2 khẳng định heuristics không phải là khiếm khuyết hệ thống mà là sự thích nghi tiến hóa cực kỳ hiệu quả ('remarkably efficient evolutionary adaptations'). Do đó, tác giả Text 2 sẽ phản biện rằng heuristics là sự thích nghi tối ưu chứ không phải khuyết tật nhận thức (Đáp án B).",
+              "difficulty": "Hard",
+              "trapRate": 49
+            }
+          ]
+        },
+        {
+          "module_id": "m2_m1",
+          "name": "Math (Module 1 - Baseline)",
+          "time_minutes": 35,
+          "questions": [
+            {
+              "id": "m2_m1_q1",
+              "full_passage": "",
+              "practice_question": "If $\\frac{4x - 7}{3} = 2x + 1$, what is the value of $x$?",
+              "choices": [
+                "A) -5",
+                "B) -2",
+                "C) 2",
+                "D) 5"
+              ],
+              "correct_choice": "A) -5",
+              "explanation": "Nhân cả hai vế với 3: $4x - 7 = 3(2x + 1) = 6x + 3$. Chuyển vế: $4x - 6x = 3 + 7 \\implies -2x = 10 \\implies x = -5$.",
+              "difficulty": "Easy",
+              "trapRate": 18
+            },
+            {
+              "id": "m2_m1_q2",
+              "full_passage": "",
+              "practice_question": "A right rectangular prism has a length of 8 cm, a width of 5 cm, and a height of 12 cm. What is the total surface area, in square centimeters, of the prism?",
+              "choices": [
+                "A) 240",
+                "B) 392",
+                "C) 480",
+                "D) 784"
+              ],
+              "correct_choice": "B) 392",
+              "explanation": "Diện tích toàn phần hình hộp chữ nhật: $S = 2(lw + lh + wh) = 2(8 \\times 5 + 8 \\times 12 + 5 \\times 12) = 2(40 + 96 + 60) = 2(196) = 392$ cm$^2$.",
+              "difficulty": "Medium",
+              "trapRate": 22
+            },
+            {
+              "id": "m2_m1_q3",
+              "full_passage": "",
+              "practice_question": "[Student-Produced Response] What is the positive solution to the equation $x^2 - 11x + 24 = 0$ that is also a prime number?",
+              "choices": [],
+              "correct_choice": "3",
+              "explanation": "Phân tích nhân tử: $(x - 3)(x - 8) = 0 \\implies x = 3$ hoặc $x = 8$. Đề bài yêu cầu nghiệm dương là số nguyên tố (prime number). Vì 8 là hợp số còn 3 là số nguyên tố, nghiệm cần tìm là 3.",
+              "difficulty": "Medium",
+              "trapRate": 36
+            },
+            {
+              "id": "m2_m1_q4",
+              "practice_question": "A water purification facility maintains a reservoir that initially holds 18,000 gallons of treated water. Water is pumped out for municipal use at a constant rate of 450 gallons per hour, while an automated filtration pipe refills the reservoir at a constant rate of 175 gallons per hour. If no other water enters or leaves, after how many hours will the reservoir contain exactly 8,100 gallons?",
+              "choices": [
+                "A) 24",
+                "B) 32",
+                "C) 36",
+                "D) 40"
+              ],
+              "correct_choice": "C) 36",
+              "explanation": "Tốc độ giảm ròng của lượng nước mỗi giờ là: $450 - 175 = 275$ gallon/giờ.\nLượng nước trong bể sau $t$ giờ là: $W(t) = 18000 - 275t$.\nĐặt $W(t) = 8100$:\n$18000 - 275t = 8100 \\implies 275t = 18000 - 8100 = 9900 \\implies t = \\frac{9900}{275} = 36$ giờ.\n[Kiểm chứng thế ngược / Back-Substitution]: $18000 - 275(36) = 18000 - 9900 = 8100$ gallon (chính xác tuyệt đối).",
+              "difficulty": "Medium",
+              "trapRate": 39
+            },
+            {
+              "id": "m2_m1_q5",
+              "practice_question": "[Student-Produced Response] For what positive value of $c$ does the line $y = 6x + c$ intersect the parabola $y = x^2 - 4x + 34$ at exactly one point in the $xy$-plane?",
+              "choices": [],
+              "correct_choice": "9",
+              "explanation": "Xét phương trình hoành độ giao điểm của đường thẳng và parabol:\n$x^2 - 4x + 34 = 6x + c \\implies x^2 - 10x + (34 - c) = 0$.\nĐể đường thẳng tiếp xúc với parabol tại đúng 1 điểm duy nhất, phương trình bậc hai phải có nghiệm kép, tức là biệt thức $\\Delta = 0$:\n$\\Delta = b^2 - 4ac = (-10)^2 - 4(1)(34 - c) = 0$\n$100 - 136 + 4c = 0 \\implies 4c - 36 = 0 \\implies 4c = 36 \\implies c = 9$.\n[Kiểm chứng thế ngược / Back-Substitution]: Thay $c = 9$ vào phương trình hoành độ: $x^2 - 10x + 25 = (x - 5)^2 = 0 \\implies x = 5$. Tung độ $y = 6(5) + 9 = 39$. Điểm tiếp xúc duy nhất $(5, 39)$. Đáp số: 9.",
+              "difficulty": "Hard",
+              "trapRate": 58
+            }
+          ]
+        },
+        {
+          "module_id": "m2_m2",
+          "name": "Math (Module 2 - Adaptive Hard)",
+          "time_minutes": 35,
+          "questions": [
+            {
+              "id": "m2_m2_q1",
+              "full_passage": "",
+              "practice_question": "The system of equations below has no solution, where $k$ is a constant:\n$$\\begin{cases} 4x - 6y = 15 \\\\ 6x + ky = 20 \\end{cases}$$\nWhat is the value of $k$?",
+              "choices": [
+                "A) -9",
+                "B) -4",
+                "C) 4",
+                "D) 9"
+              ],
+              "correct_choice": "A) -9",
+              "explanation": "Hệ phương trình tuyến tính vô nghiệm khi hai đường thẳng song song (tỉ lệ hệ số $x$ và $y$ bằng nhau nhưng khác tỉ lệ hệ số tự do): $\\frac{4}{6} = \\frac{-6}{k} \\implies 4k = -36 \\implies k = -9$. Với $k = -9$, tỉ lệ $\\frac{4}{6} = \\frac{2}{3} \\neq \\frac{15}{20} = \\frac{3}{4}$, thỏa mãn hệ vô nghiệm.",
+              "difficulty": "Hard",
+              "trapRate": 44
+            },
+            {
+              "id": "m2_m2_q2",
+              "full_passage": "",
+              "practice_question": "In right triangle $ABC$, the measure of angle $C$ is $90^\\circ$. If $\\sin(A) = \\frac{7}{25}$, what is the value of $\\tan(B)$?",
+              "choices": [
+                "A) \\frac{7}{24}",
+                "B) \\frac{24}{7}",
+                "C) \\frac{24}{25}",
+                "D) \\frac{25}{24}"
+              ],
+              "correct_choice": "B) \\frac{24}{7}",
+              "explanation": "Tam giác vuông tại $C$. Ta có $\\sin(A) = \\frac{\\text{đối}}{\\text{huyền}} = \\frac{BC}{AB} = \\frac{7}{25}$. Theo định lý Pythagoras, cạnh kề $AC = \\sqrt{25^2 - 7^2} = \\sqrt{625 - 49} = \\sqrt{576} = 24$. Xét góc $B$: $\\tan(B) = \\frac{\\text{đối}}{\\text{kề}} = \\frac{AC}{BC} = \\frac{24}{7}$.",
+              "difficulty": "Hard",
+              "trapRate": 53
+            },
+            {
+              "id": "m2_m2_q3",
+              "full_passage": "",
+              "practice_question": "[Student-Produced Response] If $f(x) = 3^{2x - 1} + 4$, for what value of $x$ does $f(x) = 85$?",
+              "choices": [],
+              "correct_choice": "2.5",
+              "explanation": "$3^{2x - 1} + 4 = 85 \\implies 3^{2x - 1} = 81 = 3^4$. Do đó $2x - 1 = 4 \\implies 2x = 5 \\implies x = 2.5$ hoặc $5/2$. Đáp án nhập: 2.5 hoặc 5/2.",
+              "difficulty": "Hard",
+              "trapRate": 42
+            },
+            {
+              "id": "m2_m2_q4",
+              "practice_question": "In the $xy$-plane, the circle $(x - 3)^2 + (y + 2)^2 = 50$ intersects the line $x - y = 9$ at two points, $P(x_1, y_1)$ and $Q(x_2, y_2)$. What is the midpoint of segment $PQ$?",
+              "choices": [
+                "A) $(5, -4)$",
+                "B) $(4, -5)$",
+                "C) $(6, -3)$",
+                "D) $(3, -6)$"
+              ],
+              "correct_choice": "A) $(5, -4)$",
+              "explanation": "Từ phương trình đường thẳng $x - y = 9 \\implies y = x - 9$.\nThay $y$ vào phương trình đường tròn:\n$(x - 3)^2 + ((x - 9) + 2)^2 = 50 \\implies (x - 3)^2 + (x - 7)^2 = 50$\n$x^2 - 6x + 9 + x^2 - 14x + 49 = 50 \\implies 2x^2 - 20x + 8 = 0 \\implies x^2 - 10x + 4 = 0$.\nTheo định lý Viète, tổng hai nghiệm $x_1 + x_2 = -\\frac{-10}{1} = 10$.\nHoành độ trung điểm của $PQ$ là $x_M = \\frac{x_1 + x_2}{2} = \\frac{10}{2} = 5$.\nTung độ trung điểm $y_M = x_M - 9 = 5 - 9 = -4$.\nVậy tọa độ trung điểm là $(5, -4)$.\n[Kiểm chứng thế ngược]: Các nghiệm $x = 5 \\pm \\sqrt{21}$ đều thỏa mãn đường tròn và đường thẳng; tâm đối xứng của đoạn thẳng cắt là hình chiếu của tâm đường tròn $(3, -2)$ lên đường thẳng, cho đúng điểm $(5, -4)$.",
+              "difficulty": "Hard",
+              "trapRate": 61
+            },
+            {
+              "id": "m2_m2_q5",
+              "practice_question": "[Student-Produced Response] In $\\triangle ABC$, side $AB = 5$, side $BC = 8$, and the measure of $\\angle B$ is $60^\\circ$. What is the length of side $AC$?",
+              "choices": [],
+              "correct_choice": "7",
+              "explanation": "Áp dụng định lý côsin (Law of Cosines) cho tam giác $ABC$ tại góc $B$:\n$AC^2 = AB^2 + BC^2 - 2(AB)(BC)\\cos(B)$\n$AC^2 = 5^2 + 8^2 - 2(5)(8)\\cos(60^\\circ)$\nBiết $\\cos(60^\\circ) = \\frac{1}{2}$:\n$AC^2 = 25 + 64 - 2(40)\\left(\\frac{1}{2}\\right) = 89 - 40 = 49$.\nDo độ dài cạnh luôn dương: $AC = \\sqrt{49} = 7$.\n[Kiểm chứng thế ngược / Back-Substitution]: Kiểm tra định lý côsin đảo: $\\cos(B) = \\frac{5^2 + 8^2 - 7^2}{2 \\times 5 \\times 8} = \\frac{25 + 64 - 49}{80} = \\frac{40}{80} = \\frac{1}{2} \\implies \\angle B = 60^\\circ$. Tam giác hoàn toàn thỏa mãn bất đẳng thức tam giác ($5 + 7 > 8$). Đáp số: 7.",
+              "difficulty": "Hard",
+              "trapRate": 51
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
