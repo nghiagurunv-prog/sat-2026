@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 import DesmosCalculator from '@/components/DesmosCalculator';
 import FormulaSheetModal from '@/components/FormulaSheetModal';
+import mockExamsData from '@/data/mock_exams.json';
+import diagnosticQuestionsData from '@/data/diagnostic_questions.json';
 
 // ============================================================================
 // TYPES & DATA STRUCTURES
@@ -138,13 +140,384 @@ const SAMPLE_QUESTIONS: ExamQuestion[] = [
   },
 ];
 
+// ----------------------------------------------------------------------------
+// HELPER: Chuyển đổi và chuẩn hóa phương án lựa chọn & đáp án đúng
+// ----------------------------------------------------------------------------
+function ensureChoices(rawChoices: string[] | undefined, correctChoice: string | number | undefined): { choices: string[]; correctIndex: number } {
+  if (Array.isArray(rawChoices) && rawChoices.length >= 2) {
+    const choices = rawChoices.map((c, i) => {
+      const prefix = ['A)', 'B)', 'C)', 'D)'][i] || `${i + 1})`;
+      const clean = String(c).replace(/^[A-D]\)\s*/, '').trim();
+      return `${prefix} ${clean}`;
+    });
+    let correctIndex = 0;
+    const target = String(correctChoice || '').trim();
+    if (/^[A-D]\b/i.test(target)) {
+      const letter = target[0].toUpperCase();
+      correctIndex = ['A', 'B', 'C', 'D'].indexOf(letter);
+      if (correctIndex === -1) correctIndex = 0;
+    } else {
+      const matchedIdx = rawChoices.findIndex(
+        (c) =>
+          c.trim().toLowerCase() === target.toLowerCase() ||
+          c.replace(/^[A-D]\)\s*/, '').trim().toLowerCase() === target.toLowerCase()
+      );
+      if (matchedIdx !== -1) correctIndex = matchedIdx;
+    }
+    return { choices, correctIndex };
+  }
+
+  // Câu hỏi Student-Produced Response (SPR) số học
+  const numVal = parseFloat(String(correctChoice));
+  if (!isNaN(numVal)) {
+    const valStr = String(correctChoice).trim();
+    const choices = [
+      `A) ${valStr}`,
+      `B) ${numVal + (numVal >= 10 ? 4 : 2)}`,
+      `C) ${numVal > 2 ? numVal - 2 : numVal * 2}`,
+      `D) ${numVal * 2 + 1}`,
+    ];
+    return { choices, correctIndex: 0 };
+  }
+
+  return {
+    choices: [
+      `A) ${correctChoice || 'True'}`,
+      'B) Phương án sai B',
+      'C) Phương án sai C',
+      'D) Phương án sai D',
+    ],
+    correctIndex: 0,
+  };
+}
+
+// ----------------------------------------------------------------------------
+// HELPER: Nạp câu hỏi từ mock_exams.json
+// ----------------------------------------------------------------------------
+interface RawExamQuestion {
+  id?: string;
+  section?: 'rw' | 'math';
+  domain?: string;
+  full_passage?: string;
+  passage?: string;
+  practice_question?: string;
+  prompt?: string;
+  question?: string;
+  choices?: string[];
+  correct_choice?: string | number;
+  explanation?: string;
+  explanation_vi?: string;
+}
+
+interface RawExamModule {
+  id?: string;
+  name?: string;
+  section?: 'rw' | 'math';
+  questions?: RawExamQuestion[];
+}
+
+interface RawExamItem {
+  id: string;
+  title: string;
+  modules?: RawExamModule[];
+}
+
+function parseMockExamQuestions(examItem: RawExamItem): ExamQuestion[] {
+  const list: ExamQuestion[] = [];
+  let order = 1;
+  (examItem.modules || []).forEach((mod) => {
+    const isMath = (mod.name || '').toLowerCase().includes('math');
+    const defaultSection: 'rw' | 'math' = isMath ? 'math' : 'rw';
+
+    (mod.questions || []).forEach((q) => {
+      const qSection: 'rw' | 'math' = q.section === 'math' ? 'math' : q.section === 'rw' ? 'rw' : defaultSection;
+      const { choices, correctIndex } = ensureChoices(q.choices, q.correct_choice);
+      list.push({
+        id: q.id || `m_${order}`,
+        order: order++,
+        section: qSection,
+        domain: q.domain || (qSection === 'math' ? 'Advanced Math' : 'Information and Ideas'),
+        passage: q.full_passage && q.full_passage.trim().length > 0 ? q.full_passage : (q.passage || undefined),
+        question: q.practice_question || q.prompt || q.question || '',
+        choices,
+        correctIndex,
+        explanation_vi: q.explanation || q.explanation_vi || 'Giải thích chi tiết chuẩn hóa College Board.',
+      });
+    });
+  });
+  return list;
+}
+
+// ----------------------------------------------------------------------------
+// HELPER: Nạp câu hỏi từ diagnostic_questions.json
+// ----------------------------------------------------------------------------
+interface RawDiagQuestion {
+  id?: string;
+  skillId?: string;
+  title?: string;
+  difficulty?: string;
+  practice_question?: string;
+  question?: string;
+  choices?: string[];
+  correct_choice?: string | number;
+  explanation?: string;
+}
+
+function parseDiagnosticQuestions(diagList: RawDiagQuestion[]): ExamQuestion[] {
+  return diagList.map((q, idx) => {
+    const { choices, correctIndex } = ensureChoices(q.choices, q.correct_choice);
+    const isMath = !!(q.skillId && (q.skillId.includes('algebra') || q.skillId.includes('math')));
+    return {
+      id: q.id || `diag_${idx + 1}`,
+      order: idx + 1,
+      section: isMath ? 'math' : 'rw',
+      domain: q.title || (isMath ? 'Algebra' : 'Craft and Structure'),
+      passage: undefined,
+      question: q.practice_question || q.question || '',
+      choices,
+      correctIndex,
+      explanation_vi: q.explanation || 'Giải thích chuẩn chẩn đoán kiến thức nền tảng.',
+    };
+  });
+}
+
+// ----------------------------------------------------------------------------
+// HELPER: Sinh bộ câu hỏi đặc thù cho các đề Mock 03-06 và QAS 2024
+// ----------------------------------------------------------------------------
+function createDedicatedExamQuestions(examKey: string, region: string, mathOffset: number): ExamQuestion[] {
+  return [
+    {
+      id: `${examKey}_q1`,
+      order: 1,
+      section: 'rw',
+      domain: 'Craft and Structure',
+      passage: `Recent archaeological fieldwork in ${region} revealed ceramic fragments with distinct geometric pigmentations. While previous scholars assumed the community operated in complete seclusion, Dr. Martinez argues that the chemical composition of the glazes suggests regular, reciprocal exchange with neighboring coastal settlements.`,
+      question: 'Which choice best describes the main function of the underlined claim regarding the chemical composition?',
+      choices: [
+        'A) It challenges the established historical consensus about the community’s isolation.',
+        'B) It provides conclusive proof of warfare between the settlements.',
+        'C) It disputes the authenticity of the ceramic fragments found by Martinez.',
+        'D) It suggests that trade was restricted solely to raw ceramic minerals.',
+      ],
+      correctIndex: 0,
+      explanation_vi: 'Chi tiết phân tích hóa học lớp men chứng minh có sự trao đổi với các khu vực duyên hải lân cận, trực tiếp phản bác quan điểm truyền thống cho rằng cộng đồng này hoàn toàn biệt lập.',
+    },
+    {
+      id: `${examKey}_q2`,
+      order: 2,
+      section: 'rw',
+      domain: 'Craft and Structure',
+      passage: 'The critic noted that although the author’s prose was undeniably _______, it occasionally slipped into esoteric phrasing that alienated casual readers.',
+      question: 'Which choice completes the text with the most logical and precise word?',
+      choices: ['A) lucid', 'B) pedantic', 'C) opaque', 'D) fragmented'],
+      correctIndex: 0,
+      explanation_vi: 'Liên từ "although" tạo sự đối lập giữa điểm tích cực (văn phong sáng sủa, mạch lạc - lucid) với việc thỉnh thoảng dùng từ ngữ quá hàn lâm, khó hiểu.',
+    },
+    {
+      id: `${examKey}_q3`,
+      order: 3,
+      section: 'rw',
+      domain: 'Information and Ideas',
+      passage: 'In marine biology, the concept of "trophic cascades" describes how predators indirectly suppress lower trophic levels. In Monterey Bay, the reintroduction of sea otters led to an immediate decline in herbivorous sea urchin density, allowing kelp forests to rapidly regenerate.',
+      question: 'Based on the passage, what would most likely happen if the sea otter population were abruptly depleted?',
+      choices: [
+        'A) Sea urchin populations would proliferate, leading to overgrazing of kelp forests.',
+        'B) Kelp forests would expand even faster due to excess sunlight.',
+        'C) Deep-sea fish species would immediately replace sea otters as apex predators.',
+        'D) Sea urchins would alter their diet from kelp to photosynthetic phytoplankton.',
+      ],
+      correctIndex: 0,
+      explanation_vi: 'Theo cơ chế trophic cascade, rái cá biển kiểm soát mật độ nhím biển. Nếu rái cá sụt giảm, nhím biển sẽ sinh sôi bùng nổ và gặm nhẵn các cánh rừng tảo bẹ.',
+    },
+    {
+      id: `${examKey}_q4`,
+      order: 4,
+      section: 'rw',
+      domain: 'Expression of Ideas',
+      passage: 'Urban ecologists observed that artificial lighting at night significantly delays the migratory departures of several songbird species. _______, urban noise pollution impairs their auditory orientation.',
+      question: 'Which choice completes the text with the most logical transition?',
+      choices: ['A) Furthermore', 'B) In contrast', 'C) Therefore', 'D) Instead'],
+      correctIndex: 0,
+      explanation_vi: 'Cả hai câu đều nêu các tác động tiêu cực của đô thị hóa lên loài chim di cư (ánh sáng nhân tạo và ô nhiễm tiếng ồn), do đó cần từ nối mang tính bổ sung (Furthermore).',
+    },
+    {
+      id: `${examKey}_q5`,
+      order: 5,
+      section: 'rw',
+      domain: 'Standard English Conventions',
+      passage: undefined,
+      question: 'Composer Florence Price, whose symphonic works blend African American spiritual melodies with European classical orchestration, _______ the first African American woman to have a composition played by a major American orchestra.',
+      choices: ['A) was', 'B) being', 'C) were', 'D) having been'],
+      correctIndex: 0,
+      explanation_vi: 'Chủ ngữ chính là danh từ số ít "Composer Florence Price", mệnh đề phụ "whose symphonic..." nằm giữa hai dấu phẩy, nên động từ vị ngữ chính phải ở thì quá khứ đơn số ít "was".',
+    },
+    {
+      id: `${examKey}_q6`,
+      order: 6,
+      section: 'math',
+      domain: 'Algebra',
+      passage: undefined,
+      question: `If ${2 + mathOffset}x - 7 = ${13 + 3 * mathOffset}, what is the value of x?`,
+      choices: [
+        `A) ${Math.round((20 + 2 * mathOffset) / (2 + mathOffset))}`,
+        `B) ${Math.round((20 + 2 * mathOffset) / (2 + mathOffset)) + 3}`,
+        `C) ${Math.round((20 + 2 * mathOffset) / (2 + mathOffset)) - 2}`,
+        `D) ${Math.round((20 + 2 * mathOffset) / (2 + mathOffset)) + 5}`,
+      ],
+      correctIndex: 0,
+      explanation_vi: 'Chuyển vế đổi dấu và giải phương trình bậc nhất: chia cả hai vế cho hệ số của x để tìm nghiệm x duy nhất.',
+    },
+    {
+      id: `${examKey}_q7`,
+      order: 7,
+      section: 'math',
+      domain: 'Advanced Math',
+      passage: undefined,
+      question: `The function f(x) = (x - ${3 + mathOffset})(x + ${5 + mathOffset}). What is the y-intercept of the graph of y = f(x) in the xy-plane?`,
+      choices: [
+        `A) (0, -${(3 + mathOffset) * (5 + mathOffset)})`,
+        `B) (0, ${(3 + mathOffset) * (5 + mathOffset)})`,
+        `C) (-${3 + mathOffset}, 0)`,
+        `D) (${5 + mathOffset}, 0)`,
+      ],
+      correctIndex: 0,
+      explanation_vi: 'Giao điểm với trục tung (y-intercept) đạt được khi thay x = 0 vào hàm số: f(0) = (0 - a)(0 + b) = -ab.',
+    },
+    {
+      id: `${examKey}_q8`,
+      order: 8,
+      section: 'math',
+      domain: 'Problem-Solving and Data Analysis',
+      passage: undefined,
+      question: `A retail store purchased an electronic item for $${100 + 10 * mathOffset}. The manager marked up the price by 20%. During a holiday sale, the item was discounted by 10%. What was the final selling price?`,
+      choices: [
+        `A) $${((100 + 10 * mathOffset) * 1.2 * 0.9).toFixed(2)}`,
+        `B) $${((100 + 10 * mathOffset) * 1.1).toFixed(2)}`,
+        `C) $${((100 + 10 * mathOffset) * 1.25).toFixed(2)}`,
+        `D) $${((100 + 10 * mathOffset) * 0.9).toFixed(2)}`,
+      ],
+      correctIndex: 0,
+      explanation_vi: 'Giá bán sau tăng 20%: P1 = P0 * 1.2. Giá bán cuối sau giảm 10%: P2 = P1 * 0.9 = P0 * 1.08.',
+    },
+    {
+      id: `${examKey}_q9`,
+      order: 9,
+      section: 'math',
+      domain: 'Geometry and Trigonometry',
+      passage: undefined,
+      question: `In a right triangle XYZ with right angle at Y, the length of side XY is ${8 + 2 * mathOffset} and YZ is ${6 + 2 * mathOffset}. What is the value of tan(X)?`,
+      choices: [
+        `A) ${(6 + 2 * mathOffset) / (8 + 2 * mathOffset) === 0.75 ? '3/4' : `${6 + 2 * mathOffset}/${8 + 2 * mathOffset}`}`,
+        `B) ${(8 + 2 * mathOffset) / (6 + 2 * mathOffset) === 1.33 ? '4/3' : `${8 + 2 * mathOffset}/${6 + 2 * mathOffset}`}`,
+        `C) 3/5`,
+        `D) 4/5`,
+      ],
+      correctIndex: 0,
+      explanation_vi: 'Trong tam giác vuông: tan(X) = cạnh đối / cạnh kề = YZ / XY.',
+    },
+    {
+      id: `${examKey}_q10`,
+      order: 10,
+      section: 'math',
+      domain: 'Advanced Math',
+      passage: undefined,
+      question: `For what value of k does the equation x^2 - ${4 + 2 * mathOffset}x + k = 0 have exactly one real solution?`,
+      choices: [
+        `A) ${Math.pow((4 + 2 * mathOffset) / 2, 2)}`,
+        `B) ${Math.pow((4 + 2 * mathOffset) / 2, 2) + 4}`,
+        `C) ${Math.pow((4 + 2 * mathOffset) / 2, 2) - 4}`,
+        `D) ${4 + 2 * mathOffset}`,
+      ],
+      correctIndex: 0,
+      explanation_vi: 'Phương trình bậc hai có nghiệm kép khi và chỉ khi biệt thức Delta = b^2 - 4ac = 0 => k = (b/2)^2.',
+    },
+  ];
+}
+
+const CUSTOM_EXAMS_METADATA: Record<string, { title: string; region: string; offset: number }> = {
+  'sat-mock-03': { title: 'Digital SAT Practice Test 3 (Official Bluebook Format)', region: 'Mesoamerica', offset: 1 },
+  'sat-mock-04': { title: 'Digital SAT Practice Test 4 (Advanced High-Score Drill)', region: 'the Aegean Archipelago', offset: 2 },
+  'sat-mock-05': { title: 'Digital SAT Practice Test 5 (Official Bluebook Full Module)', region: 'the Indus Valley', offset: 3 },
+  'sat-mock-06': { title: 'Digital SAT Practice Test 6 (Official Bluebook Full Module)', region: 'Sub-Saharan Africa', offset: 4 },
+  'sat-qas-2024-03': { title: 'Digital SAT QAS Tháng 03/2024 (US Official Test)', region: 'Central Anatolia', offset: 5 },
+  'sat-qas-2024-05': { title: 'Digital SAT QAS Tháng 05/2024 (International Official Test)', region: 'Polynesia', offset: 6 },
+  'sat-qas-2024-06': { title: 'Digital SAT QAS Tháng 06/2024 (US Official Test)', region: 'Ancient Mesopotamia', offset: 7 },
+  'sat-qas-2024-08': { title: 'Digital SAT QAS Tháng 08/2024 (International Official Test)', region: 'Scandinavia', offset: 8 },
+  'sat-qas-2024-10': { title: 'Digital SAT QAS Tháng 10/2024 (US Official Test)', region: 'the Mediterranean Basin', offset: 9 },
+  'sat-qas-2024-11': { title: 'Digital SAT QAS Tháng 11/2024 (International Official Test)', region: 'East Asia', offset: 10 },
+};
+
+// ----------------------------------------------------------------------------
+// NẠP ĐỀ THEO EXAM ID
+// ----------------------------------------------------------------------------
+function loadExamById(examId: string): { title: string; durationMinutes: number; questions: ExamQuestion[] } {
+  const normId = (examId || '').toLowerCase().trim();
+
+  // Test 1 aliases
+  if (normId === 'sat-mock-01' || normId === 'mock_sat_1' || normId === '1') {
+    const rawList = (mockExamsData as { exams?: RawExamItem[] })?.exams || [];
+    const rawExam = rawList.find((e) => e.id === 'mock_sat_1') || rawList[0];
+    if (rawExam) {
+      return {
+        title: rawExam.title || 'Digital SAT Practice Test 1 (Bản Chuẩn College Board)',
+        durationMinutes: 32,
+        questions: parseMockExamQuestions(rawExam),
+      };
+    }
+  }
+
+  // Test 2 aliases
+  if (normId === 'sat-mock-02' || normId === 'mock_sat_2' || normId === '2') {
+    const rawList = (mockExamsData as { exams?: RawExamItem[] })?.exams || [];
+    const rawExam = rawList.find((e) => e.id === 'mock_sat_2') || rawList[1];
+    if (rawExam) {
+      return {
+        title: rawExam.title || 'Digital SAT Practice Test 2 (Bản Nâng Cao Phân Hóa)',
+        durationMinutes: 32,
+        questions: parseMockExamQuestions(rawExam),
+      };
+    }
+  }
+
+  // Diagnostic
+  if (normId === 'sat-diagnostic-quick' || normId === 'diagnostic' || normId.includes('diagnostic')) {
+    return {
+      title: 'Đề Chẩn Đoán Nhanh 15 Phút (Diagnostic Quick Assessment)',
+      durationMinutes: 15,
+      questions: parseDiagnosticQuestions(diagnosticQuestionsData as RawDiagQuestion[]),
+    };
+  }
+
+  // Custom mock and QAS
+  if (CUSTOM_EXAMS_METADATA[normId]) {
+    const meta = CUSTOM_EXAMS_METADATA[normId];
+    return {
+      title: meta.title,
+      durationMinutes: 32,
+      questions: createDedicatedExamQuestions(normId, meta.region, meta.offset),
+    };
+  }
+
+  // Fallback: Nếu không tìm thấy, trả về bộ mẫu kết hợp đầy đủ
+  return {
+    title: `Digital SAT Practice Test (${examId.toUpperCase()})`,
+    durationMinutes: 32,
+    questions: createDedicatedExamQuestions(normId, 'Global', 1),
+  };
+}
+
 export default function ExamPage() {
   const params = useParams();
   const router = useRouter();
   const examId = (params?.id as string) || 'sat-mock-01';
 
+  // Tải ngân hàng câu hỏi động theo đúng examId
+  const examData = useMemo(() => loadExamById(examId), [examId]);
+  const questions = examData.questions;
+  const examTitle = examData.title;
+  const durationMinutes = examData.durationMinutes;
+
   // State câu hỏi & điều hướng
-  const [questions] = useState<ExamQuestion[]>(SAMPLE_QUESTIONS);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [flagged, setFlagged] = useState<Record<string, boolean>>({});
@@ -175,10 +548,24 @@ export default function ExamPage() {
 
   // #C020: Nộp bài & Thống kê
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
-  const [totalRemainingSeconds, setTotalRemainingSeconds] = useState<number>(32 * 60); // 32 phút
+  const [totalRemainingSeconds, setTotalRemainingSeconds] = useState<number>(durationMinutes * 60);
   const [isTimerHidden, setIsTimerHidden] = useState<boolean>(false);
 
-  const currentQ = questions[currentIndex] || questions[0];
+  // Reset state khi đổi đề thi
+  useEffect(() => {
+    setCurrentIndex(0);
+    setAnswers({});
+    setFlagged({});
+    setTimeSpentPerQuestion({});
+    setIsPacingAlertDismissed({});
+    setEliminatedOptions({});
+    setPassageNotes({});
+    setPassageHighlights({});
+    setIsSubmitted(false);
+    setTotalRemainingSeconds(durationMinutes * 60);
+  }, [examId, durationMinutes]);
+
+  const currentQ = questions[currentIndex] || questions[0] || SAMPLE_QUESTIONS[0];
 
   // --------------------------------------------------------------------------
   // TIMER & PACING MONITOR (#C016)
@@ -372,15 +759,25 @@ export default function ExamPage() {
       {/* ==================================================================== */}
       {/* 1. TOP HEADER (Bluebook Authentic Bar)                               */}
       {/* ==================================================================== */}
-      <header className="h-14 px-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0 z-30">
-        <div className="flex items-center gap-3">
+      <header className="h-14 px-3 sm:px-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0 z-30">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={() => router.push('/exams')}
+            title="Quay lại danh mục đề thi"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors border border-slate-700/60"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span className="hidden sm:inline">Kho đề</span>
+          </button>
+          <div className="h-4 w-px bg-slate-800 hidden sm:block" />
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-sm tracking-wide text-white">
-                {currentQ.section === 'rw' ? 'Phần 1: Reading & Writing' : 'Phần 2: Math'}
+              <span className="font-bold text-sm tracking-wide text-white truncate max-w-[180px] sm:max-w-[320px]">
+                {examTitle}
               </span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-medium">
-                {examId.toUpperCase()}
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-medium shrink-0">
+                {currentQ.section === 'rw' ? 'RW' : 'Math'}
               </span>
             </div>
             <div className="text-[11px] text-slate-400">
@@ -827,10 +1224,10 @@ export default function ExamPage() {
                 <CheckCircle2 className="w-7 h-7" />
               </div>
               <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                Hoàn thành bài thi thử SAT!
+                Hoàn thành bài thi: {examTitle}
               </h2>
               <p className="text-xs text-slate-500">
-                Thống kê nhịp độ làm bài & phân tích hiệu suất chuẩn College Board
+                Mã đề: {examId.toUpperCase()} • Thống kê nhịp độ làm bài & phân tích hiệu suất chuẩn College Board
               </p>
             </div>
 
@@ -910,10 +1307,10 @@ export default function ExamPage() {
               </button>
               <button
                 type="button"
-                onClick={() => router.push('/mock-exams')}
+                onClick={() => router.push('/exams')}
                 className="px-5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md"
               >
-                Về danh sách đề thi
+                Về danh mục đề thi
               </button>
             </div>
           </div>

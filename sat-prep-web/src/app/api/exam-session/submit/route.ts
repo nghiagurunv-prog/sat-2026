@@ -7,6 +7,8 @@ import { applyExamRewardFromDifficulties, MAX_EXAM_QUESTIONS, type Difficulty, t
 import { getUserTier } from '@/lib/subscription-store';
 import { TIER_COIN_MULTIPLIER } from '@/lib/subscription';
 import { generateModule } from '@/lib/exam-generator';
+import * as ExamGeneratorModule from '@/lib/exam-generator';
+import { getExamById, getExamQuestionMap } from '@/lib/exams';
 import { determineAdaptivePath } from '@/lib/exam-scoring';
 import { isE2E, e2eModule, e2eGrade, E2E_ECONOMY } from '@/lib/e2e';
 import { bumpDailyActivity } from '@/lib/daily-activity-store';
@@ -56,6 +58,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const section = body.section === 'math' ? 'math' : body.section === 'rw' ? 'rw' : null;
     const moduleNum = body.moduleNum === 2 ? 2 : body.moduleNum === 1 ? 1 : null;
+    const examId = typeof body?.examId === 'string' ? body.examId : undefined;
     const rawAnswers = Array.isArray(body?.answers) ? body.answers : [];
     const elapsedSeconds = typeof body?.elapsedSeconds === 'number' && Number.isFinite(body.elapsedSeconds)
       ? Math.max(0, Math.floor(body.elapsedSeconds))
@@ -177,6 +180,36 @@ export async function POST(request: NextRequest) {
           explanation: prior.explanation ?? null,
           skillId: prior.skillId ?? null,
         });
+        continue;
+      }
+
+      // Fallback Local-First: khi có examId mà không có DB issued_questions, đối chiếu từ ngân hàng đề tĩnh
+      if (examId) {
+        const localLookup = (ExamGeneratorModule as any).getLocalExamAnswer
+          ? (ExamGeneratorModule as any).getLocalExamAnswer(questionId, examId)
+          : null;
+        const examObj = getExamById(examId);
+        const examMap = examObj ? getExamQuestionMap(examObj) : null;
+        const mapItem = examMap?.get(questionId);
+        const fallbackCorrectChoice = localLookup?.correct_choice ?? mapItem?.correct_choice ?? null;
+        if (fallbackCorrectChoice) {
+          gradedTotal++;
+          const isLocalCorrect = matchesAnswer(answer, fallbackCorrectChoice);
+          if (isLocalCorrect) {
+            correct++;
+            const d: Difficulty = VALID_DIFFICULTY.includes((localLookup?.difficulty ?? mapItem?.difficulty) as Difficulty)
+              ? ((localLookup?.difficulty ?? mapItem?.difficulty) as Difficulty)
+              : 'Medium';
+            correctDifficulties.push(d);
+          }
+          gradedItems.push({
+            questionId,
+            correct: isLocalCorrect,
+            correctChoice: fallbackCorrectChoice,
+            explanation: localLookup?.explanation ?? mapItem?.explanation_vi ?? mapItem?.explanation ?? null,
+            skillId: localLookup?.skillId ?? mapItem?.skillId ?? null,
+          });
+        }
       }
     }
 
@@ -213,7 +246,7 @@ export async function POST(request: NextRequest) {
       const origin = request.nextUrl.origin;
       const cookie = request.headers.get('cookie') ?? '';
 
-      const generated = await generateModule(section, 2, origin, cookie, adaptivePath);
+      const generated = await (generateModule as any)(section, 2, origin, cookie, adaptivePath, examId, user.id);
       if (generated.questions.length === 0) {
         // Module 1 ĐÃ chấm xong (CAS) + thưởng đã cộng server-side; chỉ Module 2
         // sinh hụt (thường do OpenAI chặn VN). KHÔNG trả 503 — vì client throw thì
@@ -232,13 +265,25 @@ export async function POST(request: NextRequest) {
       }
 
       const safeQuestions = await Promise.all(
-        generated.questions.map(async (q) => {
-          const questionId = await issueQuestion(user.id, q.correct_choice, q.skillId, q.difficulty, {
+        generated.questions.map(async (q: any) => {
+          const correctChoice = q.correct_choice ?? q.correctAnswer ?? '';
+          const explanation = q.explanation ?? q.explanation_vi ?? q.explanationVi ?? null;
+          const questionId = await issueQuestion(user.id, correctChoice, q.skillId, q.difficulty, {
             src: 'exam',
-            explanation: q.explanation,
+            explanation,
           });
-          const { correct_choice: _c, explanation: _e, difficulty: _d, ...safe } = q;
-          return { ...safe, questionId };
+          const {
+            correct_choice: _c,
+            correctChoice: _cc,
+            correctAnswer: _ca,
+            correct_answer: _ca2,
+            explanation: _e,
+            explanation_vi: _evi,
+            explanationVi: _evi2,
+            difficulty: _d,
+            ...safe
+          } = q;
+          return { ...safe, questionId: questionId ?? q.id };
         })
       );
 

@@ -1,0 +1,3313 @@
+{
+  "metadata": {
+    "version": "2.0.0",
+    "totalQuestions": 63,
+    "lastUpdated": "2026-11-08T14:10:35.643Z",
+    "description": "Digital SAT Comprehensive Question Bank with Bilingual Vietnamese Explanations, Four-Option Choice Analysis, and Desmos Interactive Tools.",
+    "moduleBreakdown": {
+      "math": 23,
+      "literature": 16,
+      "vocab": 14,
+      "desmos": 10
+    },
+    "difficultyBreakdown": {
+      "Easy": 10,
+      "Medium": 25,
+      "Hard": 28
+    }
+  },
+  "questions": [
+    {
+      "id": "b88de8410e3394fb",
+      "moduleType": "math",
+      "topic": "Heart of Algebra (Đại số cốt lõi)",
+      "data": {
+        "concept_name": "Đường thẳng và hệ phương trình",
+        "theory": "Trong đại số, đường thẳng có thể được biểu diễn bằng phương trình dạng $y = mx + b$, trong đó $m$ là hệ số góc và $b$ là giao điểm với trục $y$. Hệ phương trình là một tập hợp các phương trình mà chúng ta cần giải để tìm giá trị của các biến. Có nhiều phương pháp để giải hệ phương trình, bao gồm phương pháp thế, phương pháp cộng đại số và phương pháp đồ thị.",
+        "sample_example": "Giả sử chúng ta có hệ phương trình sau: $\\begin{cases} 2x + 3y = 6 \\ 4x - y = 5 \\end{cases}$. Để giải hệ này, chúng ta có thể sử dụng phương pháp thế. Từ phương trình đầu tiên, ta có $y = \\frac{6 - 2x}{3}$. Thay vào phương trình thứ hai, ta có $4x - \\frac{6 - 2x}{3} = 5$. Giải phương trình này để tìm giá trị của $x$, sau đó thay lại để tìm $y$.",
+        "practice_question": "What is the solution to the system of equations: 2x + 3y = 6 and 4x - 2y = 8?",
+        "choices": [
+          "(9/4, 1/2)",
+          "(1, 0)",
+          "(2, 0)",
+          "(0, 2)"
+        ],
+        "correct_choice": "(9/4, 1/2)",
+        "explanation": "To solve the system of equations, we can use substitution or elimination. From the first equation, we can express $y$ in terms of $x$: $y = \\frac{6 - 2x}{3}$. Substituting this into the second equation gives us $4x - 2\\left(\\frac{6 - 2x}{3}\\right) = 8$. Multiplying through by 3 to eliminate the fraction, we get $12x - 2(6 - 2x) = 24$. Simplifying this leads to $12x - 12 + 4x = 24$, or $16x = 36$, so $x = \\frac{36}{16} = \\frac{9}{4}$. Substituting $x$ back into $y = \\frac{6 - 2(9/4)}{3}$ gives us $y = \\frac{6 - 9/2}{3} = \\frac{3/2}{3} = \\frac{1}{2}$. Therefore, the solution is (9/4, 1/2).",
+        "difficulty": "Hard",
+        "trapRate": 85,
+        "title": "Heart of Algebra (Đại số cốt lõi)",
+        "full_passage": "",
+        "passage": "",
+        "question": "What is the solution to the system of equations: 2x + 3y = 6 and 4x - 2y = 8?",
+        "explanation_vi": "Để giải hệ phương trình, ta có thể dùng phương pháp thế hoặc cộng đại số. Nhân phương trình thứ nhất với 2 và phương trình thứ hai với 3:\n4x + 6y = 12\n12x - 6y = 24\nCộng hai phương trình vế theo vế: 16x = 36 => x = 36/16 = 9/4.\nThay x = 9/4 vào 2(9/4) + 3y = 6 => 9/2 + 3y = 6 => 3y = 3/2 => y = 1/2.\nVậy nghiệm của hệ là (9/4, 1/2).",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Giải hệ bằng phương pháp cộng đại số cho ra x = 9/4 và y = 1/2."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy sai số: Thử (1, 0) vào phương trình thứ nhất cho 2(1)+0 = 2 ≠ 6."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy ước lượng: Điểm (2, 0) thỏa mãn 4(2)-0 = 8 nhưng 2(2)+0 = 4 ≠ 6."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy giao điểm trục tung: Điểm (0, 2) thỏa mãn 2(0)+3(2)=6 nhưng 4(0)-2(2) = -4 ≠ 8."
+          }
+        ]
+      },
+      "createdAt": "2026-06-29T02:28:47.031Z",
+      "usageCount": 0
+    },
+    {
+      "id": "eef9085cf134d364",
+      "moduleType": "math",
+      "topic": "Heart of Algebra (Đại số cốt lõi)",
+      "data": {
+        "concept_name": "Giải hệ phương trình bậc nhất hai ẩn",
+        "theory": "Hệ phương trình bậc nhất hai ẩn có dạng: $ ax + by = c $ và $ dx + ey = f $. Để giải hệ phương trình này, ta có thể sử dụng phương pháp thế, phương pháp cộng đại số hoặc phương pháp đồ thị. Mục tiêu là tìm giá trị của $ x $ và $ y $ sao cho cả hai phương trình đều đúng.",
+        "sample_example": "Giải hệ phương trình sau: $ 2x + 3y = 6 $ và $ 4x - y = 5 $.\\n\\nBước 1: Từ phương trình thứ nhất, ta có $ 3y = 6 - 2x $ hay $ y = 2 - \\frac{2}{3}x $.\\n\\nBước 2: Thay $ y $ vào phương trình thứ hai: $ 4x - (2 - \\frac{2}{3}x) = 5 $.\\n\\nBước 3: Giải phương trình này để tìm $ x $: $ 4x - 2 + \\frac{2}{3}x = 5 $ $ \\Rightarrow (4 + \\frac{2}{3})x = 7 $ $ \\Rightarrow x = \\frac{7}{\\frac{14}{3}} = \\frac{15}{14} $.\\n\\nBước 4: Thay $ x $ vào phương trình để tìm $ y $: $ y = 2 - \\frac{2}{3}(\\frac{15}{14}) = \\frac{28 - 15}{14} = \\frac{13}{14} $.\\n\\nVậy nghiệm của hệ phương trình là $ (\\frac{15}{14}, \\frac{13}{14}) $.",
+        "practice_question": "What is the solution to the system of equations: 2x + 5y = 20 and 3x - 2y = 4?",
+        "choices": [
+          "(60/19, 52/19)",
+          "(4, 2)",
+          "(2, 4)",
+          "(5, 0)"
+        ],
+        "correct_choice": "(60/19, 52/19)",
+        "explanation": "To solve the system of equations, we can use substitution or elimination. Here, we will use substitution.\n\nFrom the first equation, we can express $y$ in terms of $x$: $5y = 20 - 2x \\Rightarrow y = 4 - \\frac{2}{5}x$.\n\nNow, substitute this expression for $y$ into the second equation: $3x - 2\\left(4 - \\frac{2}{5}x\\right) = 4$.\n\nSimplifying this gives us: $3x - 8 + \\frac{4}{5}x = 4 \\Rightarrow \\left(3 + \\frac{4}{5}\\right)x = 12 \\Rightarrow \\frac{19}{5}x = 12 \\Rightarrow x = \\frac{12 \\cdot 5}{19} = \\frac{60}{19}$.\n\nSubstituting $x$ back into the equation for $y$: $y = 4 - \\frac{2}{5}\\left(\\frac{60}{19}\\right) = 4 - \\frac{24}{19} = \\frac{76 - 24}{19} = \\frac{52}{19}$.\n\nThus, the solution is (60/19, 52/19).",
+        "difficulty": "Hard",
+        "trapRate": 85,
+        "title": "Heart of Algebra (Đại số cốt lõi)",
+        "full_passage": "",
+        "passage": "",
+        "question": "What is the solution to the system of equations: 2x + 5y = 20 and 3x - 2y = 4?",
+        "explanation_vi": "Giải hệ phương trình bằng phương pháp thế hoặc cộng đại số:\nNhân phương trình 1 với 2: 4x + 10y = 40.\nNhân phương trình 2 với 5: 15x - 10y = 20.\nCộng hai vế: 19x = 60 => x = 60/19.\nThay x = 60/19 vào: 5y = 20 - 2(60/19) = 260/19 => y = 52/19.\nVậy nghiệm là (60/19, 52/19).",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Giải hệ bằng cách triệt tiêu biến y cho ra x = 60/19 và y = 52/19."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy số nguyên đẹp: Học sinh thường đoán mò số nguyên (4, 2) nhưng 3(4) - 2(2) = 8 ≠ 4."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy hoán vị: Cặp (2, 4) cho 2(2) + 5(4) = 24 ≠ 20."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy giao điểm trục hoành: (5, 0) cho 2(5) = 10 ≠ 20."
+          }
+        ]
+      },
+      "createdAt": "2026-06-29T03:35:18.901Z",
+      "usageCount": 0
+    },
+    {
+      "id": "12adccf34de265de",
+      "moduleType": "math",
+      "topic": "Heart of Algebra (Đại số cốt lõi)",
+      "data": {
+        "concept_name": "Giải phương trình bậc nhất",
+        "theory": "Phương trình bậc nhất có dạng $ax + b = 0$, trong đó $a$ và $b$ là các hằng số, $x$ là biến. Để giải phương trình này, ta cần tìm giá trị của $x$ sao cho phương trình trở thành đúng. Để làm điều này, ta có thể thực hiện các phép toán như cộng, trừ, nhân, chia hai bên của phương trình mà không làm thay đổi giá trị của nó.",
+        "sample_example": "Giải phương trình $3x - 7 = 2$. Đầu tiên, ta cộng $7$ vào cả hai bên: $3x - 7 + 7 = 2 + 7$, dẫn đến $3x = 9$. Sau đó, chia cả hai bên cho $3$: $x = 3$. Vậy nghiệm của phương trình là $x = 3$.",
+        "practice_question": "Solve for x: 5(2x - 3) = 3(4x + 1) - 2.",
+        "choices": [
+          "x = -8",
+          "x = 2",
+          "x = 3",
+          "x = 4"
+        ],
+        "correct_choice": "x = -8",
+        "explanation": "Bắt đầu từ phương trình $5(2x - 3) = 3(4x + 1) - 2$. Ta phân phối: $10x - 15 = 12x + 3 - 2$. Rút gọn bên phải: $10x - 15 = 12x + 1$. Tiếp theo, ta đưa tất cả các hạng tử chứa $x$ về một bên và các hằng số về bên kia: $10x - 12x = 1 + 15$. Điều này dẫn đến $-2x = 16$. Chia cả hai bên cho $-2$, ta có $x = -8$. Kiểm tra lại: vế trái $5(2(-8) - 3) = 5(-19) = -95$; vế phải $3(4(-8) + 1) - 2 = 3(-31) - 2 = -95$. Hai vế bằng nhau, vậy đáp án đúng là x = -8.",
+        "difficulty": "Hard",
+        "trapRate": 85,
+        "title": "Heart of Algebra (Đại số cốt lõi)",
+        "full_passage": "",
+        "passage": "",
+        "question": "Solve for x: 5(2x - 3) = 3(4x + 1) - 2.",
+        "explanation_vi": "Khai triển hai vế:\n5(2x - 3) = 10x - 15.\n3(4x + 1) - 2 = 12x + 3 - 2 = 12x + 1.\nPhương trình trở thành: 10x - 15 = 12x + 1.\nChuyển vế: 10x - 12x = 1 + 15 => -2x = 16 => x = -8.",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Phân phối và chuyển vế thu được -2x = 16 => x = -8."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy dấu: Nhầm lẫn dấu khi chuyển -15 sang vế phải thành 1 - 15 = -14 => -2x = -14 => x = 7 hoặc nhầm hệ số ra 2."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy quên phân phối hằng số: 5(2x - 3) thành 10x - 3."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy tính toán: Nhầm lẫn trong bước rút gọn 12x - 10x."
+          }
+        ]
+      },
+      "createdAt": "2026-06-29T03:36:26.444Z",
+      "usageCount": 0
+    },
+    {
+      "id": "55cd5d9d2381af6c",
+      "moduleType": "literature",
+      "topic": "Thơ Cổ (Poetry)",
+      "data": {
+        "title": "A Reflection on the Nature of Poetry",
+        "full_passage": "In sooth, the quill doth dance upon the parchment, weaving tapestries of thought, wherein the soul's lamentations and jubilations intertwine. Verily, the muse, that ethereal specter, doth beckon the bard to inscribe the ineffable, whilst the heart, in fervent throes, doth pulse with the cadence of ancient echoes. Thus, in the realm of verse, where shadows and light converge, the poet's voice, like a clarion call, resounds through the corridors of time, beseeching the listener to partake in the sublime communion of feeling and reflection, whereupon the very essence of existence is distilled into the delicate elixir of words.",
+        "archaic_words": [
+          {
+            "word": "sooth",
+            "meaning": "truth or reality"
+          },
+          {
+            "word": "doth",
+            "meaning": "does"
+          },
+          {
+            "word": "verily",
+            "meaning": "truly or certainly"
+          },
+          {
+            "word": "muse",
+            "meaning": "a source of inspiration"
+          },
+          {
+            "word": "ineffable",
+            "meaning": "too great or extreme to be expressed in words"
+          },
+          {
+            "word": "throes",
+            "meaning": "intense or violent pain"
+          },
+          {
+            "word": "cadence",
+            "meaning": "rhythmic flow of a sequence of sounds or words"
+          },
+          {
+            "word": "beseeching",
+            "meaning": "asking urgently and fervently"
+          },
+          {
+            "word": "sublime",
+            "meaning": "of such excellence or beauty as to inspire great admiration"
+          }
+        ],
+        "practice_question": "What is the primary theme conveyed in the passage regarding the role of the poet?",
+        "choices": [
+          "A) The poet's struggle with personal emotions.",
+          "B) The transformative power of poetry in connecting with the audience.",
+          "C) The historical significance of poetry in society.",
+          "D) The technical skills required for writing poetry."
+        ],
+        "correct_choice": "B) The transformative power of poetry in connecting with the audience.",
+        "explanation": "Đoạn văn chủ yếu nói về cách mà thơ ca có thể kết nối tâm hồn của người sáng tác với người nghe, thể hiện sức mạnh biến đổi của thơ trong việc truyền đạt cảm xúc và suy tư. Các lựa chọn khác không phản ánh đúng chủ đề chính này.",
+        "difficulty": "Hard",
+        "trapRate": 82,
+        "passage": "In sooth, the quill doth dance upon the parchment, weaving tapestries of thought, wherein the soul's lamentations and jubilations intertwine. Verily, the muse, that ethereal specter, doth beckon the bard to inscribe the ineffable, whilst the heart, in fervent throes, doth pulse with the cadence of ancient echoes. Thus, in the realm of verse, where shadows and light converge, the poet's voice, like a clarion call, resounds through the corridors of time, beseeching the listener to partake in the sublime communion of feeling and reflection, whereupon the very essence of existence is distilled into the delicate elixir of words.",
+        "question": "What is the primary theme conveyed in the passage regarding the role of the poet?",
+        "explanation_vi": "Đoạn văn nhấn mạnh sứ mệnh của nhà thơ trong việc chuyển hóa những cảm xúc nội tâm sâu sắc ('soul\\'s lamentations and jubilations') thành 'delicate elixir of words' và kêu gọi người nghe tham gia vào sự giao thoa tinh tế ('sublime communion of feeling and reflection'). Vì vậy, chủ đề trọng tâm là sức mạnh biến đổi và gắn kết của thơ ca với người thưởng thức.",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": false,
+            "analysis": "Bẫy chi tiết cục bộ: Văn bản có nhắc đến cảm xúc của nhà thơ, nhưng mục đích cuối cùng là truyền tải và kết nối với người nghe."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Đoạn trích tập trung vào sức mạnh chuyển hóa của thơ trong việc kết nối cảm xúc với công chúng ('sublime communion')."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy suy diễn quá rộng: Văn bản không phân tích vai trò lịch sử của thơ ca trong xã hội."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy chi tiết bề mặt: Hình ảnh cây bút và giấy da chỉ là ẩn dụ, không bàn về kỹ thuật viết thơ."
+          }
+        ]
+      },
+      "createdAt": "2026-06-29T04:14:06.881Z",
+      "usageCount": 0
+    },
+    {
+      "id": "dd7d5bf1408d592a",
+      "moduleType": "literature",
+      "topic": "Thơ Cổ (Poetry)",
+      "data": {
+        "title": "The Lament of the Wandering Bard",
+        "full_passage": "In yonder vale, where shadows creep and silence reigns, a bard, forlorn and weary, doth wander, his heart heavy with the weight of unfulfilled dreams. Beneath the boughs of ancient oaks, he weaves his melancholic strains, invoking the spirits of yore, who whisper tales of love and loss. Oft hath he sung to the moonlit skies, beseeching the stars to grant him solace, yet naught but echoes return, mocking his plight. Thus, with quill in hand and sorrow in his breast, he doth inscribe upon the parchment of time, a requiem for the forgotten souls, whose voices linger in the twilight, yearning for the dawn of remembrance.",
+        "archaic_words": [
+          {
+            "word": "yonder",
+            "meaning": "over there; at some distance in the direction indicated"
+          },
+          {
+            "word": "doth",
+            "meaning": "does (archaic form of 'does')"
+          },
+          {
+            "word": "forlorn",
+            "meaning": "pitifully sad and abandoned or lonely"
+          },
+          {
+            "word": "boughs",
+            "meaning": "the main branches of a tree"
+          },
+          {
+            "word": "oft",
+            "meaning": "often"
+          },
+          {
+            "word": "beseeching",
+            "meaning": "asking urgently and fervently"
+          },
+          {
+            "word": "naught",
+            "meaning": "nothing"
+          },
+          {
+            "word": "quill",
+            "meaning": "a pen made from a feather"
+          },
+          {
+            "word": "requiem",
+            "meaning": "a mass for the repose of the souls of the dead"
+          },
+          {
+            "word": "twilight",
+            "meaning": "the time of day immediately following sunset"
+          }
+        ],
+        "practice_question": "What is the primary emotion expressed by the bard in the passage?",
+        "choices": [
+          "A) Joy",
+          "B) Anger",
+          "C) Sorrow",
+          "D) Indifference"
+        ],
+        "correct_choice": "C) Sorrow",
+        "explanation": "Đoạn văn miêu tả cảm xúc của người nghệ sĩ, người đang lang thang với trái tim nặng trĩu vì những giấc mơ chưa thành hiện thực. Từ ngữ như 'forlorn', 'melancholic', và 'sorrow' cho thấy sự buồn bã và nỗi cô đơn của nhân vật, do đó đáp án đúng là C) Sorrow.",
+        "difficulty": "Hard",
+        "trapRate": 82,
+        "passage": "In yonder vale, where shadows creep and silence reigns, a bard, forlorn and weary, doth wander, his heart heavy with the weight of unfulfilled dreams. Beneath the boughs of ancient oaks, he weaves his melancholic strains, invoking the spirits of yore, who whisper tales of love and loss. Oft hath he sung to the moonlit skies, beseeching the stars to grant him solace, yet naught but echoes return, mocking his plight. Thus, with quill in hand and sorrow in his breast, he doth inscribe upon the parchment of time, a requiem for the forgotten souls, whose voices linger in the twilight, yearning for the dawn of remembrance.",
+        "question": "What is the primary emotion expressed by the bard in the passage?",
+        "explanation_vi": "Văn bản chứa hàng loạt từ vựng mang sắc thái buồn bã và cô đơn: 'forlorn' (cô độc, đau khổ), 'heavy with the weight of unfulfilled dreams', 'melancholic strains' (giai điệu u sầu), 'sorrow in his breast' (nỗi đau trong lòng), 'requiem' (khúc cầu siêu). Tất cả đều hội tụ về cảm xúc chủ đạo là nỗi đau buồn (Sorrow).",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": false,
+            "analysis": "Bẫy ngược nghĩa: 'Joy' trái ngược hoàn toàn với tâm trạng u sầu và bi thương của nhân vật."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy suy diễn sai: Không có dấu hiệu của sự giận dữ hay oán thán gay gắt, chỉ có nỗi buồn trầm mặc."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Toàn bộ đoạn thơ toát lên tâm trạng cô đơn, đau buồn qua các từ 'forlorn', 'melancholic', 'sorrow'."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy ngược sắc thái: Nhà thơ tha thiết cầu xin các vì sao, không hề có thái độ thờ ơ, lạnh nhạt."
+          }
+        ]
+      },
+      "createdAt": "2026-06-29T04:14:25.810Z",
+      "usageCount": 0
+    },
+    {
+      "id": "cd1e985cc9536674",
+      "moduleType": "math",
+      "topic": "Đường thẳng (Lines in the Coordinate Plane)",
+      "data": {
+        "concept_name": "Đường thẳng",
+        "theory": "Đường trên (hay còn gọi là đường thẳng) là một trong những khái niệm cơ bản trong hình học. Đường thẳng được xác định bởi hai điểm bất kỳ trên mặt phẳng. Đường thẳng có thể được biểu diễn bằng phương trình dạng $y = mx + b$, trong đó $m$ là độ dốc của đường thẳng và $b$ là giao điểm của đường thẳng với trục $y$. Độ dốc $m$ cho biết sự thay đổi của $y$ khi $x$ thay đổi, và có thể được tính bằng công thức $m = \\frac{y_2 - y_1}{x_2 - x_1}$ cho hai điểm $(x_1, y_1)$ và $(x_2, y_2)$.",
+        "sample_example": "Giả sử chúng ta có hai điểm $A(1, 2)$ và $B(3, 6)$. Để tìm độ dốc $m$, ta sử dụng công thức: $m = \\frac{y_2 - y_1}{x_2 - x_1} = \\frac{6 - 2}{3 - 1} = \\frac{4}{2} = 2$. Vậy phương trình của đường thẳng đi qua hai điểm này sẽ là $y = 2x + b$. Để tìm $b$, ta thay một trong các điểm vào phương trình. Sử dụng điểm $A(1, 2)$: $2 = 2(1) + b \\Rightarrow b = 0$. Vậy phương trình đường thẳng là $y = 2x$.",
+        "practice_question": "What is the slope of the line that passes through the points (2, 3) and (4, 7)?",
+        "choices": [
+          "2",
+          "3",
+          "4",
+          "5"
+        ],
+        "correct_choice": "2",
+        "explanation": "To find the slope $m$ of the line passing through the points $(2, 3)$ and $(4, 7)$, we use the formula $m = \\frac{y_2 - y_1}{x_2 - x_1}$. Here, $(x_1, y_1) = (2, 3)$ and $(x_2, y_2) = (4, 7)$. Plugging in the values, we get: $m = \\frac{7 - 3}{4 - 2} = \\frac{4}{2} = 2$. Thus, the correct answer is 2.",
+        "difficulty": "Hard",
+        "trapRate": 85,
+        "title": "Đường thẳng (Lines in the Coordinate Plane)",
+        "full_passage": "",
+        "passage": "",
+        "question": "What is the slope of the line that passes through the points (2, 3) and (4, 7)?",
+        "explanation_vi": "Hệ số góc m của đường thẳng đi qua hai điểm (x1, y1) và (x2, y2) được tính theo công thức:\nm = (y2 - y1) / (x2 - x1) = (7 - 3) / (4 - 2) = 4 / 2 = 2.",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Tính đúng m = (7 - 3)/(4 - 2) = 4/2 = 2."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy nhầm tọa độ: Học sinh có thể lấy y1 = 3 làm hệ số góc."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy hiệu số tử số: Học sinh chỉ lấy y2 - y1 = 4 mà quên chia cho x2 - x1."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy nghịch đảo hoặc cộng dồn toạ độ."
+          }
+        ]
+      },
+      "createdAt": "2026-06-30T11:53:02.381Z",
+      "usageCount": 0
+    },
+    {
+      "id": "dcb444d6a30303a2",
+      "moduleType": "math",
+      "topic": "Đường tròn (Circles)",
+      "data": {
+        "concept_name": "Đường tròn và các yếu tố liên quan",
+        "theory": "Đường tròn là tập hợp tất cả các điểm trong mặt phẳng có khoảng cách bằng nhau từ một điểm cố định gọi là tâm. Đường kính là đoạn thẳng đi qua tâm và có hai đầu là hai điểm trên đường tròn. Bán kính là đoạn thẳng nối tâm với một điểm trên đường tròn. Công thức tính chu vi của đường tròn là $C = 2\theta r$ và diện tích là $A = \theta r^2$, trong đó $r$ là bán kính và $\theta$ là số pi ($\theta \thickapprox 3.14$).",
+        "sample_example": "Cho đường tròn có bán kính $r = 5$. Tính chu vi và diện tích của đường tròn này.\\n\\nChu vi: $C = 2\theta r = 2 \times 3.14 \times 5 = 31.4$.\\nDiện tích: $A = \theta r^2 = 3.14 \times 5^2 = 78.5$.",
+        "practice_question": "A circle has a radius of 7 units. What is the area of the circle?",
+        "choices": [
+          "154",
+          "49π",
+          "154π",
+          "28"
+        ],
+        "correct_choice": "49π",
+        "explanation": "Diện tích của đường tròn được tính bằng công thức $A = \\pi r^2$. Với $r = 7$, ta có: $A = \\pi (7^2) = 49\\pi$ (xấp xỉ $3.14 \\times 49 \\approx 153.94$). Do đó, đáp án đúng là 49π.",
+        "difficulty": "Hard",
+        "trapRate": 85,
+        "title": "Đường tròn (Circles)",
+        "full_passage": "",
+        "passage": "",
+        "question": "A circle has a radius of 7 units. What is the area of the circle?",
+        "explanation_vi": "Công thức tính diện tích hình tròn là A = πr². Với bán kính r = 7, ta có:\nA = π(7)² = 49π.",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": false,
+            "analysis": "Bẫy xấp xỉ π ≈ 22/7: 49 * (22/7) = 154, nhưng đề bài để dạng có chứa π chính xác."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Diện tích hình tròn A = πr² = π(7²) = 49π."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy gộp số: Kết hợp 154 với π sai nguyên tắc."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy nhầm chu vi hoặc 4r: 4 * 7 = 28."
+          }
+        ]
+      },
+      "createdAt": "2026-06-30T11:53:27.029Z",
+      "usageCount": 0
+    },
+    {
+      "id": "1c0019e0cd5e6a63",
+      "moduleType": "math",
+      "topic": "Hàm số bậc hai (Quadratic Functions)",
+      "data": {
+        "concept_name": "Hàm số bậc hai",
+        "theory": "Hàm số bậc hai có dạng $f(x) = ax^2 + bx + c$, trong đó $a$, $b$, và $c$ là các hằng số, và $a \\neq 0$. Đồ thị của hàm số này là một parabol. Đỉnh của parabol có tọa độ $(-\\frac{b}{2a}, f(-\\frac{b}{2a}))$. Để xác định nghiệm của phương trình bậc hai $ax^2 + bx + c = 0$, ta sử dụng công thức nghiệm: $x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$.",
+        "sample_example": "Giả sử ta có hàm số $f(x) = 2x^2 - 4x + 1$. Để tìm đỉnh của parabol, ta tính $x_{đỉnh} = -\\frac{-4}{2 \\cdot 2} = 1$. Thay $x = 1$ vào hàm số, ta có $f(1) = 2(1)^2 - 4(1) + 1 = -1$. Vậy đỉnh của parabol là $(1, -1)$.",
+        "practice_question": "What are the roots of the quadratic equation $2x^2 - 4x + 2 = 0$?",
+        "choices": [
+          "A) 1",
+          "B) 2",
+          "C) 0",
+          "D) -1"
+        ],
+        "correct_choice": "A) 1",
+        "explanation": "To find the roots of the equation $2x^2 - 4x + 2 = 0$, we can use the quadratic formula $x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$. Here, $a = 2$, $b = -4$, and $c = 2$. First, we calculate the discriminant: $b^2 - 4ac = (-4)^2 - 4(2)(2) = 16 - 16 = 0$. Since the discriminant is zero, there is exactly one root: $x = \\frac{-(-4)}{2 \\cdot 2} = \\frac{4}{4} = 1$. Thus, the correct answer is A) 1.",
+        "difficulty": "Hard",
+        "trapRate": 85,
+        "title": "Hàm số bậc hai (Quadratic Functions)",
+        "full_passage": "",
+        "passage": "",
+        "question": "What are the roots of the quadratic equation $2x^2 - 4x + 2 = 0$?",
+        "explanation_vi": "Chia cả hai vế phương trình cho 2:\nx² - 2x + 1 = 0.\nNhận thấy đây là hằng đẳng thức: (x - 1)² = 0 => x = 1 (nghiệm kép).",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Rút gọn thành x² - 2x + 1 = 0 => (x - 1)² = 0 => x = 1."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy hệ số: Học sinh nhầm lẫn nghiệm với hệ số góc hoặc giá trị của -b/a."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy thử x = 0: Thay vào được 2 ≠ 0."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy dấu: Nhầm (x - 1)² với (x + 1)² nên chọn nhầm x = -1."
+          }
+        ]
+      },
+      "createdAt": "2026-06-30T11:53:33.864Z",
+      "usageCount": 0
+    },
+    {
+      "id": "0a71abcd9ddcbedb",
+      "moduleType": "vocab",
+      "topic": "Words in Context",
+      "data": {
+        "title": "Understanding Context in Vocabulary",
+        "full_passage": "In the midst of the bustling city, the small café offered a rare sense of ______. Patrons could escape the chaos outside and enjoy a moment of tranquility, surrounded by the aroma of freshly brewed coffee and the soft murmur of conversation.",
+        "archaic_words": [
+          {
+            "word": "tranquility",
+            "meaning": "the state of being calm and peaceful"
+          }
+        ],
+        "practice_question": "What word best fits in the blank?",
+        "choices": [
+          "chaos",
+          "tranquility",
+          "noise",
+          "distraction"
+        ],
+        "correct_choice": "tranquility",
+        "explanation": "The context of the passage suggests that the café provides a peaceful escape from the busy city, making 'tranquility' the most appropriate choice.",
+        "difficulty": "Medium",
+        "trapRate": 35,
+        "passage": "In the midst of the bustling city, the small café offered a rare sense of ______. Patrons could escape the chaos outside and enjoy a moment of tranquility, surrounded by the aroma of freshly brewed coffee and the soft murmur of conversation.",
+        "question": "What word best fits in the blank?",
+        "explanation_vi": "Ngữ cảnh của đoạn văn mô tả quán cà phê nhỏ là nơi thực khách có thể trốn khỏi sự hỗn loạn bên ngoài ('escape the chaos outside') và tận hưởng không gian yên bình với tiếng thì thầm nhỏ nhẹ. Từ phù hợp nhất là 'tranquility' (sự thanh bình, tĩnh lặng).",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": false,
+            "analysis": "Bẫy từ đối lập: 'chaos' (hỗn loạn) là trạng thái bên ngoài thành phố mà khách muốn trốn thoát."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: 'tranquility' nghĩa là sự yên bình, tĩnh lặng, hoàn toàn tương thích với ngữ cảnh của quán cà phê."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy đối lập: 'noise' (tiếng ồn) mâu thuẫn với 'soft murmur' và sự thư thái."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy từ tiêu cực: 'distraction' (sự xao nhãng) không phù hợp với cảm giác dễ chịu được mô tả."
+          }
+        ]
+      },
+      "createdAt": "2026-06-30T11:53:36.561Z",
+      "usageCount": 0
+    },
+    {
+      "id": "ab4c7254f1f7b04e",
+      "moduleType": "desmos",
+      "topic": "Đường tròn và Parabol (Circles & Parabolas)",
+      "data": {
+        "title": "Finding the Vertex of a Parabola",
+        "full_passage": "Consider the quadratic function defined by the equation y = -2x^2 + 8x - 5. Your task is to find the vertex of this parabola.",
+        "archaic_words": [],
+        "practice_question": "What are the coordinates of the vertex of the parabola represented by the equation y = -2x^2 + 8x - 5?",
+        "choices": [
+          "(2, 3)",
+          "(4, 7)",
+          "(1, 1)",
+          "(3, 4)"
+        ],
+        "correct_choice": "(2, 3)",
+        "explanation": "To find the vertex of the parabola, we can use Desmos to graph the function. Input the equation into Desmos: y = -2x^2 + 8x - 5. The vertex can be found at the point where the parabola reaches its maximum (since the coefficient of x^2 is negative). You can also find the vertex using the formula x = -b/(2a) where a = -2 and b = 8. This gives x = 2. Substituting x = 2 back into the equation gives y = -2(2)^2 + 8(2) - 5 = 3, so the vertex is (2, 3).",
+        "difficulty": "Medium",
+        "trapRate": 65,
+        "passage": "Consider the quadratic function defined by the equation y = -2x^2 + 8x - 5. Your task is to find the vertex of this parabola.",
+        "question": "What are the coordinates of the vertex of the parabola represented by the equation y = -2x^2 + 8x - 5?",
+        "explanation_vi": "Cách 1 (Desmos): Nhập phương trình y = -2x^2 + 8x - 5, nhấp vào điểm cực trị cao nhất hiển thị tọa độ (2, 3).\nCách 2 (Đại số): Ta có a = -2, b = 8. Hoành độ đỉnh x = -b/(2a) = -8/(2*(-2)) = 2. Tung độ y = -2(2)² + 8(2) - 5 = -8 + 16 - 5 = 3. Vậy đỉnh là (2, 3).",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Hoành độ đỉnh x = -8/(2*-2) = 2, thay vào tìm được y = 3 => Đỉnh (2, 3)."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy quên chia hệ số 2: Lấy x = -b/a = 4 dẫn đến toạ độ sai (4, 7)."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy điểm bất kỳ: Điểm (1, 1) thuộc parabol nhưng không phải đỉnh."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy tính nhẩm: Giá trị x = 3 không phải trục đối xứng."
+          }
+        ],
+        "concept_name": "Finding the Vertex of a Parabola",
+        "theory": "The vertex of a parabola y = ax^2 + bx + c can be found at x = -b/(2a). On Desmos, enter the equation and click the maximum/minimum point.",
+        "sample_example": "y = -2x^2 + 8x - 5 has vertex at x = -8/(2*-2) = 2, y = 3.",
+        "desmos_expression": "y = -2x^2 + 8x - 5",
+        "target_equation": "y = -2x^2 + 8x - 5"
+      },
+      "createdAt": "2026-06-30T11:54:37.416Z",
+      "usageCount": 0
+    },
+    {
+      "id": "35b5af33fe89fbdc",
+      "moduleType": "math",
+      "topic": "Lượng giác (Trigonometry: Sin & Cos)",
+      "data": {
+        "concept_name": "Lượng giác sin và cos",
+        "theory": "Lượng giác là một nhánh của toán học nghiên cứu mối quan hệ giữa các cạnh và góc của tam giác. Hai hàm lượng giác cơ bản là sin và cos. Đối với một góc $\theta$, ta có: \n- $\text{sin}(\theta) = \\frac{\text{đối}}{\text{huyền}}$ \n- $\text{cos}(\theta) = \\frac{\text{kề}}{\text{huyền}}$ \nTrong đó, 'đối' là cạnh đối diện với góc $\theta$, 'kề' là cạnh kề với góc $\theta$, và 'huyền' là cạnh huyền của tam giác vuông. Các giá trị của sin và cos có thể được tính toán cho các góc đặc biệt như $0^\text{o}$, $30^\text{o}$, $45^\text{o}$, $60^\text{o}$, và $90^\text{o}$.",
+        "sample_example": "Giả sử ta có một tam giác vuông với góc $\theta = 30^\text{o}$. Ta biết rằng: \n- $\text{sin}(30^\text{o}) = \\frac{1}{2}$ \n- $\text{cos}(30^\text{o}) = \\frac{\text{√3}}{2}$ \nNếu cạnh huyền của tam giác là 10, thì: \n- Cạnh đối = $10 \times \text{sin}(30^\text{o}) = 10 \times \\frac{1}{2} = 5$ \n- Cạnh kề = $10 \times \text{cos}(30^\text{o}) = 10 \times \\frac{\text{√3}}{2} = 5\text{√3}$",
+        "practice_question": "If $sin(x) = \\frac{3}{5}$, what is the value of $cos(x)$?",
+        "choices": [
+          "$\\frac{4}{5}$",
+          "$\\frac{3}{5}$",
+          "$\\frac{5}{4}$",
+          "$\\frac{1}{5}$"
+        ],
+        "correct_choice": "$\\frac{4}{5}$",
+        "explanation": "Để tìm giá trị của $cos(x)$ khi biết $sin(x) = \\frac{3}{5}$, ta sử dụng định lý Pythagore cho tam giác vuông. Theo định lý này, ta có: \n$$sin^2(x) + cos^2(x) = 1$$ \nThay giá trị của $sin(x)$ vào: \n$$\\left(\\frac{3}{5}\\right)^2 + cos^2(x) = 1$$ \n$$\\frac{9}{25} + cos^2(x) = 1$$ \n$$cos^2(x) = 1 - \\frac{9}{25}$$ \n$$cos^2(x) = \\frac{25}{25} - \\frac{9}{25} = \\frac{16}{25}$$ \n$$cos(x) = \\sqrt{\\frac{16}{25}} = \\frac{4}{5}$$ \nVậy đáp án đúng là $\\frac{4}{5}$.",
+        "difficulty": "Hard",
+        "trapRate": 85,
+        "title": "Lượng giác (Trigonometry: Sin & Cos)",
+        "full_passage": "",
+        "passage": "",
+        "question": "If $sin(x) = \\frac{3}{5}$, what is the value of $cos(x)$?",
+        "explanation_vi": "Sử dụng đồng nhất thức lượng giác cơ bản sin²(x) + cos²(x) = 1:\ncos²(x) = 1 - sin²(x) = 1 - (3/5)² = 1 - 9/25 = 16/25.\nDo đó, cos(x) = 4/5 (với x là góc nhọn tam giác vuông 3-4-5).",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Tam giác vuông tỉ lệ 3-4-5 có cos(x) = √(1 - (3/5)²) = 4/5."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy bằng nhau: Nhầm cos(x) = sin(x)."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy nghịch đảo: 5/4 là giá trị của csc(x) hoặc sec(x), hàm cos không thể > 1."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy phép trừ trực tiếp: 1 - 3/5 = 2/5 hoặc 1/5 do tính toán sai."
+          }
+        ]
+      },
+      "createdAt": "2026-06-30T11:54:47.202Z",
+      "usageCount": 0
+    },
+    {
+      "id": "7cb858ae26a8cdfb",
+      "moduleType": "desmos",
+      "topic": "Hệ phương trình bậc nhất (Systems of Linear Equations)",
+      "data": {
+        "title": "Linear Equation Intersection",
+        "full_passage": "Consider the following two linear equations: 2x + 3y = 6 and 4x - y = 5. Find the point of intersection of these two lines.",
+        "archaic_words": [],
+        "practice_question": "What is the point of intersection of the lines represented by the equations 2x + 3y = 6 and 4x - y = 5?",
+        "choices": [
+          "(1.5, 1)",
+          "(1, 0)",
+          "(2, 0)",
+          "(0, 1)"
+        ],
+        "correct_choice": "(1.5, 1)",
+        "explanation": "To find the point of intersection of the two lines, we solve the system of equations algebraically:\n1) $2x + 3y = 6$\n2) $4x - y = 5 \\implies y = 4x - 5$\n\nSubstitute $y$ into equation (1):\n$2x + 3(4x - 5) = 6$\n$2x + 12x - 15 = 6$\n$14x = 21 \\implies x = \\frac{21}{14} = 1.5$\n\nNow substitute $x = 1.5$ back into $y = 4x - 5$:\n$y = 4(1.5) - 5 = 6 - 5 = 1$.\n\nThus, the lines intersect at the point (1.5, 1).",
+        "difficulty": "Medium",
+        "trapRate": 30,
+        "passage": "Consider the following two linear equations: 2x + 3y = 6 and 4x - y = 5. Find the point of intersection of these two lines.",
+        "question": "What is the point of intersection of the lines represented by the equations 2x + 3y = 6 and 4x - y = 5?",
+        "explanation_vi": "Cách 1 (Desmos): Nhập lần lượt hai phương trình vào hai dòng, Desmos sẽ tự động đánh dấu giao điểm màu xám tại (1.5, 1).\nCách 2 (Đại số): Từ phương trình 2 có y = 4x - 5. Thế vào pt 1: 2x + 3(4x - 5) = 6 => 14x = 21 => x = 1.5. Suy ra y = 4(1.5) - 5 = 1. Giao điểm là (1.5, 1).",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Tọa độ giao điểm của hai đường thẳng là (1.5, 1)."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy điểm thử: Điểm (1, 0) không thỏa mãn cả hai phương trình."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy giao trục: Điểm (2, 0) không phải giao điểm của hai đường."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy hoán vị tọa độ hoặc điểm cắt trục tung."
+          }
+        ],
+        "concept_name": "Solving Linear Systems via Intersection",
+        "theory": "The intersection point of two linear equations corresponds to their algebraic solution. In Desmos, type both lines to locate the intersection.",
+        "sample_example": "2x + 3y = 6 and 4x - y = 5 intersect at (1.5, 1).",
+        "desmos_expression": "2x + 3y = 6; 4x - y = 5",
+        "target_equation": "2x + 3y = 6"
+      },
+      "createdAt": "2026-06-30T11:57:24.177Z",
+      "usageCount": 0
+    },
+    {
+      "id": "b486254571ac949e",
+      "moduleType": "math",
+      "topic": "Phương trình bậc nhất một ẩn (Linear Equations in One Variable)",
+      "data": {
+        "concept_name": "Phương trình bậc nhất một ẩn",
+        "theory": "Phương trình bậc nhất một ẩn có dạng tổng quát là $ax + b = 0$, trong đó $a$ và $b$ là các số thực và $a \\neq 0$. Để giải phương trình này, ta cần tìm giá trị của $x$ sao cho phương trình trở thành đúng. Quy trình giải bao gồm việc chuyển các hạng tử tự do sang một bên và các hạng tử chứa $x$ sang bên còn lại. Cuối cùng, ta chia cả hai bên cho hệ số của $x$ để tìm giá trị của $x$.",
+        "sample_example": "Giải phương trình sau: $3x - 7 = 2$.\\n\\nBước 1: Chuyển hạng tử tự do sang bên phải: $3x = 2 + 7$.\\nBước 2: Tính toán bên phải: $3x = 9$.\\nBước 3: Chia cả hai bên cho 3: $x = \\frac{9}{3} = 3$.\\n\\nVậy nghiệm của phương trình là $x = 3$.",
+        "practice_question": "If $5x - 3 = 2x + 6$, what is the value of $x$?",
+        "choices": [
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "correct_choice": "3",
+        "explanation": "To solve the equation $5x - 3 = 2x + 6$, we first move all terms involving $x$ to one side and constant terms to the other side.\\n\\nStep 1: Subtract $2x$ from both sides: $5x - 2x - 3 = 6$.\\n\\nThis simplifies to: $3x - 3 = 6$.\\n\\nStep 2: Add 3 to both sides: $3x = 6 + 3$.\\n\\nThis simplifies to: $3x = 9$.\\n\\nStep 3: Divide both sides by 3: $x = \\frac{9}{3} = 3$.\\n\\nThus, the correct answer is $x = 3$.",
+        "difficulty": "Hard",
+        "trapRate": 85,
+        "title": "Phương trình bậc nhất một ẩn (Linear Equations in One Variable)",
+        "full_passage": "",
+        "passage": "",
+        "question": "If $5x - 3 = 2x + 6$, what is the value of $x$?",
+        "explanation_vi": "Khai triển và rút gọn hai vế:\n3(2x - 5) = 6x - 15.\n4(x + 1) - 7 = 4x + 4 - 7 = 4x - 3.\nPhương trình trở thành: 6x - 15 = 4x - 3.\nChuyển vế: 6x - 4x = -3 + 15 => 2x = 12 => x = 6.",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Khai triển 6x - 15 = 4x - 3 => 2x = 12 => x = 6."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy chuyển vế: Nhầm 15 - 3 thành 6 hoặc chia sai hệ số."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy nhầm dấu vế phải khi rút gọn 4 - 7."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy tính toán rút gọn hằng số."
+          }
+        ]
+      },
+      "createdAt": "2026-06-30T17:07:57.767Z",
+      "usageCount": 0
+    },
+    {
+      "id": "66915fe8bdf860ff",
+      "moduleType": "math",
+      "topic": "Hệ phương trình bậc nhất hai ẩn (Systems of Linear Equations)",
+      "data": {
+        "concept_name": "Hệ phương trình bậc nhất hai ẩn",
+        "theory": "Hệ phương trình bậc nhất hai ẩn là một tập hợp gồm hai phương trình có dạng $ax + by = c$ và $dx + ey = f$, trong đó $a$, $b$, $c$, $d$, $e$, $f$ là các hằng số thực. Mục tiêu là tìm giá trị của hai ẩn $x$ và $y$ sao cho cả hai phương trình đều đúng. Có nhiều phương pháp để giải hệ phương trình này như phương pháp thế, phương pháp cộng đại số và phương pháp đồ thị.",
+        "sample_example": "Giải hệ phương trình sau:\n1) $2x + 3y = 6$  \n2) $4x - y = 5$  \n\nBước 1: Từ phương trình (1), ta có thể biểu diễn $y$ theo $x$:  \n$3y = 6 - 2x$  \n$y = 2 - \\frac{2}{3}x$  \n\nBước 2: Thay $y$ vào phương trình (2):  \n$4x - (2 - \\frac{2}{3}x) = 5$  \n$4x - 2 + \\frac{2}{3}x = 5$  \n$\\frac{12}{3}x + \\frac{2}{3}x = 7$  \n$\\frac{14}{3}x = 7$  \n$x = \\frac{7 \\cdot 3}{14} = \\frac{3}{2}$  \n\nBước 3: Thay $x$ vào phương trình biểu diễn $y$:  \n$y = 2 - \\frac{2}{3} \\cdot \\frac{3}{2} = 2 - 1 = 1$  \n\nVậy nghiệm của hệ phương trình là $(x, y) = (\\frac{3}{2}, 1)$.",
+        "practice_question": "What is the solution to the following system of equations?\n1) 3x + 4y = 12\n2) 6x + 8y = 24\nChoices: \nA) (0, 3)  \nB) (2, 0)  \nC) (1, 2)  \nD) Infinite solutions",
+        "choices": [
+          "A) (0, 3)",
+          "B) (2, 0)",
+          "C) (1, 2)",
+          "D) Infinite solutions"
+        ],
+        "correct_choice": "D) Infinite solutions",
+        "explanation": "To solve the system, we notice that the second equation $6x + 8y = 24$ is just a multiple of the first equation $3x + 4y = 12$. Specifically, if we multiply the first equation by 2, we get the second equation. This means that both equations represent the same line in the coordinate plane. Therefore, there are infinitely many solutions that lie on this line, which is why the correct answer is D) Infinite solutions.",
+        "difficulty": "Hard",
+        "trapRate": 85,
+        "title": "Hệ phương trình bậc nhất hai ẩn (Systems of Linear Equations)",
+        "full_passage": "",
+        "passage": "",
+        "question": "What is the solution to the following system of equations?\n1) 3x + 4y = 12\n2) 6x + 8y = 24\nChoices: \nA) (0, 3)  \nB) (2, 0)  \nC) (1, 2)  \nD) Infinite solutions",
+        "explanation_vi": "Từ phương trình thứ hai: x = y + 1. Thế vào phương trình đầu:\n3(y + 1) + 2y = 12 => 3y + 3 + 2y = 12 => 5y = 9 => y = 9/5.\nThay vào x = y + 1: x = 9/5 + 1 = 14/5.\nVậy nghiệm của hệ là (14/5, 9/5).",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Thế x = y + 1 vào phương trình 1 ta có 5y = 9 => y = 9/5, x = 14/5."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy số nguyên gần đúng: (2, 3) cho x - y = -1 ≠ 1."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy đảo cặp nghiệm: (3, 2) cho 3(3)+2(2) = 13 ≠ 12."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy nghiệm trục tọa độ."
+          }
+        ]
+      },
+      "createdAt": "2026-06-30T18:14:08.551Z",
+      "usageCount": 0
+    },
+    {
+      "id": "184c74cdcda82eec",
+      "moduleType": "math",
+      "topic": "Phương trình bậc nhất một ẩn (Linear Equations in One Variable)",
+      "data": {
+        "concept_name": "Phương trình bậc nhất một ẩn",
+        "theory": "Phương trình bậc nhất một ẩn có dạng tổng quát là $ax + b = 0$, trong đó $a$ và $b$ là các hằng số và $x$ là ẩn cần tìm. Để giải phương trình này, chúng ta cần thực hiện các bước sau: 1. Chuyển các hằng số về một phía của phương trình. 2. Tách ẩn $x$ ra khỏi các hằng số. 3. Tính giá trị của $x$.",
+        "sample_example": "Giải phương trình $3x - 5 = 7$. Bước 1: Chuyển $-5$ sang bên phải, ta có $3x = 7 + 5$. Bước 2: Tính tổng bên phải, ta có $3x = 12$. Bước 3: Chia cả hai bên cho $3$, ta có $x = 4$.",
+        "practice_question": "Solve for x: 5(2x - 3) = 3(3x + 1) - 4",
+        "choices": [
+          "x = 14",
+          "x = 2",
+          "x = 3",
+          "x = 4"
+        ],
+        "correct_choice": "x = 14",
+        "explanation": "Bắt đầu với phương trình $5(2x - 3) = 3(3x + 1) - 4$. Phân phối bên trái: $10x - 15$. Phân phối bên phải: $9x + 3 - 4 = 9x - 1$. Ta có phương trình mới: $10x - 15 = 9x - 1$. Chuyển $9x$ sang bên trái và $-15$ sang bên phải: $10x - 9x = -1 + 15$. Ta được $x = 14$. Kiểm tra lại: vế trái $5(2(14) - 3) = 5(25) = 125$; vế phải $3(3(14) + 1) - 4 = 3(43) - 4 = 125$. Hai vế bằng nhau, vậy đáp án đúng là x = 14.",
+        "difficulty": "Hard",
+        "trapRate": 85,
+        "title": "Phương trình bậc nhất một ẩn (Linear Equations in One Variable)",
+        "full_passage": "",
+        "passage": "",
+        "question": "Solve for x: 5(2x - 3) = 3(3x + 1) - 4",
+        "explanation_vi": "Khai triển cả hai vế:\n2(3x - 1) = 6x - 2.\n4(x + 2) - 6 = 4x + 8 - 6 = 4x + 2.\nPhương trình trở thành: 6x - 2 = 4x + 2.\nChuyển vế: 6x - 4x = 2 + 2 => 2x = 4 => x = 2.",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: 6x - 2 = 4x + 2 => 2x = 4 => x = 2."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy cộng nhầm hằng số: 2 + 2 = 6."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy quên chia hệ số 2 ở bước cuối cùng."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy nhầm dấu khi chuyển -2 sang vế phải."
+          }
+        ]
+      },
+      "createdAt": "2026-06-30T18:14:55.415Z",
+      "usageCount": 0
+    },
+    {
+      "id": "a285183a12ba6bba",
+      "moduleType": "math",
+      "topic": "Hàm số bậc nhất và đồ thị đường thẳng (Linear Functions & Graphs)",
+      "data": {
+        "concept_name": "Hàm số bậc nhất và đồ thị đường thẳng",
+        "theory": "Hàm số bậc nhất có dạng tổng quát là $y = mx + b$, trong đó $m$ là hệ số góc (slope) và $b$ là hằng số (y-intercept). Hệ số góc $m$ cho biết độ dốc của đường thẳng: nếu $m > 0$, đường thẳng nghiêng lên; nếu $m < 0$, đường thẳng nghiêng xuống; nếu $m = 0$, đường thẳng là một đường ngang. Đồ thị của hàm số bậc nhất là một đường thẳng trong mặt phẳng tọa độ.",
+        "sample_example": "Giả sử ta có hàm số $y = 2x + 3$. Để vẽ đồ thị, ta cần xác định hai điểm. Khi $x = 0$, $y = 3$ (điểm $A(0, 3)$). Khi $x = 1$, $y = 5$ (điểm $B(1, 5)$). Vẽ hai điểm này và nối chúng lại để có được đường thẳng. Hệ số góc $m = 2$ cho thấy đường thẳng nghiêng lên với độ dốc 2.",
+        "practice_question": "What is the slope of the line represented by the equation $3y - 6x = 12$?",
+        "choices": [
+          "2",
+          "-2",
+          "3",
+          "-3"
+        ],
+        "correct_choice": "2",
+        "explanation": "To find the slope, rewrite the equation in slope-intercept form $y = mx + b$:\n1. Add $6x$ to both sides: $3y = 6x + 12$.\n2. Divide everything by 3: $y = 2x + 4$.\n\nIn the form $y = mx + b$, $m$ represents the slope. Therefore, the slope of the line is 2.",
+        "difficulty": "Hard",
+        "trapRate": 85,
+        "title": "Hàm số bậc nhất và đồ thị đường thẳng (Linear Functions & Graphs)",
+        "full_passage": "",
+        "passage": "",
+        "question": "What is the slope of the line represented by the equation $3y - 6x = 12$?",
+        "explanation_vi": "Công thức tính hệ số góc m của đường thẳng qua (x1, y1) và (x2, y2):\nm = (y2 - y1) / (x2 - x1) = (6 - 2) / (3 - 1) = 4 / 2 = 2.",
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: m = (6 - 2)/(3 - 1) = 4/2 = 2."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy chia trực tiếp tọa độ điểm thứ hai: 6/3 = 2 nhưng nhầm lấy 6/2 = 3."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy chỉ tính hiệu số tung độ 6 - 2 = 4 mà quên chia hiệu số hoành độ."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy nghịch đảo độ dốc."
+          }
+        ]
+      },
+      "createdAt": "2026-06-30T18:15:05.211Z",
+      "usageCount": 0
+    },
+    {
+      "id": "ba874ae4ba1d8215",
+      "moduleType": "math",
+      "topic": "Phương trình bậc nhất (Linear Equations)",
+      "data": {
+        "concept_name": "Phương trình bậc nhất",
+        "theory": "Phương trình bậc nhất có dạng tổng quát là $ax + b = 0$, trong đó $a$ và $b$ là các số thực, và $a \\neq 0$. Để giải phương trình này, ta cần tìm giá trị của $x$ sao cho phương trình đúng. Cách giải là đưa $b$ sang bên phải và chia cả hai vế cho $a$: $x = -\\frac{b}{a}$.",
+        "sample_example": "Giải phương trình sau: $3x - 9 = 0$.\\n\\nBước 1: Thêm 9 vào cả hai vế: $3x = 9$.\\nBước 2: Chia cả hai vế cho 3: $x = 3$.\\nVậy nghiệm của phương trình là $x = 3$.",
+        "practice_question": "Solve for x: 5x + 7 = 2x + 19",
+        "choices": [
+          "A) 4",
+          "B) 3",
+          "C) 5",
+          "D) 2"
+        ],
+        "correct_choice": "A) 4",
+        "explanation": "Để giải phương trình $5x + 7 = 2x + 19$, ta thực hiện các bước sau: \\nBước 1: Chuyển $2x$ sang bên trái: $5x - 2x + 7 = 19$. \\nBước 2: Rút gọn: $3x + 7 = 19$. \\nBước 3: Chuyển 7 sang bên phải: $3x = 12$. \\nBước 4: Chia cả hai vế cho 3: $x = 4$. Vậy đáp án đúng là $A) 4$.",
+        "difficulty": "Medium",
+        "trapRate": 40,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Khai triển 4x - 4 = 2x + 4 => 2x = 8 => x = 4."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy tính toán: Nhầm lẫn dấu khi chuyển -4 sang vế phải."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy rút gọn: Rút gọn nhầm 6 - 2 thành 6."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy chia: Chia 8 cho 4 thay vì chia cho 2."
+          }
+        ],
+        "title": "Phương trình bậc nhất (Linear Equations)",
+        "full_passage": "",
+        "passage": "",
+        "question": "Solve for x: 5x + 7 = 2x + 19",
+        "explanation_vi": "Khai triển hai vế phương trình:\n4(x - 1) = 4x - 4.\n2(x + 3) - 2 = 2x + 6 - 2 = 2x + 4.\nPhương trình trở thành: 4x - 4 = 2x + 4.\nChuyển vế: 4x - 2x = 4 + 4 => 2x = 8 => x = 4."
+      },
+      "createdAt": "2026-06-30T18:51:00.028Z",
+      "usageCount": 0
+    },
+    {
+      "id": "549842d062f72d09",
+      "moduleType": "math",
+      "topic": "Phương trình bậc nhất (Linear Equations)",
+      "data": {
+        "concept_name": "Phương trình bậc nhất",
+        "theory": "Phương trình bậc nhất có dạng tổng quát là $ax + b = 0$, trong đó $a$ và $b$ là các hằng số và $a \neq 0$. Để giải phương trình này, ta cần tìm giá trị của $x$ sao cho phương trình trở thành đúng. Quy trình giải phương trình bậc nhất bao gồm việc đưa $b$ sang bên phải và sau đó chia cho $a$.",
+        "sample_example": "Giải phương trình $2x + 3 = 7$. Đầu tiên, ta trừ $3$ từ cả hai phía: $2x = 7 - 3$. Sau đó, ta có $2x = 4$. Cuối cùng, chia cả hai phía cho $2$ để tìm $x$: $x = 2$.",
+        "practice_question": "Solve for x: 5(x - 2) + 3 = 2(x + 4)",
+        "choices": [
+          "A) 5",
+          "B) 3",
+          "C) 2",
+          "D) 1"
+        ],
+        "correct_choice": "A) 5",
+        "explanation": "Để giải phương trình, ta phân phối: $5x - 10 + 3 = 2x + 8$. Sau đó, gộp các hạng tử lại: $5x - 2x = 8 + 10 - 3$. Ta có $3x = 15$, chia cả hai vế cho 3 ta được $x = 5$. Kiểm tra lại: $5(5 - 2) + 3 = 18$ và $2(5 + 4) = 18$. Vậy đáp án đúng là A) 5.",
+        "difficulty": "Medium",
+        "trapRate": 40,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Phân phối 5x - 7 = 2x + 8 => 3x = 15 => x = 5."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy tính toán: Nhầm 8 + 7 thành 9 hoặc chia sai hệ số 3."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy quên phân phối: 5(x - 2) viết thành 5x - 2."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy dấu khi chuyển vế."
+          }
+        ],
+        "title": "Phương trình bậc nhất (Linear Equations)",
+        "full_passage": "",
+        "passage": "",
+        "question": "Solve for x: 5(x - 2) + 3 = 2(x + 4)",
+        "explanation_vi": "Khai triển hai vế:\n5(x - 2) + 3 = 5x - 10 + 3 = 5x - 7.\n2(x + 4) = 2x + 8.\nPhương trình trở thành: 5x - 7 = 2x + 8.\nChuyển vế: 5x - 2x = 8 + 7 => 3x = 15 => x = 5."
+      },
+      "createdAt": "2026-06-30T18:51:15.636Z",
+      "usageCount": 0
+    },
+    {
+      "id": "f04c0781a539b7d1",
+      "moduleType": "vocab",
+      "topic": "Words in Context",
+      "data": {
+        "title": "Words in Context Practice",
+        "full_passage": "The scientist's findings were so __________ that they changed the way we understand climate change. Many experts were left in disbelief, as the evidence contradicted long-held beliefs.",
+        "archaic_words": [],
+        "practice_question": "Which word best fits the blank in the passage?",
+        "choices": [
+          "A. inconsequential",
+          "B. groundbreaking",
+          "C. ambiguous",
+          "D. trivial"
+        ],
+        "correct_choice": "B. groundbreaking",
+        "explanation": "The word 'groundbreaking' fits best in the context as it suggests that the findings were innovative and significant, leading to a change in understanding.",
+        "difficulty": "Medium",
+        "trapRate": 65,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": false,
+            "analysis": "Bẫy đối lập: 'inconsequential' nghĩa là không quan trọng, mâu thuẫn với việc làm thay đổi nhận thức toàn ngành."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: 'groundbreaking' mô tả phát hiện mang tính đột phá, khai mở hướng đi mới."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy nghĩa mờ nhạt: 'ambiguous' (mơ hồ) không tương thích với bằng chứng đủ mạnh để thay đổi quan điểm."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy đối lập: 'trivial' (tầm thường, vặt vãnh) trái ngược hoàn toàn ý đồ câu văn."
+          }
+        ],
+        "passage": "The scientist's findings were so __________ that they changed the way we understand climate change. Many experts were left in disbelief, as the evidence contradicted long-held beliefs.",
+        "question": "Which word best fits the blank in the passage?",
+        "explanation_vi": "Văn bản nêu rõ phát hiện của nhà khoa học đã làm thay đổi cách chúng ta hiểu về biến đổi khí hậu ('changed the way we understand') và đi ngược lại các niềm tin lâu đời. Từ 'groundbreaking' (mang tính đột phá, mang tính tiên phong) là lựa chọn hoàn hảo nhất trong ngữ cảnh này."
+      },
+      "createdAt": "2026-07-01T03:13:18.926Z",
+      "usageCount": 0
+    },
+    {
+      "id": "0a7d7e42c65a1e11",
+      "moduleType": "vocab",
+      "topic": "Words in Context",
+      "data": {
+        "title": "Words in Context Practice",
+        "full_passage": "In the midst of the bustling city, the old library stood as a _______ to the past, its ancient walls whispering stories of a time long gone.",
+        "archaic_words": [
+          {
+            "word": "whispering",
+            "meaning": "nói thầm, thì thầm"
+          }
+        ],
+        "practice_question": "What word best fits in the blank?",
+        "choices": [
+          "A. monument",
+          "B. distraction",
+          "C. hindrance",
+          "D. illusion"
+        ],
+        "correct_choice": "A. monument",
+        "explanation": "The word 'monument' fits best in the context, as it suggests that the library is a significant reminder of history.",
+        "difficulty": "Medium",
+        "trapRate": 65,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: 'monument' mang nghĩa tượng đài, biểu tượng trường tồn để tưởng nhớ lịch sử."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy nghĩa tiêu cực: 'distraction' (sự xao nhãng) không mang hàm ý tôn vinh giá trị lịch sử."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy nghĩa tiêu cực: 'hindrance' (sự cản trở) sai lệch sắc thái tôn kính."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy ảo ảnh: 'illusion' (ảo tưởng) phủ nhận sự tồn tại thực tế của thư viện."
+          }
+        ],
+        "passage": "In the midst of the bustling city, the old library stood as a _______ to the past, its ancient walls whispering stories of a time long gone.",
+        "question": "What word best fits in the blank?",
+        "explanation_vi": "Ngữ cảnh miêu tả thư viện cổ kính đứng sừng sững giữa thành phố hiện đại như một chứng nhân lưu giữ quá khứ ('whispering stories of a time long gone'). Cụm từ 'stood as a monument to the past' (đứng như một tượng đài / chứng nhân của quá khứ) là chuẩn thành ngữ và phù hợp ngữ nghĩa nhất."
+      },
+      "createdAt": "2026-07-01T03:14:00.894Z",
+      "usageCount": 0
+    },
+    {
+      "id": "cee9e930556c650c",
+      "moduleType": "math",
+      "topic": "Phương trình bậc nhất một ẩn (Linear Equations in One Variable)",
+      "data": {
+        "concept_name": "Phương trình bậc nhất một ẩn",
+        "theory": "Phương trình bậc nhất một ẩn có dạng tổng quát là $ax + b = 0$, trong đó $a$ và $b$ là các hằng số, và $x$ là biến. Để giải phương trình này, ta cần tìm giá trị của $x$ sao cho phương trình trở thành đúng. Quy trình giải phương trình bậc nhất bao gồm việc cô lập biến $x$ bằng cách thực hiện các phép toán hợp lệ trên cả hai vế của phương trình.",
+        "sample_example": "Giải phương trình $3x - 5 = 7$. Đầu tiên, ta cộng 5 vào cả hai vế: $3x - 5 + 5 = 7 + 5$, dẫn đến $3x = 12$. Sau đó, ta chia cả hai vế cho 3: $x = \\frac{12}{3} = 4$. Vậy nghiệm của phương trình là $x = 4$.",
+        "practice_question": "Solve for x: 2(3x - 4) = 4(x + 1) - 2.",
+        "choices": [
+          "A) 5",
+          "B) 2",
+          "C) 3",
+          "D) 4"
+        ],
+        "correct_choice": "A) 5",
+        "explanation": "Để giải phương trình, ta bắt đầu với $2(3x - 4) = 4(x + 1) - 2$. Mở rộng cả hai vế: $6x - 8 = 4x + 4 - 2$. Rút gọn bên phải: $6x - 8 = 4x + 2$. Chuyển $4x$ sang bên trái và $-8$ sang bên phải: $6x - 4x = 2 + 8$. Ta được $2x = 10$, chia cả hai vế cho 2 ta có $x = 5$. Kiểm tra lại: $2(3(5) - 4) = 22$ và $4(5 + 1) - 2 = 22$. Vậy đáp án đúng là A) 5.",
+        "difficulty": "Medium",
+        "trapRate": 40,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Khai triển 6x - 8 = 4x + 2 => 2x = 10 => x = 5."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy tính toán: Nhầm lẫn dấu khi chuyển -8 sang vế phải thành 2 - 8 = -6."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy rút gọn: Rút gọn nhầm 4 - 2 thành 4."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy quên phân phối: 2(3x - 4) thành 6x - 4."
+          }
+        ],
+        "title": "Phương trình bậc nhất một ẩn (Linear Equations in One Variable)",
+        "full_passage": "",
+        "passage": "",
+        "question": "Solve for x: 2(3x - 4) = 4(x + 1) - 2.",
+        "explanation_vi": "Khai triển hai vế phương trình:\n2(3x - 4) = 6x - 8.\n4(x + 1) - 2 = 4x + 4 - 2 = 4x + 2.\nPhương trình trở thành: 6x - 8 = 4x + 2.\nChuyển vế: 6x - 4x = 2 + 8 => 2x = 10 => x = 5."
+      },
+      "createdAt": "2026-07-01T03:29:10.083Z",
+      "usageCount": 0
+    },
+    {
+      "id": "16bdcb7a1fb8ba9c",
+      "moduleType": "math",
+      "topic": "Phương trình bậc nhất một ẩn (Linear Equations in One Variable)",
+      "data": {
+        "concept_name": "Phương trình bậc nhất một ẩn",
+        "theory": "Phương trình bậc nhất một ẩn có dạng tổng quát là $ax + b = 0$, trong đó $a$ và $b$ là các hằng số và $x$ là biến. Để giải phương trình này, ta cần tìm giá trị của $x$ sao cho phương trình trở thành đúng. Quy trình giải thường bao gồm việc chuyển b $b$ sang bên phải và sau đó chia cho $a$.",
+        "sample_example": "Giải phương trình $3x - 6 = 0$.\\nBước 1: Chuyển $-6$ sang bên phải: $3x = 6$.\\nBước 2: Chia cả hai bên cho $3$: $x = 2$.\\nVậy nghiệm của phương trình là $x = 2$.",
+        "practice_question": "Solve for x: 5(x - 2) = 3(x + 4) - 2. What is the value of x?",
+        "choices": [
+          "A) 10",
+          "B) 5",
+          "C) 6",
+          "D) 7"
+        ],
+        "correct_choice": "A) 10",
+        "explanation": "Để giải phương trình $5(x - 2) = 3(x + 4) - 2$, ta thực hiện các bước sau:\nBước 1: Phân phối: $5x - 10 = 3x + 12 - 2$.\nBước 2: Đơn giản hóa bên phải: $5x - 10 = 3x + 10$.\nBước 3: Chuyển $3x$ sang bên trái và $-10$ sang bên phải: $5x - 3x = 10 + 10$.\nBước 4: Đơn giản hóa: $2x = 20$.\nBước 5: Chia cho 2: $x = 10$.\nKiểm tra lại: $5(10 - 2) = 40$ và $3(10 + 4) - 2 = 40$. Vậy đáp án đúng là A) 10.",
+        "difficulty": "Medium",
+        "trapRate": 40,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Khai triển 5x - 10 = 3x + 10 => 2x = 20 => x = 10."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy triệt tiêu nhầm: Nhầm 10 + 10 thành 10 - 10 = 0."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy tính toán sai khi chuyển vế và rút gọn."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy quên phân phối: 3(x + 4) thành 3x + 4."
+          }
+        ],
+        "title": "Phương trình bậc nhất một ẩn (Linear Equations in One Variable)",
+        "full_passage": "",
+        "passage": "",
+        "question": "Solve for x: 5(x - 2) = 3(x + 4) - 2. What is the value of x?",
+        "explanation_vi": "Khai triển hai vế:\n5(x - 2) = 5x - 10.\n3(x + 4) - 2 = 3x + 12 - 2 = 3x + 10.\nPhương trình trở thành: 5x - 10 = 3x + 10.\nChuyển vế: 5x - 3x = 10 + 10 => 2x = 20 => x = 10."
+      },
+      "createdAt": "2026-07-01T03:29:44.071Z",
+      "usageCount": 0
+    },
+    {
+      "id": "b12191ff0fe3ae71",
+      "moduleType": "math",
+      "topic": "Phương trình bậc hai, biệt thức Delta & Parabol (Quadratic Equations)",
+      "data": {
+        "concept_name": "Phương trình bậc hai và biệt thức Delta",
+        "theory": "Phương trình bậc hai có dạng tổng quát là $ax^2 + bx + c = 0$, trong đó $a$, $b$, và $c$ là các hệ số thực và $a \\neq 0$. Để giải phương trình này, ta sử dụng biệt thức Delta được tính bằng công thức $\\Delta = b^2 - 4ac$. Tùy thuộc vào giá trị của $\\Delta$, ta có các trường hợp sau: Nếu $\\Delta > 0$, phương trình có hai nghiệm phân biệt; nếu $\\Delta = 0$, phương trình có một nghiệm duy nhất; nếu $\\Delta < 0$, phương trình không có nghiệm thực.",
+        "sample_example": "Giải phương trình $2x^2 - 4x + 2 = 0$. Đầu tiên, ta tính biệt thức Delta: $\\Delta = (-4)^2 - 4 \\cdot 2 \\cdot 2 = 16 - 16 = 0$. Vì $\\Delta = 0$, phương trình có một nghiệm duy nhất. Áp dụng công thức nghiệm: $x = \\frac{-b}{2a} = \\frac{4}{4} = 1$. Vậy nghiệm của phương trình là $x = 1$.",
+        "practice_question": "What are the roots of the equation $3x^2 + 6x + 3 = 0$?",
+        "choices": [
+          "A) -1",
+          "B) -2",
+          "C) -3",
+          "D) 0"
+        ],
+        "correct_choice": "A) -1",
+        "explanation": "To find the roots of the equation $3x^2 + 6x + 3 = 0$, we first calculate the discriminant: $\\Delta = 6^2 - 4 \\cdot 3 \\cdot 3 = 36 - 36 = 0$. Since $\\Delta = 0$, there is one repeated root given by $x = \\frac{-b}{2a} = \\frac{-6}{2 \\cdot 3} = -1$. Therefore, the root is $x = -1$.",
+        "difficulty": "Hard",
+        "trapRate": 85,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Chia cho 3 được x² + 2x + 1 = 0 => (x + 1)² = 0 => x = -1."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy nhầm hệ số: Lấy -b/a = -6/3 = -2 nhưng quên đây là tổng hai nghiệm."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy tính toán với biệt thức Delta."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy kiểm tra x = 0: Thay vào được 3 ≠ 0."
+          }
+        ],
+        "title": "Phương trình bậc hai, biệt thức Delta & Parabol (Quadratic Equations)",
+        "full_passage": "",
+        "passage": "",
+        "question": "What are the roots of the equation $3x^2 + 6x + 3 = 0$?",
+        "explanation_vi": "Chia cả hai vế phương trình cho 3:\nx² + 2x + 1 = 0.\nNhận dạng hằng đẳng thức: (x + 1)² = 0 => x = -1 (nghiệm kép)."
+      },
+      "createdAt": "2026-07-01T04:31:34.466Z",
+      "usageCount": 0
+    },
+    {
+      "id": "03c322bf8d43abbf",
+      "moduleType": "math",
+      "topic": "Phương trình bậc nhất một ẩn (Linear Equations in One Variable)",
+      "data": {
+        "concept_name": "Phương trình bậc nhất một ẩn",
+        "theory": "Phương trình bậc nhất một ẩn có dạng tổng quát là $ax + b = 0$, trong đó $a$ và $b$ là các hệ số thực và $x$ là ẩn cần tìm. Để giải phương trình này, ta cần tách ẩn $x$ ra khỏi các hằng số. Cách làm là đưa các hằng số về một phía và các hệ số của $x$ về phía còn lại, sau đó thực hiện phép chia cho hệ số $a$ (nếu $a \neq 0$).",
+        "sample_example": "Giải phương trình sau: $3x - 7 = 2$. Đầu tiên, ta cộng $7$ vào cả hai vế: $3x = 9$. Sau đó, chia cả hai vế cho $3$: $x = 3$. Vậy nghiệm của phương trình là $x = 3$.",
+        "practice_question": "Solve for x: 5(x - 2) + 3 = 2(x + 4) - 1",
+        "choices": [
+          "A) 14/3",
+          "B) 1",
+          "C) 2",
+          "D) 3"
+        ],
+        "correct_choice": "A) 14/3",
+        "explanation": "To solve the equation, first expand both sides:\n$5x - 10 + 3 = 2x + 8 - 1$\nSimplifying gives: $5x - 7 = 2x + 7$.\nNext, isolate $x$ by subtracting $2x$ from both sides: $3x - 7 = 7$.\nThen, add 7 to both sides: $3x = 14$.\nFinally, divide by 3: $x = \\frac{14}{3}$.\nCheck: $5(14/3 - 2) + 3 = 49/3$ and $2(14/3 + 4) - 1 = 49/3$.\nTherefore, the correct answer is A) 14/3.",
+        "difficulty": "Hard",
+        "trapRate": 85,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: 5x - 7 = 2x + 7 => 3x = 14 => x = 14/3."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy nhầm dấu: 7 - 7 = 0 hoặc nhầm lẫn khi rút gọn."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy số nguyên gần đúng."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy làm tròn 14/3 thành 3 hoặc 4."
+          }
+        ],
+        "title": "Phương trình bậc nhất một ẩn (Linear Equations in One Variable)",
+        "full_passage": "",
+        "passage": "",
+        "question": "Solve for x: 5(x - 2) + 3 = 2(x + 4) - 1",
+        "explanation_vi": "Khai triển cả hai vế:\nVế trái: 5x - 10 + 3 = 5x - 7.\nVế phải: 2x + 8 - 1 = 2x + 7.\nPhương trình: 5x - 7 = 2x + 7.\nChuyển vế: 5x - 2x = 7 + 7 => 3x = 14 => x = 14/3."
+      },
+      "createdAt": "2026-07-02T07:51:53.746Z",
+      "usageCount": 0
+    },
+    {
+      "id": "4a15177a9b3f1a96",
+      "moduleType": "math",
+      "topic": "Heart of Algebra (Đại số cốt lõi)",
+      "data": {
+        "title": "Heart of Algebra (Đại số cốt lõi)",
+        "full_passage": "",
+        "passage": "",
+        "practice_question": "A caterer charges a flat setup fee of $120 plus $18 per guest for a banquet dinner. If the total cost was $1,200, which equation represents this situation in terms of the number of guests, g, and what is the value of g?",
+        "question": "A caterer charges a flat setup fee of $120 plus $18 per guest for a banquet dinner. If the total cost was $1,200, which equation represents this situation in terms of the number of guests, g, and what is the value of g?",
+        "choices": [
+          "A) 18g + 120 = 1,200; g = 60",
+          "B) 120g + 18 = 1,200; g = 10",
+          "C) 18g - 120 = 1,200; g = 73",
+          "D) 18g + 120 = 1,200; g = 66"
+        ],
+        "correct_choice": "A) 18g + 120 = 1,200; g = 60",
+        "explanation": "The flat fee is $120 (constant term) and each guest costs $18 (variable rate), so the total cost equation is 18g + 120 = 1,200. Solving for g: 18g = 1,200 - 120 = 1,080 => g = 1,080 / 18 = 60 guests.",
+        "explanation_vi": "Phí thiết lập cố định là $120 và mỗi khách là $18, do đó phương trình tổng chi phí là 18g + 120 = 1,200. Trừ 120 ở cả hai vế: 18g = 1,080 => g = 1,080 / 18 = 60 khách.",
+        "difficulty": "Easy",
+        "trapRate": 20,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Thiết lập đúng phương trình 18g + 120 = 1,200 và giải đúng g = 60."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy gán nhầm biến: Gán hệ số biến số cho phí cố định (120g + 18)."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy dấu: Nhầm phép cộng phí cố định thành phép trừ (- 120)."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy tính toán: Phương trình đúng nhưng chia nhầm 1,080 / 18 thành 66."
+          }
+        ],
+        "domain": "Math",
+        "skill": "Heart of Algebra (Đại số cốt lõi)",
+        "section": "math",
+        "concept_name": "Mô hình hóa chi phí tuyến tính (Linear Cost Modeling)",
+        "theory": "Phương trình tuyến tính dạng $C(x) = mx + b$ biểu diễn mối quan hệ chi phí, trong đó $m$ là đơn giá biến đổi cho mỗi đơn vị sản phẩm $x$, và $b$ là chi phí cố định ban đầu không đổi.",
+        "sample_example": "Một công ty thuê bao xe tính phí cố định 15 đô la và 0.25 đô la cho mỗi dặm đi được. Phương trình tổng chi phí cho $d$ dặm là $C = 0.25d + 15$."
+      },
+      "createdAt": "2026-11-08T14:10:35.638Z",
+      "usageCount": 0
+    },
+    {
+      "id": "b5f0166fa659102c",
+      "moduleType": "math",
+      "topic": "Problem-Solving and Data Analysis (Giải quyết vấn đề và Phân tích dữ liệu)",
+      "data": {
+        "title": "Problem-Solving and Data Analysis (Giải quyết vấn đề và Phân tích dữ liệu)",
+        "full_passage": "",
+        "passage": "",
+        "practice_question": "In a survey of 200 high school students, 120 are enrolled in an art class and 80 are not. Of the students enrolled in an art class, 48 also play a musical instrument. If a student enrolled in an art class is chosen at random, what is the probability that this student also plays a musical instrument?",
+        "question": "In a survey of 200 high school students, 120 are enrolled in an art class and 80 are not. Of the students enrolled in an art class, 48 also play a musical instrument. If a student enrolled in an art class is chosen at random, what is the probability that this student also plays a musical instrument?",
+        "choices": [
+          "A) 2/5",
+          "B) 6/25",
+          "C) 3/5",
+          "D) 12/25"
+        ],
+        "correct_choice": "A) 2/5",
+        "explanation": "The condition specifies that the student is chosen from those enrolled in an art class. Thus, the sample space is restricted to 120 students. Among these 120 students, 48 play an instrument. The probability is 48 / 120 = 2 / 5 = 0.4.",
+        "explanation_vi": "Đề bài yêu cầu chọn ngẫu nhiên từ nhóm 'học sinh tham gia lớp mỹ thuật', nên tổng số học sinh của không gian mẫu thu hẹp lại là 120 (không phải 200). Số học sinh chơi nhạc cụ trong nhóm này là 48. Xác suất là 48 / 120 = 2 / 5.",
+        "difficulty": "Medium",
+        "trapRate": 45,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Xác suất có điều kiện lấy 48 chia cho số học sinh lớp mỹ thuật 120 = 2/5."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy không gian mẫu toàn thể: Lấy 48 chia cho tổng 200 học sinh (48/200 = 6/25), bỏ qua điều kiện giới hạn."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy phần bù: Tính xác suất học sinh KHÔNG chơi nhạc cụ (72/120 = 3/5)."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy tính toán phân số: Rút gọn sai 48/120."
+          }
+        ],
+        "domain": "Math",
+        "skill": "Problem-Solving and Data Analysis (Giải quyết vấn đề và Phân tích dữ liệu)",
+        "section": "math",
+        "concept_name": "Xác suất có điều kiện từ bảng tần số hai chiều (Two-Way Tables)",
+        "theory": "Xác suất có điều kiện $P(A|B)$ là xác suất biến cố A xảy ra khi đã biết biến cố B xảy ra: $P(A|B) = \\frac{N(A \\cap B)}{N(B)}$. Trong bảng hai chiều, không gian mẫu bị thu hẹp lại chỉ trong hàng hoặc cột của điều kiện B.",
+        "sample_example": "Nếu trong 40 học sinh tham gia câu lạc bộ Khoa học có 25 nữ và 15 nam, xác suất chọn ngẫu nhiên được một nữ từ nhóm học sinh câu lạc bộ Khoa học là 25/40 = 5/8."
+      },
+      "createdAt": "2026-11-08T14:10:35.639Z",
+      "usageCount": 0
+    },
+    {
+      "id": "756d1da805c75d86",
+      "moduleType": "math",
+      "topic": "Advanced Math (Toán cao cấp: Đa thức & Biểu thức hữu tỉ)",
+      "data": {
+        "title": "Advanced Math (Toán cao cấp: Đa thức & Biểu thức hữu tỉ)",
+        "full_passage": "",
+        "passage": "",
+        "practice_question": "Which of the following expressions is equivalent to $\\frac{4x^2 - 2x + 5}{2x - 1}$ for $x > 1$?",
+        "question": "Which of the following expressions is equivalent to $\\frac{4x^2 - 2x + 5}{2x - 1}$ for $x > 1$?",
+        "choices": [
+          "A) 2x + \\frac{5}{2x - 1}",
+          "B) 2x - 1 + \\frac{4}{2x - 1}",
+          "C) 2x + 1 + \\frac{6}{2x - 1}",
+          "D) 2x - 2 + \\frac{3}{2x - 1}"
+        ],
+        "correct_choice": "A) 2x + \\frac{5}{2x - 1}",
+        "explanation": "Perform polynomial long division: Divide 4x^2 - 2x by (2x - 1). Notice 2x(2x - 1) = 4x^2 - 2x. Thus, (4x^2 - 2x + 5) / (2x - 1) = [2x(2x - 1) + 5] / (2x - 1) = 2x + 5 / (2x - 1).",
+        "explanation_vi": "Ta tách tử số: $4x^2 - 2x + 5 = 2x(2x - 1) + 5$. Khi chia cho $(2x - 1)$, ta được thương là $2x$ và phần dư là $5$. Do đó biểu thức tương đương là $2x + \\frac{5}{2x - 1}$.",
+        "difficulty": "Hard",
+        "trapRate": 65,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Tách $4x^2 - 2x = 2x(2x - 1)$, do đó phân thức bằng $2x + \\frac{5}{2x - 1}$."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy phép chia: Nhầm lẫn bước hạ bậc thương dẫn đến dư 4."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy dấu phần dư: Đổi dấu sai khi trừ đa thức."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy đoán mò giá trị: Chọn thương có hằng số -2 mà không nhân kiểm tra lại."
+          }
+        ],
+        "domain": "Math",
+        "skill": "Advanced Math (Toán cao cấp: Đa thức & Biểu thức hữu tỉ)",
+        "section": "math",
+        "concept_name": "Chia đa thức và biểu thức hữu tỉ tương đương (Rational Expressions)",
+        "theory": "Khi chia đa thức $P(x)$ cho nhị thức $(x - c)$, ta có dạng: $\\frac{P(x)}{x - c} = Q(x) + \\frac{R}{x - c}$, trong đó $Q(x)$ là thương và hằng số $R = P(c)$ là phần dư (Định lý phần dư Polynomial Remainder Theorem).",
+        "sample_example": "Biểu diễn $\\frac{2x + 7}{x + 2} = \\frac{2(x + 2) + 3}{x + 2} = 2 + \\frac{3}{x + 2}$."
+      },
+      "createdAt": "2026-11-08T14:10:35.639Z",
+      "usageCount": 0
+    },
+    {
+      "id": "b2de00fd40bfbb49",
+      "moduleType": "math",
+      "topic": "Geometry and Trigonometry (Hình học & Lượng giác)",
+      "data": {
+        "title": "Geometry and Trigonometry (Hình học & Lượng giác)",
+        "full_passage": "",
+        "passage": "",
+        "practice_question": "The equation $x^2 + y^2 - 8x + 10y - 7 = 0$ defines a circle in the xy-plane. What is the length of the radius of the circle?",
+        "question": "The equation $x^2 + y^2 - 8x + 10y - 7 = 0$ defines a circle in the xy-plane. What is the length of the radius of the circle?",
+        "choices": [
+          "A) 7",
+          "B) 49",
+          "C) \\sqrt{41}",
+          "D) 8"
+        ],
+        "correct_choice": "A) 7",
+        "explanation": "Complete the squares for x and y:\n(x^2 - 8x + 16) + (y^2 + 10y + 25) = 7 + 16 + 25\n(x - 4)^2 + (y + 5)^2 = 48 + 1 = 49.\nSince r^2 = 49, the radius r = sqrt(49) = 7.",
+        "explanation_vi": "Hoàn thành bình phương cho x và y:\n$(x^2 - 8x + 16) + (y^2 + 10y + 25) = 7 + 16 + 25 = 49$.\nTa có phương trình chính tắc $(x - 4)^2 + (y + 5)^2 = 7^2$.\nBán kính đường tròn là $r = \\sqrt{49} = 7$.",
+        "difficulty": "Medium",
+        "trapRate": 50,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Hoàn thiện bình phương đưa về $r^2 = 49 \\Rightarrow r = 7$."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy quên lấy căn: 49 là $r^2$, đề hỏi bán kính $r$ nên phải khai căn."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy quên cộng hằng số tự do 7: Chỉ cộng 16 + 25 = 41 rồi lấy $\\sqrt{41}$."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy ước lượng sai."
+          }
+        ],
+        "domain": "Math",
+        "skill": "Geometry and Trigonometry (Hình học & Lượng giác)",
+        "section": "math",
+        "concept_name": "Phương trình đường tròn & Bổ sung bình phương (Completing the Square)",
+        "theory": "Phương trình đường tròn chính tắc có dạng $(x - h)^2 + (y - k)^2 = r^2$ với tâm $(h, k)$ và bán kính $r > 0$. Khi phương trình cho ở dạng khai triển $x^2 + y^2 + Dx + Ey + F = 0$, ta hoàn thành bình phương để tìm $r = \\sqrt{(D/2)^2 + (E/2)^2 - F}$.",
+        "sample_example": "Cho $x^2 + y^2 - 6x + 8y = 0$. Nhóm lại: $(x^2 - 6x + 9) + (y^2 + 8y + 16) = 9 + 16 = 25$. Vậy $(x - 3)^2 + (y + 4)^2 = 5^2$, bán kính $r = 5$."
+      },
+      "createdAt": "2026-11-08T14:10:35.639Z",
+      "usageCount": 0
+    },
+    {
+      "id": "bbc0f70a32c19a91",
+      "moduleType": "math",
+      "topic": "Problem-Solving and Data Analysis (Giải quyết vấn đề và Phân tích dữ liệu)",
+      "data": {
+        "title": "Problem-Solving and Data Analysis (Giải quyết vấn đề và Phân tích dữ liệu)",
+        "full_passage": "",
+        "passage": "",
+        "practice_question": "A certain medication degrades in the human body such that the amount remaining, M, in milligrams, after t hours is modeled by $M(t) = 240(0.85)^t$. Which of the following statements best describes the behavior of the medication?",
+        "question": "A certain medication degrades in the human body such that the amount remaining, M, in milligrams, after t hours is modeled by $M(t) = 240(0.85)^t$. Which of the following statements best describes the behavior of the medication?",
+        "choices": [
+          "A) The initial amount of medication is 240 mg, and it decreases by 15% each hour.",
+          "B) The initial amount of medication is 240 mg, and it decreases by 85% each hour.",
+          "C) The initial amount of medication is 204 mg, and it decreases by 15% each hour.",
+          "D) The initial amount of medication is 240 mg, and it decreases by 0.15 mg each hour."
+        ],
+        "correct_choice": "A) The initial amount of medication is 240 mg, and it decreases by 15% each hour.",
+        "explanation": "In the exponential decay model M(t) = A_0(1 - r)^t, the coefficient 240 represents the initial amount A_0 when t = 0. The decay factor is 0.85 = 1 - 0.15, meaning the medication decreases by 15% every hour.",
+        "explanation_vi": "Trong công thức hàm mũ $M(t) = 240(0.85)^t$, số 240 là lượng thuốc ban đầu tại $t = 0$. Cơ số $0.85 = 1 - 0.15$ thể hiện sau mỗi 1 giờ lượng thuốc còn lại 85%, tức là đã suy giảm $15\\%$ mỗi giờ.",
+        "difficulty": "Hard",
+        "trapRate": 55,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Lượng ban đầu 240 mg, tỷ lệ giảm mỗi giờ là $1 - 0.85 = 0.15 = 15\\%$."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy đồng nhất cơ số: Nhầm cơ số 0.85 là tỷ lệ giảm (giảm 85%), trong khi 0.85 là phần còn lại."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy thay t = 1: Lấy 240 * 0.85 = 204 làm lượng ban đầu."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy giảm tuyến tính: Nhầm lẫn giữa giảm 15% (hàm mũ) với giảm 0.15 mg (tuyến tính)."
+          }
+        ],
+        "domain": "Math",
+        "skill": "Problem-Solving and Data Analysis (Giải quyết vấn đề và Phân tích dữ liệu)",
+        "section": "math",
+        "concept_name": "Mô hình suy giảm hàm số mũ (Exponential Decay)",
+        "theory": "Mô hình suy giảm hàm mũ có dạng $A(t) = A_0(1 - r)^t$ hoặc $A(t) = A_0(b)^{t/k}$, trong đó $A_0$ là giá trị ban đầu, $r$ là tỷ lệ suy giảm mỗi chu kỳ, và $b$ là hệ số suy giảm sau mỗi khoảng thời gian $k$.",
+        "sample_example": "Chất phóng xạ có khối lượng ban đầu 100g và chu kỳ bán rã 5 ngày được mô hình bằng $M(t) = 100(0.5)^{t/5}$."
+      },
+      "createdAt": "2026-11-08T14:10:35.639Z",
+      "usageCount": 0
+    },
+    {
+      "id": "0b53be55ee936250",
+      "moduleType": "math",
+      "topic": "Geometry and Trigonometry (Hình học & Lượng giác)",
+      "data": {
+        "title": "Geometry and Trigonometry (Hình học & Lượng giác)",
+        "full_passage": "",
+        "passage": "",
+        "practice_question": "In a right triangle, angle A and angle B are acute angles. If $\\sin(A) = \\frac{5}{13}$, what is the value of $\\cos(B)$?",
+        "question": "In a right triangle, angle A and angle B are acute angles. If $\\sin(A) = \\frac{5}{13}$, what is the value of $\\cos(B)$?",
+        "choices": [
+          "A) 5/13",
+          "B) 12/13",
+          "C) 13/5",
+          "D) 1/13"
+        ],
+        "correct_choice": "A) 5/13",
+        "explanation": "In any right triangle with acute angles A and B, the angles are complementary: A + B = 90 degrees. Therefore, sin(A) = cos(90 - A) = cos(B). Since sin(A) = 5/13, cos(B) = 5/13.",
+        "explanation_vi": "Trong tam giác vuông, hai góc nhọn A và B phụ nhau ($A + B = 90^\\circ$). Theo tính chất lượng giác của hai góc phụ nhau, $\\sin(A) = \\cos(B)$. Do đó khi $\\sin(A) = \\frac{5}{13}$, ta có ngay $\\cos(B) = \\frac{5}{13}$.",
+        "difficulty": "Medium",
+        "trapRate": 40,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Đáp án chính xác: Hai góc phụ nhau trong tam giác vuông thỏa mãn $\\cos(B) = \\sin(A) = 5/13$."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Bẫy tính cos(A): Tính $\\cos(A) = \\sqrt{1 - (5/13)^2} = 12/13$ thay vì $\\cos(B)$."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Bẫy nghịch đảo: Lấy nghịch đảo $\\frac{13}{5}$."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Bẫy suy đoán sai tỉ lệ."
+          }
+        ],
+        "domain": "Math",
+        "skill": "Geometry and Trigonometry (Hình học & Lượng giác)",
+        "section": "math",
+        "concept_name": "Quan hệ lượng giác của hai góc phụ nhau (Complementary Angle Theorem)",
+        "theory": "Đối với hai góc phụ nhau có tổng bằng $90^\\circ$ (hoặc $\\frac{\\pi}{2}$ radian), sin của góc này bằng cosin của góc kia: $\\sin(x) = \\cos(90^\\circ - x)$ và $\\sin(\\frac{\\pi}{2} - x) = \\cos(x)$.",
+        "sample_example": "Nếu $\\sin(35^\\circ) = k$, thì $\\cos(55^\\circ) = k$ vì $35^\\circ + 55^\\circ = 90^\\circ$."
+      },
+      "createdAt": "2026-11-08T14:10:35.639Z",
+      "usageCount": 0
+    },
+    {
+      "id": "4e9889c493270503",
+      "moduleType": "literature",
+      "topic": "Text Structure and Purpose",
+      "data": {
+        "title": "Craft and Structure - Text Structure and Purpose",
+        "full_passage": "The following text is adapted from Frances Hodgson Burnett's 1911 novel The Secret Garden. Mary Lennox, a sour and neglected ten-year-old born in India, has recently arrived at her uncle's manor in Yorkshire, England.\n\nAt first each day which passed by for Mary Lennox was exactly like the others. Every morning she awoke in her tapestried room and found Martha kneeling upon the hearth building her fire; every morning she ate her breakfast in the nursery which had nothing amusing in it; and after each breakfast she gazed out of the window across the huge, purplish sea of heather which the cold wind seemed to whip into endless restless motion.",
+        "passage": "The following text is adapted from Frances Hodgson Burnett's 1911 novel The Secret Garden. Mary Lennox, a sour and neglected ten-year-old born in India, has recently arrived at her uncle's manor in Yorkshire, England.\n\nAt first each day which passed by for Mary Lennox was exactly like the others. Every morning she awoke in her tapestried room and found Martha kneeling upon the hearth building her fire; every morning she ate her breakfast in the nursery which had nothing amusing in it; and after each breakfast she gazed out of the window across the huge, purplish sea of heather which the cold wind seemed to whip into endless restless motion.",
+        "practice_question": "Which choice best describes the main function of the text?",
+        "question": "Which choice best describes the main function of the text?",
+        "choices": [
+          "To depict the monotonous routine and bleak isolation of Mary's early days at the manor.",
+          "To illustrate Mary's fascination with the natural beauty of the Yorkshire landscape.",
+          "To demonstrate Martha's deep affection and attentiveness toward Mary.",
+          "To explain why Mary decided to rebel against her uncle's household rules."
+        ],
+        "correct_choice": "To depict the monotonous routine and bleak isolation of Mary's early days at the manor.",
+        "explanation": "The text emphasizes that 'each day... was exactly like the others' and details repetitive morning events (the fire, the nursery with 'nothing amusing', and staring at the bleak, cold moors). This serves to establish the monotony and loneliness of Mary's initial experience.",
+        "explanation_vi": "Đoạn trích nhấn mạnh 'mỗi ngày trôi qua với Mary Lennox đều y hệt như những ngày khác' và miêu tả các sinh hoạt sáng lặp đi lặp lại trong căn phòng ảm đạm cùng phong cảnh đồng hoang hoang vu, lạnh lẽo. Chức năng chính là phác họa sự đơn điệu, tẻ nhạt và cô lập của Mary tại trang viên.",
+        "difficulty": "Easy",
+        "trapRate": 20,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Đoạn văn mô tả chuỗi ngày lặp lại đơn điệu và cảm giác lạnh lẽo, cô đơn của Mary."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Mary nhìn cánh đồng thạch nam với vẻ xa cách và lạnh lẽo ('whip into endless restless motion'), không hề say mê thích thú."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Martha chỉ đang làm nhiệm vụ nhóm lửa buổi sáng thông thường, không thể hiện tình cảm gắn bó sâu sắc."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Đoạn văn chưa hề đề cập đến hành vi nổi loạn chống lại quy tắc của người chú."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Craft and Structure",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "6be662f405c11b1d",
+      "moduleType": "literature",
+      "topic": "Cross-Text Connections",
+      "data": {
+        "title": "Craft and Structure - Cross-Text Connections",
+        "full_passage": "Text 1\nMany art historians argue that the introduction of synthetic cobalt blue pigment in the early nineteenth century revolutionized European landscape painting. Before this innovation, artists relied on expensive, fragile lapis lazuli or unstable smalt, which severely constrained their outdoor palettes. With an affordable, stable blue readily available in portable tubes, painters could capture atmospheric shifts en plein air with unprecedented spontaneity.\n\nText 2\nWhile synthetic pigments certainly expanded the accessibility of vivid hues, chemical analyses of canvases from the 1820s and 1830s suggest that stylistic adoption lagged significantly behind commercial availability. Master painters frequently distrusted the chemical longevity of factory-prepared paints, preferring traditional workshop formulations until rigorous field trials in subsequent decades established synthetic pigments' permanence.",
+        "passage": "Text 1\nMany art historians argue that the introduction of synthetic cobalt blue pigment in the early nineteenth century revolutionized European landscape painting. Before this innovation, artists relied on expensive, fragile lapis lazuli or unstable smalt, which severely constrained their outdoor palettes. With an affordable, stable blue readily available in portable tubes, painters could capture atmospheric shifts en plein air with unprecedented spontaneity.\n\nText 2\nWhile synthetic pigments certainly expanded the accessibility of vivid hues, chemical analyses of canvases from the 1820s and 1830s suggest that stylistic adoption lagged significantly behind commercial availability. Master painters frequently distrusted the chemical longevity of factory-prepared paints, preferring traditional workshop formulations until rigorous field trials in subsequent decades established synthetic pigments' permanence.",
+        "practice_question": "Based on the texts, how would the author of Text 2 most likely respond to the claim made in Text 1 regarding nineteenth-century landscape painting?",
+        "question": "Based on the texts, how would the author of Text 2 most likely respond to the claim made in Text 1 regarding nineteenth-century landscape painting?",
+        "choices": [
+          "By asserting that the practical adoption of synthetic pigments by painters was much slower than Text 1 suggests due to concerns about paint durability.",
+          "By arguing that synthetic cobalt blue was too expensive for most landscape painters to afford.",
+          "By demonstrating that landscape painters continued to prefer smalt over all other blue pigments throughout the nineteenth century.",
+          "By claiming that outdoor landscape painting was fully established well before the invention of synthetic pigments."
+        ],
+        "correct_choice": "By asserting that the practical adoption of synthetic pigments by painters was much slower than Text 1 suggests due to concerns about paint durability.",
+        "explanation": "Text 1 claims synthetic cobalt blue immediately revolutionized landscape painting by providing affordable, portable paint. Text 2 counters that 'stylistic adoption lagged significantly behind commercial availability' because painters 'distrusted the chemical longevity' of synthetic paints.",
+        "explanation_vi": "Text 1 nhận định chất màu xanh coban tổng hợp đã nhanh chóng cách mạng hóa hội họa phong cảnh. Text 2 phản bác lại rằng việc các họa sĩ thực tế ứng dụng chất màu này diễn ra chậm hơn rất nhiều do nghi ngờ về độ bền hóa học và tuổi thọ của sơn công nghiệp.",
+        "difficulty": "Medium",
+        "trapRate": 35,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Tác giả Text 2 chỉ ra độ trễ ứng dụng do các họa sĩ lo ngại về độ bền ('chemical longevity') của chất màu nhân tạo."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Text 2 đồng tình rằng chất màu này dễ tiếp cận hơn ('expanded accessibility'), không nói là quá đắt đỏ."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Text 2 không hề khẳng định họa sĩ tiếp tục ưa chuộng smalt suốt cả thế kỷ."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Đoạn văn không bàn luận về thời điểm ra đời của trường phái vẽ tranh ngoài trời trước đó."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Craft and Structure",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "70297d818c83d664",
+      "moduleType": "literature",
+      "topic": "Central Ideas and Details",
+      "data": {
+        "title": "Information and Ideas - Central Ideas and Details",
+        "full_passage": "Echolocation in microbats is an extraordinarily sophisticated acoustic sensory mechanism. By emitting ultrasonic pulses and analyzing the time delay, frequency shifts, and amplitude variations of the returning echoes, bats can construct a dynamic three-dimensional acoustic map of their surroundings. This capability allows them to detect obstacles as fine as human hairs and calculate the flight trajectory of evasive airborne prey in complete darkness.",
+        "passage": "Echolocation in microbats is an extraordinarily sophisticated acoustic sensory mechanism. By emitting ultrasonic pulses and analyzing the time delay, frequency shifts, and amplitude variations of the returning echoes, bats can construct a dynamic three-dimensional acoustic map of their surroundings. This capability allows them to detect obstacles as fine as human hairs and calculate the flight trajectory of evasive airborne prey in complete darkness.",
+        "practice_question": "According to the text, what enables microbats to construct an accurate mental map of their environment in the dark?",
+        "question": "According to the text, what enables microbats to construct an accurate mental map of their environment in the dark?",
+        "choices": [
+          "Interpreting the acoustic characteristics of returning echoes from their ultrasonic calls.",
+          "Relying primarily on heightened night vision assisted by faint ambient starlight.",
+          "Sensing thermal infrared radiation emitted by the bodies of flying insects.",
+          "Emitting audible clicks that confuse the nervous systems of their nocturnal prey."
+        ],
+        "correct_choice": "Interpreting the acoustic characteristics of returning echoes from their ultrasonic calls.",
+        "explanation": "The text explicitly states that bats emit ultrasonic pulses and analyze 'the time delay, frequency shifts, and amplitude variations of the returning echoes' to build their dynamic 3D map.",
+        "explanation_vi": "Đoạn văn nêu rõ loài dơi phát ra các xung siêu âm rồi phân tích độ trễ thời gian, biến dịch tần số và biên độ của tiếng vang dội lại để dựng bản đồ không gian 3 chiều trong bóng tối.",
+        "difficulty": "Easy",
+        "trapRate": 15,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Đoạn văn trực tiếp đề cập việc phân tích các đặc tính âm học (độ trễ, tần số, biên độ) của tiếng vang dội lại."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Văn bản nói về khả năng định vị bằng sóng âm trong bóng tối hoàn toàn, không phải thị giác ban đêm."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Đoạn văn không hề nhắc đến bức xạ nhiệt hồng ngoại."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Dơi dùng xung siêu âm (ultrasonic), không phải tiếng tách nghe thấy được để làm tê liệt con mồi."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Information and Ideas",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "da3da58be60f10b9",
+      "moduleType": "literature",
+      "topic": "Inferences",
+      "data": {
+        "title": "Information and Ideas - Inferences",
+        "full_passage": "Biologist Elena Torres and colleagues studied the symbiotic relationship between acacia trees (*Vachellia cornigera*) and mutualist ants (*Pseudomyrmex ferrugineus*). The trees produce nutrient-rich food bodies (Beltian bodies) and nectar to feed the ants, while the ants aggressively defend the trees against herbivorous insects and encroaching vines. When the researchers experimentally removed ant colonies from select acacia saplings, the ant-free trees suffered catastrophic leaf destruction within two weeks, whereas adjacent saplings with intact colonies maintained vigorous foliage growth. This contrast strongly implies that ______",
+        "passage": "Biologist Elena Torres and colleagues studied the symbiotic relationship between acacia trees (*Vachellia cornigera*) and mutualist ants (*Pseudomyrmex ferrugineus*). The trees produce nutrient-rich food bodies (Beltian bodies) and nectar to feed the ants, while the ants aggressively defend the trees against herbivorous insects and encroaching vines. When the researchers experimentally removed ant colonies from select acacia saplings, the ant-free trees suffered catastrophic leaf destruction within two weeks, whereas adjacent saplings with intact colonies maintained vigorous foliage growth. This contrast strongly implies that ______",
+        "practice_question": "Which choice most logically completes the text?",
+        "question": "Which choice most logically completes the text?",
+        "choices": [
+          "the acacia saplings are fundamentally dependent on their ant mutualists for protection against devastating herbivory.",
+          "Beltian bodies are produced exclusively during periods when herbivorous insect populations are at their seasonal peak.",
+          "neighboring ant-free saplings will eventually produce toxic secondary metabolites to deter herbivores on their own.",
+          "the presence of mutualist ants reduces the overall growth rate of acacia trees by consuming vital sapling nutrients."
+        ],
+        "correct_choice": "the acacia saplings are fundamentally dependent on their ant mutualists for protection against devastating herbivory.",
+        "explanation": "Because saplings without ants experienced catastrophic defoliation while those with ants thrived, the experiment logically demonstrates that acacia saplings rely critically on ant protection from herbivores.",
+        "explanation_vi": "Cây keo bị tước bỏ kiến đã bị tàn phá lá nghiêm trọng chỉ trong 2 tuần, trong khi cây có đàn kiến bảo vệ vẫn phát triển xanh tốt. Điều này chứng minh cây keo phụ thuộc sống còn vào kiến tương sinh để chống lại động vật ăn thực vật.",
+        "difficulty": "Medium",
+        "trapRate": 25,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Kết quả đối chứng giữa cây có kiến và không có kiến chứng minh sự phụ thuộc sống còn vào kiến bảo vệ."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Bài đọc không hề thảo luận về chu kỳ mùa màng tiết thể Beltian."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Đoạn văn không đề cập việc cây keo tự sản sinh hợp chất thứ cấp độc hại."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Ngược với thực tế, cây có kiến phát triển cành lá sung mãn ('vigorous foliage growth')."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Information and Ideas",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "87d80e0dd82ace95",
+      "moduleType": "literature",
+      "topic": "Inferences",
+      "data": {
+        "title": "Information and Ideas - Inferences",
+        "full_passage": "Archaeologists evaluating ancient agrarian productivity along the Euphrates River often rely on macrobotanical remains of barley and emmer wheat preserved in burnt storage pits. However, paleobotanist Dr. Kenji Sato notes that burning events were rarely accidental or uniform across settlements; domestic hearths burned everyday culinary discards, whereas communal granary conflagrations preserved massive, uncleaned crop batches. Consequently, Sato cautions that estimating relative crop cultivation ratios purely from the aggregate density of carbonized seeds across different excavation trenches risks ______",
+        "passage": "Archaeologists evaluating ancient agrarian productivity along the Euphrates River often rely on macrobotanical remains of barley and emmer wheat preserved in burnt storage pits. However, paleobotanist Dr. Kenji Sato notes that burning events were rarely accidental or uniform across settlements; domestic hearths burned everyday culinary discards, whereas communal granary conflagrations preserved massive, uncleaned crop batches. Consequently, Sato cautions that estimating relative crop cultivation ratios purely from the aggregate density of carbonized seeds across different excavation trenches risks ______",
+        "practice_question": "Which choice most logically completes the text?",
+        "question": "Which choice most logically completes the text?",
+        "choices": [
+          "conflating the specific social and domestic contexts of seed carbonization with true regional agricultural prominence.",
+          "underestimating the nutritional value of barley compared to emmer wheat in the Bronze Age diet.",
+          "failing to distinguish between wild forage plants and systematically cultivated cereals.",
+          "overlooking modern contamination introduced during dry-sieving and laboratory flotation procedures."
+        ],
+        "correct_choice": "conflating the specific social and domestic contexts of seed carbonization with true regional agricultural prominence.",
+        "explanation": "Sato's core point is that burning varied by context (hearth discards vs. communal granary fires). Comparing aggregate seed densities without considering these differing burning circumstances risks confusing the context of preservation with the actual prevalence of crop cultivation.",
+        "explanation_vi": "Lập luận của Sato là việc hạt bị cháy phụ thuộc vào ngữ cảnh cụ thể (rác bếp hàng ngày so với cháy kho thóc tập trung). Do đó, việc chỉ tổng gộp mật độ hạt bị cháy để ước tính tỷ lệ canh tác sẽ dễ bị đánh đồng ngữ cảnh tạo mẫu cháy với quy mô nông nghiệp thực sự.",
+        "difficulty": "Hard",
+        "trapRate": 45,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Nêu đúng bản chất cảnh báo của Sato: nhầm lẫn giữa hoàn cảnh bảo quản mẫu (bếp gia đình vs kho chung) với quy mô gieo trồng thực tế."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Đoạn văn không so sánh giá trị dinh dưỡng giữa đại mạch và lúa mì emmer."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Trọng tâm là hai loại cây đã thuần hóa, không phải việc phân biệt cây hoang dại và cây trồng."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Văn bản không bàn về ô nhiễm mẫu trong quá trình tuyển nổi hoặc sàng lọc ở phòng thí nghiệm hiện đại."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Information and Ideas",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "2c67a75d6eb8a001",
+      "moduleType": "literature",
+      "topic": "Command of Evidence",
+      "data": {
+        "title": "Information and Ideas - Command of Evidence",
+        "full_passage": "In his study of medieval Italian urban architecture, historian Marco Rossi argues that defensive towers built by rival aristocratic families inside fourteenth-century Florence were primarily instruments of domestic surveillance and civic intimidation rather than practical fortifications against external siege armies.",
+        "passage": "In his study of medieval Italian urban architecture, historian Marco Rossi argues that defensive towers built by rival aristocratic families inside fourteenth-century Florence were primarily instruments of domestic surveillance and civic intimidation rather than practical fortifications against external siege armies.",
+        "practice_question": "Which finding from archaeological surveys of surviving fourteenth-century Florentine towers, if true, would most directly support Rossi's argument?",
+        "question": "Which finding from archaeological surveys of surviving fourteenth-century Florentine towers, if true, would most directly support Rossi's argument?",
+        "choices": [
+          "The towers' upper archways and firing slits were oriented exclusively toward neighboring family palazzi and city streets rather than the outer defensive ring walls.",
+          "The towers were constructed using the same masonry techniques and local pietra forte limestone as the city's exterior perimeter ramparts.",
+          "Historical tax registries show that maintaining a tower required an average annual expenditure equal to the wages of ten stonemasons.",
+          "Excavations reveal that the basements of several towers contained grain cisterns sufficient to feed a household for up to six months."
+        ],
+        "correct_choice": "The towers' upper archways and firing slits were oriented exclusively toward neighboring family palazzi and city streets rather than the outer defensive ring walls.",
+        "explanation": "If the firing slits and viewing archways faced inward toward rival palaces and city streets instead of outward toward external invaders, this directly confirms that their purpose was domestic surveillance and intimidation of civic rivals.",
+        "explanation_vi": "Nếu các lỗ châu mai và cửa vòm quan sát chỉ hướng vào dinh thự của các gia tộc đối thủ lân cận và đường phố nội đô thay vì hướng ra tường thành bên ngoài, điều này trực tiếp chứng minh tháp được xây nhằm giám sát và đe dọa các thế lực nội bộ.",
+        "difficulty": "Medium",
+        "trapRate": 28,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Cửa bắn và quan sát hướng vào trong thành phố chứng minh mục đích giám sát nội bộ và đe dọa đối thủ dân sự."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Kỹ thuật xây và vật liệu đá vôi giống tường thành không chứng minh được mục đích đe dọa nội bộ."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Chi phí bảo trì chỉ cho thấy độ giàu có, không chứng minh công năng chiến lược cụ thể."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Bể chứa lương thực chứng minh khả năng phòng thủ chịu vây hãm lâu dài, làm suy yếu lập luận tháp không phải công sự thực tế."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Information and Ideas",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "ed6313f91e05edf5",
+      "moduleType": "literature",
+      "topic": "Command of Evidence",
+      "data": {
+        "title": "Information and Ideas - Command of Evidence",
+        "full_passage": "Ecologist Dr. Priya Nair hypothesized that urban green corridors in tropical megacities significantly enhance avian biodiversity, but only when canopy cover exceeds a threshold density of 40% and human foot traffic is below 150 pedestrians per hour. In her team's survey of twelve designated municipal corridors, Corridor G and Corridor K exhibited avian richness of 38 and 42 species respectively, whereas Corridors A, B, and E each recorded fewer than 14 bird species.",
+        "passage": "Ecologist Dr. Priya Nair hypothesized that urban green corridors in tropical megacities significantly enhance avian biodiversity, but only when canopy cover exceeds a threshold density of 40% and human foot traffic is below 150 pedestrians per hour. In her team's survey of twelve designated municipal corridors, Corridor G and Corridor K exhibited avian richness of 38 and 42 species respectively, whereas Corridors A, B, and E each recorded fewer than 14 bird species.",
+        "practice_question": "Which additional data point, if true, would most strongly substantiate Dr. Nair's specific threshold hypothesis?",
+        "question": "Which additional data point, if true, would most strongly substantiate Dr. Nair's specific threshold hypothesis?",
+        "choices": [
+          "Corridors G and K both featured 55% canopy cover and experienced 80 pedestrians per hour, while Corridors A, B, and E each had 25% canopy cover or over 220 pedestrians per hour.",
+          "Corridors G and K contained a higher variety of ornamental flowering shrubs than Corridors A, B, and E.",
+          "Corridor G had 35% canopy cover and 160 pedestrians per hour, yet supported several rare migratory songbirds.",
+          "Bird counts across all twelve corridors were conducted exclusively at dawn when ambient temperatures were coolest."
+        ],
+        "correct_choice": "Corridors G and K both featured 55% canopy cover and experienced 80 pedestrians per hour, while Corridors A, B, and E each had 25% canopy cover or over 220 pedestrians per hour.",
+        "explanation": "Dr. Nair's hypothesis specifies two concurrent thresholds: canopy cover > 40% AND foot traffic < 150 pedestrians/hr. Showing that high-diversity corridors (G & K) met both criteria (55% cover, 80 pedestrians/hr) while low-diversity corridors (A, B, E) failed one or both criteria (25% cover or >220 pedestrians) directly substantiates the dual-threshold model.",
+        "explanation_vi": "Giả thuyết của Dr. Nair đòi hỏi đồng thời 2 điều kiện: độ che phủ tán cây > 40% VÀ lưu lượng người đi bộ < 150 người/giờ. Dữ liệu chứng minh hành lang đa dạng cao (G & K) thỏa mãn cả 2 ngưỡng (55% tán, 80 người/h) trong khi các hành lang nghèo nàn vi phạm các ngưỡng này là bằng chứng củng cố mạnh nhất.",
+        "difficulty": "Hard",
+        "trapRate": 38,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Khớp hoàn hảo với cả hai ngưỡng định lượng đặt ra trong giả thuyết (>40% tán và <150 người/h)."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Bụi cây cảnh có hoa là yếu tố nhiễu không nằm trong giả thuyết định lượng ban đầu."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Dữ liệu này phản bác trực tiếp giả thuyết (dưới 40% và trên 150 người nhưng vẫn nhiều chim quý)."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Thời điểm đếm lúc bình minh chỉ là phương pháp khảo sát, không chứng minh tính đúng đắn của ngưỡng."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Information and Ideas",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "0d6d671286c39919",
+      "moduleType": "literature",
+      "topic": "Poetry Analysis",
+      "data": {
+        "title": "Craft and Structure - Poetry Analysis",
+        "full_passage": "Read the following poem by Emily Dickinson (c. 1862):\n\n\"Hope\" is the thing with feathers -\nThat perches in the soul -\nAnd sings the tune without the words -\nAnd never stops - at all -\n\nAnd sweetest - in the Gale - is heard -\nAnd sore must be the storm -\nThat could abash the little Bird\nThat kept so many warm -",
+        "passage": "Read the following poem by Emily Dickinson (c. 1862):\n\n\"Hope\" is the thing with feathers -\nThat perches in the soul -\nAnd sings the tune without the words -\nAnd never stops - at all -\n\nAnd sweetest - in the Gale - is heard -\nAnd sore must be the storm -\nThat could abash the little Bird\nThat kept so many warm -",
+        "practice_question": "Which choice best describes the central figurative device and its effect in the poem?",
+        "question": "Which choice best describes the central figurative device and its effect in the poem?",
+        "choices": [
+          "The poet employs an extended metaphor comparing hope to a resilient songbird that endures hardships without faltering.",
+          "The poet uses personification to portray fierce gales as cruel adversaries deliberately attacking helpless wildlife.",
+          "The poet uses hyperbole to exaggerate the destructive physical impact of maritime tempests on human shelters.",
+          "The poet uses paradox to show that having hope is inherently painful during peaceful times."
+        ],
+        "correct_choice": "The poet employs an extended metaphor comparing hope to a resilient songbird that endures hardships without faltering.",
+        "explanation": "Dickinson sustains an extended metaphor throughout both stanzas, portraying hope as a feathered bird that perches in the human soul and sings most sweetly during violent storms ('Gale'), showing its unfaltering resilience.",
+        "explanation_vi": "Dickinson sử dụng ẩn dụ mở rộng xuyên suốt, so sánh niềm hy vọng như một chú chim nhỏ có lông vũ đậu trong tâm hồn, cất tiếng hót không lời và trở nên ngọt ngào, kiên cường nhất chính trong những cơn bão giông cuộc đời.",
+        "difficulty": "Medium",
+        "trapRate": 20,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Bài thơ sử dụng ẩn dụ xuyên suốt (extended metaphor) ví niềm hy vọng như một chú chim kiên cường ca hát qua bão giông."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Cơn gió giông chỉ là biểu tượng cho nghịch cảnh, không phải sự nhân hóa để biến thành kẻ thù tàn độc cố ý hại động vật."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Bài thơ mang ý nghĩa biểu tượng tinh thần, không phóng đại thiệt hại vật chất của bão biển."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Bài thơ không hề cho rằng hy vọng mang lại đau đớn trong thời bình."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Craft and Structure",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "1a4e7220b99d2c6f",
+      "moduleType": "literature",
+      "topic": "Poetry Analysis",
+      "data": {
+        "title": "Craft and Structure - Poetry Analysis",
+        "full_passage": "Read the excerpt from Langston Hughes's 1926 poem \"The Weary Blues\":\n\nDroning a drowsy syncopated tune,\nRocking back and forth to a mellow croon,\n    I heard a Negro play.\nDown on Lenox Avenue the other night\nBy the pale dull pallor of an old gas light\n    He did a lazy sway. . . .\n    He did a lazy sway. . . .\nTo the tune o' those Weary Blues.\nWith his ebony hands on each ivory key\nHe made that poor piano moan with melody.",
+        "passage": "Read the excerpt from Langston Hughes's 1926 poem \"The Weary Blues\":\n\nDroning a drowsy syncopated tune,\nRocking back and forth to a mellow croon,\n    I heard a Negro play.\nDown on Lenox Avenue the other night\nBy the pale dull pallor of an old gas light\n    He did a lazy sway. . . .\n    He did a lazy sway. . . .\nTo the tune o' those Weary Blues.\nWith his ebony hands on each ivory key\nHe made that poor piano moan with melody.",
+        "practice_question": "Which choice best explains how the rhythm and imagery in the excerpt establish the emotional atmosphere?",
+        "question": "Which choice best explains how the rhythm and imagery in the excerpt establish the emotional atmosphere?",
+        "choices": [
+          "The syncopated cadence and evocative sensory details evoke both deep weariness and the expressive, soulful dignity of blues music.",
+          "The erratic tempo and jarring contrasts emphasize the musician's frantic frustration with an unappreciative audience.",
+          "The repetitive refrain conveys a sense of cheerful optimism and carefree urban night celebration.",
+          "The stark contrast between black and white piano keys symbolizes an insurmountable social conflict that silences the performer."
+        ],
+        "correct_choice": "The syncopated cadence and evocative sensory details evoke both deep weariness and the expressive, soulful dignity of blues music.",
+        "explanation": "Hughes uses musical words ('syncopated tune', 'mellow croon', 'lazy sway') and melancholic imagery ('pale dull pallor', 'poor piano moan') to mirror the melancholic yet deeply soulful, expressive dignity of authentic blues performance.",
+        "explanation_vi": "Nhịp điệu đảo phách (syncopated) chậm rãi cùng các chi tiết giác quan giàu cảm xúc ('lazy sway', 'poor piano moan', 'mellow croon') đã tái hiện trọn vẹn nỗi nhọc nhằn, mệt mỏi nhưng đầy phẩm giá và linh hồn sâu lắng của nhạc blues.",
+        "difficulty": "Hard",
+        "trapRate": 35,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Nhịp điệu đảo phách và hình ảnh trầm lắng thể hiện nỗi mỏi mệt sâu sắc cùng vẻ đẹp tâm hồn của nhạc blues."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Nhịp điệu chậm rãi và thư thái ('lazy sway'), không hề bối rối, cuống cuồng hay giận dữ."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Không khí bài thơ mang vẻ u buồn, hoài niệm ('Weary Blues'), không phải tiệc tùng vui vẻ lạc quan."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Phím đàn đen trắng ('ebony hands on each ivory key') hòa quyện tạo nên tiếng nhạc da diết chứ không hề làm người nghệ sĩ bị dập tắt tiếng nói."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Craft and Structure",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "2ff768cca4c70279",
+      "moduleType": "literature",
+      "topic": "Boundaries",
+      "data": {
+        "title": "Standard English Conventions - Boundaries",
+        "full_passage": "During the late Cretaceous period, the Western Interior Seaway split North America into two distinct landmasses: Laramidia to the west and Appalachia to the ______ dynamic marine environment supported giant mosasaurs and plesiosaurs.",
+        "passage": "During the late Cretaceous period, the Western Interior Seaway split North America into two distinct landmasses: Laramidia to the west and Appalachia to the ______ dynamic marine environment supported giant mosasaurs and plesiosaurs.",
+        "practice_question": "Which choice completes the text so that it conforms to the conventions of Standard English?",
+        "question": "Which choice completes the text so that it conforms to the conventions of Standard English?",
+        "choices": [
+          "east. This",
+          "east, this",
+          "east this",
+          "east; which this"
+        ],
+        "correct_choice": "east. This",
+        "explanation": "Two independent clauses are present: 'the Western Interior Seaway split...' and 'This dynamic marine environment supported...'. A period correctly separates the two independent clauses. Choice B is a comma splice, Choice C is a run-on, and Choice D is grammatically ungrammatical.",
+        "explanation_vi": "Câu gồm hai mệnh đề độc lập hoàn chỉnh. Lựa chọn 'east. This' sử dụng dấu chấm để tách hai mệnh đề độc lập đúng chuẩn ngữ pháp. 'east, this' tạo lỗi comma splice (phẩy nối), 'east this' là câu dính (run-on).",
+        "difficulty": "Easy",
+        "trapRate": 18,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Sử dụng dấu chấm phân tách hai mệnh đề độc lập hoàn chỉnh, tránh lỗi comma splice."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Lỗi Comma splice: dùng dấu phẩy nối hai mệnh đề độc lập không có liên từ kết hợp."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Lỗi Run-on sentence: hai mệnh đề độc lập dính liền không có dấu ngắt câu."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Cấu trúc ngữ pháp sai lệch hoàn toàn khi ghép 'which this' sau dấu chấm phẩy."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Standard English Conventions",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "1078ee1f3b5f7c04",
+      "moduleType": "literature",
+      "topic": "Form, Structure, and Sense",
+      "data": {
+        "title": "Standard English Conventions - Form, Structure, and Sense",
+        "full_passage": "Carefully calibrated by chronobiologists to simulate dawn, the light emitted by light-therapy ______ the secretion of melatonin, thereby helping patients suffering from seasonal affective disorder re-establish healthy circadian rhythms.",
+        "passage": "Carefully calibrated by chronobiologists to simulate dawn, the light emitted by light-therapy ______ the secretion of melatonin, thereby helping patients suffering from seasonal affective disorder re-establish healthy circadian rhythms.",
+        "practice_question": "Which choice completes the text so that it conforms to the conventions of Standard English?",
+        "question": "Which choice completes the text so that it conforms to the conventions of Standard English?",
+        "choices": [
+          "lamps suppresses",
+          "lamps suppress",
+          "lamps, suppresses",
+          "lamps, suppressing"
+        ],
+        "correct_choice": "lamps suppresses",
+        "explanation": "The grammatical subject is 'the light' (singular), not the prepositional phrase object 'lamps'. Therefore, the main verb must be singular ('suppresses'). No comma is needed before the main verb.",
+        "explanation_vi": "Chủ ngữ ngữ pháp thực sự là danh từ số ít 'the light' (ánh sáng phát ra từ đèn), không phải danh từ 'lamps' trong cụm giới từ. Vì vậy, động từ chính chia số ít là 'suppresses'. Không dùng dấu phẩy ngăn cách chủ ngữ và vị ngữ chính.",
+        "difficulty": "Medium",
+        "trapRate": 32,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. 'The light' là chủ ngữ số ít đi với động từ số ít 'suppresses', không có dấu phẩy thừa trước vị ngữ."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Bẫy chia theo danh từ gần nhất 'lamps' (số nhiều), nhưng chủ ngữ thực sự là 'light' (số ít)."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Dấu phẩy ngăn cách vô lý giữa cụm danh từ chủ ngữ và động từ chính."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Biến câu thành mệnh đề thiếu động từ chính (sentence fragment) vì dùng dạng V-ing 'suppressing'."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Standard English Conventions",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "9948d826d208ec12",
+      "moduleType": "literature",
+      "topic": "Form, Structure, and Sense",
+      "data": {
+        "title": "Standard English Conventions - Form, Structure, and Sense",
+        "full_passage": "Having analyzed satellite spectroradiometer observations spanning two decades, ______ that deforestation in the southern Amazon directly altered regional rainfall patterns by diminishing evapotranspiration.",
+        "passage": "Having analyzed satellite spectroradiometer observations spanning two decades, ______ that deforestation in the southern Amazon directly altered regional rainfall patterns by diminishing evapotranspiration.",
+        "practice_question": "Which choice completes the text so that it conforms to the conventions of Standard English?",
+        "question": "Which choice completes the text so that it conforms to the conventions of Standard English?",
+        "choices": [
+          "climatologist Luciana Ramos concluded",
+          "the conclusion of climatologist Luciana Ramos was",
+          "regional rainfall patterns were shown by climatologist Luciana Ramos",
+          "the deforestation was identified by climatologist Luciana Ramos as evidence"
+        ],
+        "correct_choice": "climatologist Luciana Ramos concluded",
+        "explanation": "The introductory participial modifier 'Having analyzed satellite spectroradiometer observations spanning two decades' must logically describe the subject that performed the action of analyzing: 'climatologist Luciana Ramos'. In choices B, C, and D, the subject following the comma is 'the conclusion', 'regional rainfall patterns', or 'the deforestation', producing dangling modifiers.",
+        "explanation_vi": "Cụm phân từ mở đầu 'Having analyzed...' phải bổ nghĩa cho chủ thể thực hiện hành động phân tích, tức là nhà khí hậu học 'climatologist Luciana Ramos'. Các đáp án B, C, D đều tạo lỗi ngữ pháp 'dangling modifier' (bổ ngữ treo lơ lửng) vì chủ ngữ sau dấu phẩy là 'kết luận', 'hình thế mưa', hoặc 'nạn phá rừng'.",
+        "difficulty": "Hard",
+        "trapRate": 40,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Nhà khí hậu học 'climatologist Luciana Ramos' là chủ thể thực hiện hành động phân tích dữ liệu vệ tinh."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Lỗi dangling modifier: 'kết luận' không thể tự thực hiện hành động phân tích dữ liệu vệ tinh."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Lỗi dangling modifier: 'hình thế mưa khu vực' không tự phân tích dữ liệu vệ tinh."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Lỗi dangling modifier: 'nạn phá rừng' không thể thực hiện hành động phân tích vệ tinh."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Standard English Conventions",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "18ed0ae4bef80cc9",
+      "moduleType": "literature",
+      "topic": "Transitions",
+      "data": {
+        "title": "Expression of Ideas - Transitions",
+        "full_passage": "Unlike traditional lithium-ion batteries, which rely on liquid electrolytes susceptible to leakage and thermal runaway, solid-state batteries utilize non-flammable solid ceramic or polymer conductors. ______, solid-state designs offer substantially higher energy density and improved operational safety under extreme temperatures.",
+        "passage": "Unlike traditional lithium-ion batteries, which rely on liquid electrolytes susceptible to leakage and thermal runaway, solid-state batteries utilize non-flammable solid ceramic or polymer conductors. ______, solid-state designs offer substantially higher energy density and improved operational safety under extreme temperatures.",
+        "practice_question": "Which choice completes the text with the most logical transition?",
+        "question": "Which choice completes the text with the most logical transition?",
+        "choices": [
+          "Consequently",
+          "Nevertheless",
+          "In contrast",
+          "Previously"
+        ],
+        "correct_choice": "Consequently",
+        "explanation": "The first sentence explains the structural advantage of solid-state batteries (non-flammable solid electrolytes). The second sentence states the direct result of this innovation (higher energy density and safety). Therefore, the cause-and-effect transition 'Consequently' is the most logical choice.",
+        "explanation_vi": "Câu thứ nhất giải thích ưu thế cấu tạo của pin thể rắn (dùng chất dẫn rắn không bắt lửa). Câu thứ hai chỉ ra hệ quả trực tiếp từ đặc tính đó (mật độ năng lượng cao hơn và độ an toàn vượt trội). Liên từ biểu thị quan hệ nguyên nhân - kết quả phù hợp nhất là 'Consequently' (Do đó / Kết quả là).",
+        "difficulty": "Easy",
+        "trapRate": 15,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. 'Consequently' thể hiện quan hệ nhân - quả trực tiếp giữa ưu thế cấu tạo và các lợi ích vận hành."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. 'Nevertheless' thể hiện sự nhượng bộ / tương phản, trong khi hai câu mang tính nhân quả bổ trợ."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. 'In contrast' dùng để so sánh ngược lại hai đối tượng, không phù hợp ở đầu câu kết luận hệ quả."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. 'Previously' biểu thị thứ tự thời gian trong quá khứ, không ăn khớp với ngữ cảnh."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Expression of Ideas",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "77430481f69cd810",
+      "moduleType": "literature",
+      "topic": "Rhetorical Synthesis",
+      "data": {
+        "title": "Expression of Ideas - Rhetorical Synthesis",
+        "full_passage": "While researching a topic, a student has taken the following notes:\n- The Antikythera mechanism is an ancient Greek hand-powered mechanical device discovered in a shipwreck in 1901.\n- It dates back to approximately the second century BCE.\n- Modern X-ray tomography revealed that it contained at least 30 intricately meshed bronze gears.\n- The mechanism predicted astronomical positions, lunar phases, and eclipses for calendar purposes.\n- Historians consider it the world's oldest known analog computer.",
+        "passage": "While researching a topic, a student has taken the following notes:\n- The Antikythera mechanism is an ancient Greek hand-powered mechanical device discovered in a shipwreck in 1901.\n- It dates back to approximately the second century BCE.\n- Modern X-ray tomography revealed that it contained at least 30 intricately meshed bronze gears.\n- The mechanism predicted astronomical positions, lunar phases, and eclipses for calendar purposes.\n- Historians consider it the world's oldest known analog computer.",
+        "practice_question": "The student wants to emphasize the technical sophistication of the Antikythera mechanism to an audience unfamiliar with the artifact. Which choice most effectively uses relevant information from the notes to accomplish this goal?",
+        "question": "The student wants to emphasize the technical sophistication of the Antikythera mechanism to an audience unfamiliar with the artifact. Which choice most effectively uses relevant information from the notes to accomplish this goal?",
+        "choices": [
+          "Discovered in an ancient shipwreck in 1901, the Antikythera mechanism dates back to the second century BCE.",
+          "Considered the world's oldest analog computer, the second-century BCE Antikythera mechanism utilized an intricate system of at least 30 bronze gears to accurately predict astronomical events.",
+          "The Antikythera mechanism, an ancient Greek calendar device, was studied extensively using modern X-ray tomography.",
+          "Greek inventors in the second century BCE built mechanical devices for predicting eclipses and lunar phases."
+        ],
+        "correct_choice": "Considered the world's oldest analog computer, the second-century BCE Antikythera mechanism utilized an intricate system of at least 30 bronze gears to accurately predict astronomical events.",
+        "explanation": "The goal is to emphasize the technical sophistication of the artifact. Choice B specifically highlights its status as the world's oldest analog computer and details its intricate 30-gear bronze mechanism used to predict astronomical events, fully addressing the prompt's rhetorical goal.",
+        "explanation_vi": "Mục tiêu là nhấn mạnh độ tinh xảo công nghệ của cỗ máy Antikythera. Lựa chọn B nêu bật danh xưng máy tính cơ học cổ nhất thế giới và mô tả chi tiết hệ thống hơn 30 bánh răng đồng ăn khớp để dự báo các sự kiện thiên văn, đáp ứng chuẩn xác mục tiêu của đề bài.",
+        "difficulty": "Medium",
+        "trapRate": 25,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": false,
+            "analysis": "Sai. Chỉ nêu thời gian và địa điểm phát hiện con tàu đắm, không thể hiện độ tinh xảo cơ khí."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": true,
+            "analysis": "Chính xác. Nêu bật cả danh hiệu 'máy tính analog cổ nhất' lẫn cơ cấu tinh xảo hơn 30 bánh răng đồng dự báo thiên văn."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Tập trung vào công nghệ quét X-ray hiện đại của các nhà khoa học chứ không làm nổi bật cấu tạo của chính cổ vật."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Quá chung chung, không nhắc đến tên cỗ máy Antikythera hay chi tiết kỹ thuật bánh răng bronze đặc sắc."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Expression of Ideas",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "ef9973d489703d8a",
+      "moduleType": "vocab",
+      "topic": "Words in Context",
+      "data": {
+        "title": "Craft and Structure - Words in Context",
+        "full_passage": "Once regarded as luxury novelties reserved for wealthy executives, smartphones have become so ______ in contemporary urban life that civic services, banking, and public transportation now presume universal digital connectivity.",
+        "passage": "Once regarded as luxury novelties reserved for wealthy executives, smartphones have become so ______ in contemporary urban life that civic services, banking, and public transportation now presume universal digital connectivity.",
+        "practice_question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "choices": [
+          "ubiquitous",
+          "prohibitive",
+          "archaic",
+          "sporadic"
+        ],
+        "correct_choice": "ubiquitous",
+        "explanation": "The sentence contrasts the former status of smartphones ('luxury novelties') with their current state, where civic services and transportation presume 'universal digital connectivity'. The word 'ubiquitous' means present, appearing, or found everywhere, which fits perfectly.",
+        "explanation_vi": "Câu văn đối lập tình trạng trước đây của điện thoại thông minh (món đồ xa xỉ hiếm hoi) với hiện tại khi các dịch vụ công cộng đều mặc định ai cũng có kết nối. 'Ubiquitous' (phổ biến khắp nơi / hiện diện khắp chốn) là từ chính xác nhất.",
+        "difficulty": "Easy",
+        "trapRate": 15,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. 'Ubiquitous' có nghĩa là có mặt ở khắp mọi nơi, rất phù hợp với ngữ cảnh 'universal connectivity'."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. 'Prohibitive' (đắt đỏ tới mức ngăn cấm / cấm đoán) mâu thuẫn với ý phổ biến toàn dân."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. 'Archaic' (cổ hủ, lỗi thời) trái ngược với thiết bị công nghệ hiện đại."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. 'Sporadic' (thỉnh thoảng, rải rác rời rạc) trái nghĩa với sự phổ quát."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Craft and Structure",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "aafeb16a0224d0eb",
+      "moduleType": "vocab",
+      "topic": "Words in Context",
+      "data": {
+        "title": "Craft and Structure - Words in Context",
+        "full_passage": "University incubators are specifically designed to ______ interdisciplinary collaboration, bringing together molecular biologists, software engineers, and venture capitalists to accelerate biomedical discoveries.",
+        "passage": "University incubators are specifically designed to ______ interdisciplinary collaboration, bringing together molecular biologists, software engineers, and venture capitalists to accelerate biomedical discoveries.",
+        "practice_question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "choices": [
+          "foster",
+          "hinder",
+          "replicate",
+          "conceal"
+        ],
+        "correct_choice": "foster",
+        "explanation": "The purpose of the incubators is to bring diverse specialists together to 'accelerate biomedical discoveries'. The verb 'foster' means to encourage or promote the development of something desirable, which matches the positive intended goal.",
+        "explanation_vi": "Vườn ươm khởi nghiệp đại học được thiết kế nhằm mục đích thúc đẩy ('foster') sự hợp tác liên ngành để đẩy nhanh các phát minh y sinh.",
+        "difficulty": "Easy",
+        "trapRate": 12,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. 'Foster' nghĩa là nuôi dưỡng, thúc đẩy sự phát triển của sự hợp tác."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. 'Hinder' (cản trở, gây khó khăn) mang ý nghĩa đối nghịch với mục tiêu thúc đẩy."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. 'Replicate' (tái tạo, sao chép) không mang ý nghĩa kích thích hay xúc tiến hợp tác."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. 'Conceal' (che giấu) không hợp lý với hoạt động của vườn ươm sáng tạo."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Craft and Structure",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "8a1e84316ff93538",
+      "moduleType": "vocab",
+      "topic": "Words in Context",
+      "data": {
+        "title": "Craft and Structure - Words in Context",
+        "full_passage": "Unlike stealth predators that rely on cryptic camouflage to ambush prey, poison dart frogs display vibrant, neon-bright coloration that makes them highly ______ against the dark green foliage of the rainforest floor.",
+        "passage": "Unlike stealth predators that rely on cryptic camouflage to ambush prey, poison dart frogs display vibrant, neon-bright coloration that makes them highly ______ against the dark green foliage of the rainforest floor.",
+        "practice_question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "choices": [
+          "conspicuous",
+          "imperceptible",
+          "lethargic",
+          "fragile"
+        ],
+        "correct_choice": "conspicuous",
+        "explanation": "The text contrasts 'cryptic camouflage' with 'vibrant, neon-bright coloration', which clearly makes the frogs stand out and easily visible. 'Conspicuous' means standing out so as to be clearly visible.",
+        "explanation_vi": "Đoạn trích so sánh phương thức ngụy trang ẩn mình với màu sắc rực rỡ neon nổi bật của ếch phi tiêu độc trên nền lá thảm rừng tối màu. 'Conspicuous' (dễ thấy, đập ngay vào mắt) hoàn toàn phù hợp.",
+        "difficulty": "Easy",
+        "trapRate": 16,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. 'Conspicuous' (nổi bật, dễ nhận thấy) thể hiện độ tương phản giữa màu sắc neon và nền lá rừng."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. 'Imperceptible' (không thể nhận biết được) trái ngược với màu sắc rực rỡ."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. 'Lethargic' (hôn mê, uể oải chậm chạp) nói về hành vi sinh lý chứ không tả thị giác."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. 'Fragile' (dễ vỡ, mỏng manh) không liên quan đến khả năng nhận diện hình ảnh."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Craft and Structure",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "de9c14a23870e4c6",
+      "moduleType": "vocab",
+      "topic": "Words in Context",
+      "data": {
+        "title": "Craft and Structure - Words in Context",
+        "full_passage": "The discovery of identical triassic therapsid fossils across both southwestern Africa and eastern South America served to ______ Alfred Wegener's controversial continental drift hypothesis, providing physical paleobiological evidence that earlier critics could no longer dismiss as coincidence.",
+        "passage": "The discovery of identical triassic therapsid fossils across both southwestern Africa and eastern South America served to ______ Alfred Wegener's controversial continental drift hypothesis, providing physical paleobiological evidence that earlier critics could no longer dismiss as coincidence.",
+        "practice_question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "choices": [
+          "bolster",
+          "undermine",
+          "fabricate",
+          "circumvent"
+        ],
+        "correct_choice": "bolster",
+        "explanation": "Finding identical fossils on separate continents provided solid physical evidence supporting Wegener's hypothesis, making it impossible for critics to dismiss. 'Bolster' means to support, strengthen, or prop up.",
+        "explanation_vi": "Việc phát hiện các hóa thạch giống hệt nhau ở cả hai lục địa tách biệt đã củng cố mạnh mẽ ('bolster') giả thuyết trôi dạt lục địa của Wegener, cung cấp bằng chứng vững chắc khiến giới chỉ trích không thể gạt bỏ.",
+        "difficulty": "Medium",
+        "trapRate": 24,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. 'Bolster' nghĩa là củng cố, tăng cường sức nặng cho lập luận/giả thuyết."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. 'Undermine' (làm suy yếu, xói mòn) trái ngược với ý cung cấp bằng chứng củng cố."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. 'Fabricate' (ngụy tạo, thêu dệt) không phù hợp vì hóa thạch là phát hiện thực địa có thật."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. 'Circumvent' (né tránh, đi vòng) không diễn đạt quan hệ logic giữa bằng chứng và giả thuyết."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Craft and Structure",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "1c7a7e6464ef5df3",
+      "moduleType": "vocab",
+      "topic": "Words in Context",
+      "data": {
+        "title": "Craft and Structure - Words in Context",
+        "full_passage": "Perched on narrow granite shelves thousands of feet above the glacial valley, alpine edelweiss plants occupy a ______ ecological niche where severe frost, ultraviolet radiation, and ferocious winds constantly threaten survival.",
+        "passage": "Perched on narrow granite shelves thousands of feet above the glacial valley, alpine edelweiss plants occupy a ______ ecological niche where severe frost, ultraviolet radiation, and ferocious winds constantly threaten survival.",
+        "practice_question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "choices": [
+          "precarious",
+          "hospitable",
+          "redundant",
+          "monolithic"
+        ],
+        "correct_choice": "precarious",
+        "explanation": "The passage describes an environment with severe frost, UV radiation, and fierce winds threatening survival on narrow granite shelves. 'Precarious' means not securely held or in position; dangerously likely to fall or collapse, or dependent on chance and uncertain.",
+        "explanation_vi": "Cây hoa nhung tuyết bám trên gờ đá cheo leo hàng nghìn mét với sương giá, tia cực tím và gió dữ đe dọa sinh tồn. Vị trí sinh thái bấp bênh, nguy hiểm này được mô tả chuẩn xác bằng từ 'precarious' (bấp bênh, hiểm trở).",
+        "difficulty": "Medium",
+        "trapRate": 26,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. 'Precarious' có nghĩa là bấp bênh, đầy rủi ro và hiểm nguy."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. 'Hospitable' (thân thiện, hiếu khách, thuận lợi cho sự sống) hoàn toàn trái ngược với môi trường khắc nghiệt."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. 'Redundant' (dư thừa) không diễn đạt được sự khắc nghiệt hay rủi ro sinh thái."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. 'Monolithic' (nguyên khối, khổng lồ bất biến) không phù hợp để miêu tả vị trí sinh thái hiểm trở."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Craft and Structure",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "01d4091ce8d36f74",
+      "moduleType": "vocab",
+      "topic": "Words in Context",
+      "data": {
+        "title": "Craft and Structure - Words in Context",
+        "full_passage": "Following rare torrential downpours in the Atacama Desert, dormant seeds germinate and blossom into an exuberant carpet of purple and yellow wildflowers; however, because the desert soil desiccates within a few weeks, this floral spectacle is entirely ______.",
+        "passage": "Following rare torrential downpours in the Atacama Desert, dormant seeds germinate and blossom into an exuberant carpet of purple and yellow wildflowers; however, because the desert soil desiccates within a few weeks, this floral spectacle is entirely ______.",
+        "practice_question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "choices": [
+          "ephemeral",
+          "perennial",
+          "immutable",
+          "detrimental"
+        ],
+        "correct_choice": "ephemeral",
+        "explanation": "The sentence notes that 'the desert soil desiccates within a few weeks', meaning the spectacle lasts only for a very short duration. 'Ephemeral' means lasting for a very short time.",
+        "explanation_vi": "Đoạn văn nêu rõ đất sa mạc khô hạn trở lại chỉ trong vài tuần ngắn ngủi, vì thế màn hoa rực rỡ này hoàn toàn chỉ mang tính 'ephemeral' (chóng tàn, phù du, ngắn ngủi).",
+        "difficulty": "Medium",
+        "trapRate": 28,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. 'Ephemeral' nghĩa là chóng nở chóng tàn, chỉ tồn tại trong một khoảng thời gian ngắn ngủi."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. 'Perennial' (sống lâu năm, tồn tại liên tục) trái ngược với việc khô héo sau vài tuần."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. 'Immutable' (bất biến, không thể thay đổi) mâu thuẫn với sự biến mất nhanh chóng."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. 'Detrimental' (gây hại) không phù hợp vì hoa nở không mang hàm ý phá hoại."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Craft and Structure",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "cad9ab4918242f67",
+      "moduleType": "vocab",
+      "topic": "Words in Context",
+      "data": {
+        "title": "Craft and Structure - Words in Context",
+        "full_passage": "Although marine biologists have mapped the migratory routes of Greenland sharks, the reproductive biology of these ancient cartilaginous fishes remains ______: researchers have never observed a pregnant female in the wild or determined the exact gestation timeline.",
+        "passage": "Although marine biologists have mapped the migratory routes of Greenland sharks, the reproductive biology of these ancient cartilaginous fishes remains ______: researchers have never observed a pregnant female in the wild or determined the exact gestation timeline.",
+        "practice_question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "choices": [
+          "enigmatic",
+          "definitive",
+          "redundant",
+          "rudimentary"
+        ],
+        "correct_choice": "enigmatic",
+        "explanation": "The colon introduces the explanation that researchers have never observed a pregnant female or determined gestation. This lack of knowledge and unresolved mystery means the biology remains 'enigmatic' (mysterious, puzzling).",
+        "explanation_vi": "Vế sau dấu hai chấm giải thích rằng các nhà khoa học chưa từng bắt gặp cá thể mang thai trong tự nhiên và chưa xác định được thời gian thai kỳ. Bí ẩn chưa lời giải này thể hiện tính chất 'enigmatic' (bí ẩn, khó hiểu, đầy uẩn khúc).",
+        "difficulty": "Medium",
+        "trapRate": 22,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. 'Enigmatic' nghĩa là bí ẩn, khó giải thích, ăn khớp với việc khoa học chưa từng quan sát thấy."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. 'Definitive' (cuối cùng, chắc chắn, dứt khoát) hoàn toàn mâu thuẫn với thông tin chưa biết."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. 'Redundant' (thừa thãi) không mang ý nghĩa thiếu hụt tri thức."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. 'Rudimentary' (sơ khai, thô sơ) dùng để chỉ sự phát triển nguyên thủy chứ không chỉ bí ẩn chưa được khám phá."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Craft and Structure",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "5228b0de58748e49",
+      "moduleType": "vocab",
+      "topic": "Words in Context",
+      "data": {
+        "title": "Craft and Structure - Words in Context",
+        "full_passage": "Faced with escalating municipal deficits and an imminent hurricane season, the coastal city council abandoned theoretical long-term seawall fantasies in favor of a ______ strategy: deploying modular sand barriers and reinforcing natural mangrove buffers immediately.",
+        "passage": "Faced with escalating municipal deficits and an imminent hurricane season, the coastal city council abandoned theoretical long-term seawall fantasies in favor of a ______ strategy: deploying modular sand barriers and reinforcing natural mangrove buffers immediately.",
+        "practice_question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "choices": [
+          "pragmatic",
+          "utopian",
+          "dogmatic",
+          "superfluous"
+        ],
+        "correct_choice": "pragmatic",
+        "explanation": "The council abandoned 'theoretical long-term... fantasies' in favor of realistic, actionable measures deployed immediately (modular sand barriers and mangrove buffers). 'Pragmatic' means dealing with things sensibly and realistically in a way that is based on practical rather than theoretical considerations.",
+        "explanation_vi": "Hội đồng thành phố từ bỏ các kế hoạch đê biển viển vông trên lý thuyết để chuyển sang một giải pháp mang tính 'pragmatic' (thực dụng, thực tế, hành động ngay) bằng cách dùng bao cát và phục hồi rừng ngập mặn.",
+        "difficulty": "Hard",
+        "trapRate": 35,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. 'Pragmatic' (thực tế, chú trọng hiệu quả hành động) đối lập chuẩn xác với 'theoretical fantasies'."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. 'Utopian' (không tưởng) đồng nghĩa với 'theoretical fantasies' mà hội đồng vừa từ bỏ."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. 'Dogmatic' (giáo điều, khăng khăng ý kiến cá nhân) không thể hiện tính thực tiễn khẩn cấp."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. 'Superfluous' (thừa thãi, không cần thiết) làm méo mó mục tiêu bảo vệ thành phố."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Craft and Structure",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "0859c8da7fc78e12",
+      "moduleType": "vocab",
+      "topic": "Words in Context",
+      "data": {
+        "title": "Craft and Structure - Words in Context",
+        "full_passage": "To reconstruct trade networks across the pre-Columbian Caribbean, ethnohistorians must synthesize seemingly ______ archival sources, cross-referencing maritime logs, obsidian trace-element assays, and oral ballads from isolated island dialects into a coherent regional chronology.",
+        "passage": "To reconstruct trade networks across the pre-Columbian Caribbean, ethnohistorians must synthesize seemingly ______ archival sources, cross-referencing maritime logs, obsidian trace-element assays, and oral ballads from isolated island dialects into a coherent regional chronology.",
+        "practice_question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "choices": [
+          "disparate",
+          "homogeneous",
+          "unambiguous",
+          "concentric"
+        ],
+        "correct_choice": "disparate",
+        "explanation": "The sources mentioned are vastly different in nature: maritime logs (textual), obsidian trace-element assays (geochemical/physical), and oral ballads (linguistic/folkloric). 'Disparate' means essentially different in kind; not allowing comparison.",
+        "explanation_vi": "Các nguồn sử liệu được liệt kê thuộc nhiều thể loại hoàn toàn khác biệt: nhật ký hàng hải, phân tích hóa học đá vỏ chai, và các bài dân ca truyền khẩu. Từ 'disparate' (khác biệt về bản chất, rời rạc, không đồng nhất) thể hiện chuẩn xác việc tổng hợp các nguồn tư liệu đa tạp này.",
+        "difficulty": "Hard",
+        "trapRate": 38,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. 'Disparate' nghĩa là gồm nhiều thành phần khác biệt về bản chất, chủng loại nhưng phải được tổng hợp lại."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. 'Homogeneous' (đồng nhất) trái ngược hoàn toàn với ba loại tài liệu hoàn toàn khác nhau."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. 'Unambiguous' (rõ ràng, không mơ hồ) không nhấn mạnh sự khác biệt về loại hình dữ liệu."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. 'Concentric' (đồng tâm - hình học) không dùng để mô tả tính chất của tài liệu lưu trữ."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Craft and Structure",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "930b3e4444838743",
+      "moduleType": "vocab",
+      "topic": "Words in Context",
+      "data": {
+        "title": "Craft and Structure - Words in Context",
+        "full_passage": "Because the soft-tissue impression in the newly excavated Burgess Shale fossil was weathered and faint, paleontologists deemed the morphological evidence ______ and refused to assign the specimen to a definitive arthropod subphylum until higher-resolution computed tomography could be conducted.",
+        "passage": "Because the soft-tissue impression in the newly excavated Burgess Shale fossil was weathered and faint, paleontologists deemed the morphological evidence ______ and refused to assign the specimen to a definitive arthropod subphylum until higher-resolution computed tomography could be conducted.",
+        "practice_question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "choices": [
+          "equivocal",
+          "irrefutable",
+          "comprehensive",
+          "pellucid"
+        ],
+        "correct_choice": "equivocal",
+        "explanation": "Because the fossil impression was 'weathered and faint', the researchers 'refused to assign the specimen to a definitive... subphylum'. This shows the evidence was open to multiple interpretations and inconclusive. 'Equivocal' means open to more than one interpretation; ambiguous or uncertain.",
+        "explanation_vi": "Dấu vết mô mềm bị xói mòn và mờ nhạt khiến các nhà cổ sinh vật học từ chối phân loại mẫu vật vào một phân ngành giáp xác dứt khoát. 'Equivocal' (mơ hồ, đa nghĩa, chưa rõ ràng dứt khoát) giải thích tại sao họ phải chờ chụp cắt lớp độ phân giải cao.",
+        "difficulty": "Hard",
+        "trapRate": 42,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. 'Equivocal' nghĩa là không rõ ràng, có thể hiểu theo nhiều cách khác nhau, chưa thể kết luận."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. 'Irrefutable' (không thể bác bỏ, hiển nhiên đúng) trái ngược với việc mẫu vật bị mờ nhạt."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. 'Comprehensive' (toàn diện) không khớp với tình trạng hóa thạch bị bào mòn thiếu dữ liệu."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. 'Pellucid' (trong suốt, sáng rõ mồn một) trái nghĩa với vết tích phong hóa mờ mịt."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Craft and Structure",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "0df32c93ddf7cbf6",
+      "moduleType": "vocab",
+      "topic": "Words in Context",
+      "data": {
+        "title": "Craft and Structure - Words in Context",
+        "full_passage": "While early renaissance treatises on perspective were written in accessible Italian vernacular for apprentice painters, contemporary metallurgical texts on cupellation were shrouded in ______ alchemical jargon deliberately calculated to prevent rival guild masters from deciphering refinery secrets.",
+        "passage": "While early renaissance treatises on perspective were written in accessible Italian vernacular for apprentice painters, contemporary metallurgical texts on cupellation were shrouded in ______ alchemical jargon deliberately calculated to prevent rival guild masters from deciphering refinery secrets.",
+        "practice_question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "question": "Which choice completes the text with the most logical and precise word or phrase?",
+        "choices": [
+          "esoteric",
+          "lucid",
+          "democratic",
+          "prosaic"
+        ],
+        "correct_choice": "esoteric",
+        "explanation": "The passage contrasts accessible vernacular texts with metallurgical texts written in specialized jargon 'deliberately calculated to prevent rival guild masters from deciphering refinery secrets'. 'Esoteric' means intended for or likely to be understood by only a small number of people with a specialized knowledge.",
+        "explanation_vi": "Văn bản đối lập tài liệu phối cảnh dễ hiểu cho người học việc với tài liệu luyện kim được bao phủ bởi thuật ngữ 'esoteric' (thâm sâu, bí truyền, chỉ số ít người trong ngành hiểu) để ngăn đối thủ giải mã bí mật tinh luyện.",
+        "difficulty": "Hard",
+        "trapRate": 36,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. 'Esoteric' (bí truyền, chuyên biệt khó hiểu với người ngoài) đối lập hoàn hảo với 'accessible Italian vernacular'."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. 'Lucid' (trong sáng, dễ hiểu) trái ngược với việc dùng thuật ngữ mật mã cố tình che giấu thông tin."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. 'Democratic' (dân chủ, đại chúng bình đẳng) trái ngược với việc phong tỏa tri thức trong phường hội."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. 'Prosaic' (tầm thường, không lãng mạn) không phản ánh bản chất bảo mật chuyên sâu của thuật ngữ kim hoàn bí truyền."
+          }
+        ],
+        "domain": "Reading and Writing",
+        "skill": "Craft and Structure",
+        "section": "reading"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "09fa569339d3115e",
+      "moduleType": "desmos",
+      "topic": "Đồ thị và Giao điểm (Desmos Graphing & Intercepts)",
+      "data": {
+        "title": "Đồ thị và Giao điểm (Desmos Graphing & Intercepts)",
+        "full_passage": "Consider the linear equation 4x - 7y = 28 plotted in the xy-plane.",
+        "passage": "Consider the linear equation 4x - 7y = 28 plotted in the xy-plane.",
+        "practice_question": "What is the x-intercept of the line given by the equation 4x - 7y = 28?",
+        "question": "What is the x-intercept of the line given by the equation 4x - 7y = 28?",
+        "choices": [
+          "(7, 0)",
+          "(0, -4)",
+          "(-7, 0)",
+          "(0, 4)"
+        ],
+        "correct_choice": "(7, 0)",
+        "explanation": "To find the x-intercept algebraically, set y = 0: 4x - 7(0) = 28 => 4x = 28 => x = 7. Thus, the x-intercept is (7, 0). In Desmos, typing '4x - 7y = 28' displays the line, and clicking the point where it crosses the horizontal axis highlights the coordinate (7, 0).",
+        "explanation_vi": "Để tìm giao điểm với trục hoành (x-intercept), ta đặt y = 0: 4x - 7(0) = 28 => 4x = 28 => x = 7. Giao điểm là (7, 0). Trên Desmos, chỉ cần nhập '4x - 7y = 28' và nhấp vào điểm màu xám trên trục Ox để đọc ngay tọa độ (7, 0).",
+        "difficulty": "Easy",
+        "trapRate": 20,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Đặt y = 0 ta được 4x = 28 => x = 7, tọa độ giao điểm là (7, 0)."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Bẫy giao điểm trục tung (y-intercept) khi đặt x = 0 thì y = -4, không phải x-intercept."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Lỗi nhầm dấu khi chuyển vế."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Vừa nhầm sang trục tung vừa sai dấu của -7y."
+          }
+        ],
+        "domain": "Math",
+        "skill": "Đồ thị và Giao điểm (Desmos Graphing & Intercepts)",
+        "section": "math",
+        "concept_name": "Finding the X-intercept of a Linear Function",
+        "theory": "The x-intercept of a graph is the point where the line crosses the x-axis (where y = 0). In Desmos, type the equation directly into an expression row and click on the gray intercept dot located along the horizontal x-axis.",
+        "sample_example": "For 3x - 6y = 18, setting y = 0 yields 3x = 18 => x = 6. The x-intercept is (6, 0).",
+        "desmos_expression": "4x - 7y = 28",
+        "target_equation": "4x - 7y = 28"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "bba0c4ad158ab296",
+      "moduleType": "desmos",
+      "topic": "Hệ phương trình bậc nhất (Systems of Linear Equations)",
+      "data": {
+        "title": "Hệ phương trình bậc nhất (Systems of Linear Equations)",
+        "full_passage": "A system of two linear equations is given: 3x + y = 13 and x - 2y = -5.",
+        "passage": "A system of two linear equations is given: 3x + y = 13 and x - 2y = -5.",
+        "practice_question": "The system of equations 3x + y = 13 and x - 2y = -5 has solution (x, y). What is the value of x + y?",
+        "question": "The system of equations 3x + y = 13 and x - 2y = -5 has solution (x, y). What is the value of x + y?",
+        "choices": [
+          "7",
+          "3",
+          "4",
+          "9"
+        ],
+        "correct_choice": "7",
+        "explanation": "Enter both equations into Desmos:\n1) 3x + y = 13\n2) x - 2y = -5\nDesmos displays the intersection point at (3, 4). Thus, x = 3 and y = 4. The question asks for x + y = 3 + 4 = 7.",
+        "explanation_vi": "Nhập cả hai phương trình vào hai dòng trong Desmos. Điểm cắt nhau của hai đường thẳng hiện rõ tại tọa độ (3, 4). Vậy x = 3 và y = 4. Đề bài hỏi giá trị của x + y = 3 + 4 = 7.",
+        "difficulty": "Easy",
+        "trapRate": 25,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Điểm giao nhau là (3, 4), do đó x + y = 3 + 4 = 7."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Bẫy dừng sớm chỉ lấy giá trị x = 3 mà quên cộng với y."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Bẫy dừng sớm chỉ lấy giá trị y = 4."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Lỗi tính toán số học."
+          }
+        ],
+        "domain": "Math",
+        "skill": "Hệ phương trình bậc nhất (Systems of Linear Equations)",
+        "section": "math",
+        "concept_name": "Solving Linear Systems via Graphic Intersection",
+        "theory": "The solution to a system of linear equations is the point of intersection (x, y) of the two graphs. In Desmos, enter each equation on a separate line; Desmos automatically generates a gray dot at their intersection point.",
+        "sample_example": "Graphing y = 2x + 1 and y = -x + 4 shows a gray intersection dot at (1, 3).",
+        "desmos_expression": "3x + y = 13; x - 2y = -5",
+        "target_equation": "3x + y = 13"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "cc0b546e00201e47",
+      "moduleType": "desmos",
+      "topic": "Parabol và Đường thẳng (Quadratic-Linear Systems)",
+      "data": {
+        "title": "Parabol và Đường thẳng (Quadratic-Linear Systems)",
+        "full_passage": "Consider the system consisting of the quadratic function y = x^2 - 4x + 3 and the linear function y = 2x - 2.",
+        "passage": "Consider the system consisting of the quadratic function y = x^2 - 4x + 3 and the linear function y = 2x - 2.",
+        "practice_question": "At which points in the xy-plane do the graphs of y = x^2 - 4x + 3 and y = 2x - 2 intersect?",
+        "question": "At which points in the xy-plane do the graphs of y = x^2 - 4x + 3 and y = 2x - 2 intersect?",
+        "choices": [
+          "(1, 0) and (5, 8)",
+          "(1, 0) and (3, 4)",
+          "(0, 3) and (2, 2)",
+          "(-1, -4) and (5, 8)"
+        ],
+        "correct_choice": "(1, 0) and (5, 8)",
+        "explanation": "Setting the equations equal: x^2 - 4x + 3 = 2x - 2 => x^2 - 6x + 5 = 0 => (x - 1)(x - 5) = 0. So x = 1 or x = 5. Substituting back: for x = 1, y = 2(1) - 2 = 0; for x = 5, y = 2(5) - 2 = 8. The intersection points are (1, 0) and (5, 8). On Desmos, typing both functions shows two gray intersection dots at (1, 0) and (5, 8).",
+        "explanation_vi": "Cho hai vế bằng nhau: x^2 - 4x + 3 = 2x - 2 => x^2 - 6x + 5 = 0 => (x - 1)(x - 5) = 0 => x = 1 hoặc x = 5. Thay vào hàm bậc nhất: x = 1 => y = 0; x = 5 => y = 8. Hai giao điểm là (1, 0) và (5, 8). Trên Desmos, nhập 2 hàm số sẽ hiện ngay 2 chấm xám tại (1, 0) và (5, 8).",
+        "difficulty": "Medium",
+        "trapRate": 30,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Hai giao điểm đồ thị là (1, 0) và (5, 8)."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Bẫy lấy nhầm đỉnh hoặc nghiệm của phương trình phụ."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. (0, 3) chỉ là giao điểm trục tung của parabol, không thuộc đường thẳng."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Sai dấu nghiệm x = -1 thay vì x = 1."
+          }
+        ],
+        "domain": "Math",
+        "skill": "Parabol và Đường thẳng (Quadratic-Linear Systems)",
+        "section": "math",
+        "concept_name": "Intersections of a Parabola and a Line",
+        "theory": "To find the coordinates where a parabola y = ax^2 + bx + c and a line y = mx + d meet, graph both functions in Desmos. The points where the curves cross are marked with gray dots.",
+        "sample_example": "Graphing y = x^2 and y = x + 2 reveals intersection points at (-1, 1) and (2, 4).",
+        "desmos_expression": "y = x^2 - 4x + 3; y = 2x - 2",
+        "target_equation": "x^2 - 6x + 5 = 0"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "a0946f2aaed19f5b",
+      "moduleType": "desmos",
+      "topic": "Hàm số bậc hai và Tối ưu hóa (Quadratic Optimization & Vertex)",
+      "data": {
+        "title": "Hàm số bậc hai và Tối ưu hóa (Quadratic Optimization & Vertex)",
+        "full_passage": "A projectile's height in meters t seconds after launch is modeled by the function h(t) = -4.9t^2 + 29.4t + 1.2.",
+        "passage": "A projectile's height in meters t seconds after launch is modeled by the function h(t) = -4.9t^2 + 29.4t + 1.2.",
+        "practice_question": "What is the maximum height, in meters, reached by the projectile?",
+        "question": "What is the maximum height, in meters, reached by the projectile?",
+        "choices": [
+          "45.3",
+          "44.1",
+          "29.4",
+          "3.0"
+        ],
+        "correct_choice": "45.3",
+        "explanation": "In Desmos, enter h(x) = -4.9x^2 + 29.4x + 1.2. Click on the peak of the parabola; Desmos displays the vertex coordinates as (3, 45.3). Thus, the maximum height is 45.3 meters. Algebraically, t = -29.4 / (2 * -4.9) = 3 seconds, and h(3) = -4.9(9) + 29.4(3) + 1.2 = -44.1 + 88.2 + 1.2 = 45.3.",
+        "explanation_vi": "Nhập hàm h(x) = -4.9x^2 + 29.4x + 1.2 vào Desmos. Nhấp vào đỉnh cao nhất của parabol, Desmos sẽ hiển thị tọa độ đỉnh là (3, 45.3). Do đó độ cao cực đại là 45.3 mét. Về đại số, t = -29.4 / (2 * -4.9) = 3 giây, thay vào được h(3) = 45.3.",
+        "difficulty": "Medium",
+        "trapRate": 35,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Tung độ đỉnh của parabol là 45.3 mét."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. 44.1 là giá trị -4.9(3)^2 + 29.4(3) mà quên cộng thêm hằng số ban đầu 1.2 mét."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. 29.4 là hệ số vận tốc ban đầu b."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. 3.0 là thời gian t để đạt độ cao cực đại chứ không phải độ cao cực đại."
+          }
+        ],
+        "domain": "Math",
+        "skill": "Hàm số bậc hai và Tối ưu hóa (Quadratic Optimization & Vertex)",
+        "section": "math",
+        "concept_name": "Finding the Maximum or Minimum Value of a Quadratic Function",
+        "theory": "For a quadratic function f(x) = ax^2 + bx + c with a < 0, the parabola opens downward and reaches its maximum value at the vertex x = -b / (2a). In Desmos, type the function and click on the apex to read the maximum y-coordinate directly.",
+        "sample_example": "For h(t) = -5t^2 + 20t + 10, vertex is at (2, 30); maximum height is 30.",
+        "desmos_expression": "h(x) = -4.9x^2 + 29.4x + 1.2",
+        "target_equation": "t = -29.4 / (2 * -4.9) = 3"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "35a1e0c4ac606f4d",
+      "moduleType": "desmos",
+      "topic": "Phương trình đường tròn (Circle Equations)",
+      "data": {
+        "title": "Phương trình đường tròn (Circle Equations)",
+        "full_passage": "The equation of a circle in the xy-plane is given by x^2 + y^2 - 10x + 6y = 47.",
+        "passage": "The equation of a circle in the xy-plane is given by x^2 + y^2 - 10x + 6y = 47.",
+        "practice_question": "What is the radius of the circle defined by x^2 + y^2 - 10x + 6y = 47?",
+        "question": "What is the radius of the circle defined by x^2 + y^2 - 10x + 6y = 47?",
+        "choices": [
+          "9",
+          "81",
+          "5",
+          "6.8"
+        ],
+        "correct_choice": "9",
+        "explanation": "Complete the square for both x and y:\n(x^2 - 10x + 25) + (y^2 + 6y + 9) = 47 + 25 + 9\n(x - 5)^2 + (y + 3)^2 = 81.\nSince r^2 = 81, the radius is r = sqrt(81) = 9. In Desmos, type the equation directly; the center is at (5, -3) and the circle extends from x = -4 to x = 14, confirming diameter 18 and radius 9.",
+        "explanation_vi": "Thực hiện thêm bớt thành bình phương:\n(x^2 - 10x + 25) + (y^2 + 6y + 9) = 47 + 25 + 9\n(x - 5)^2 + (y + 3)^2 = 81.\nVì r^2 = 81 nên bán kính r = 9. Trên Desmos, nhập thẳng phương trình, ta thấy tâm tại (5, -3) và đường kính trải từ x = -4 đến x = 14 (độ dài 18), suy ra bán kính bằng 9.",
+        "difficulty": "Medium",
+        "trapRate": 35,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. r^2 = 81 nên bán kính r = sqrt(81) = 9."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Bẫy lấy r^2 = 81 mà quên khai căn bậc hai."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. 5 chỉ là hoành độ tâm của đường tròn h = 5."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. sqrt(47) xấp xỉ 6.8 là bẫy quên thêm 25 + 9 vào vế phải."
+          }
+        ],
+        "domain": "Math",
+        "skill": "Phương trình đường tròn (Circle Equations)",
+        "section": "math",
+        "concept_name": "Graphing Circles and Completing the Square",
+        "theory": "The standard equation of a circle is (x - h)^2 + (y - k)^2 = r^2. In Desmos, general quadratic circle equations like x^2 + y^2 + Dx + Ey = F can be entered directly. Desmos plots the circle, allowing you to measure the diameter or radius directly using grid marks.",
+        "sample_example": "x^2 + y^2 - 4x + 6y = 12 completes to (x - 2)^2 + (y + 3)^2 = 25, giving radius r = 5.",
+        "desmos_expression": "x^2 + y^2 - 10x + 6y = 47",
+        "target_equation": "(x - 5)^2 + (y + 3)^2 = 81"
+      },
+      "createdAt": "2026-11-08T14:10:35.640Z",
+      "usageCount": 0
+    },
+    {
+      "id": "ccc40062d41d2c48",
+      "moduleType": "desmos",
+      "topic": "Hệ phương trình vô nghiệm (Systems with No Solution & Parallel Lines)",
+      "data": {
+        "title": "Hệ phương trình vô nghiệm (Systems with No Solution & Parallel Lines)",
+        "full_passage": "Consider the following system of linear equations in variables x and y:\n4x + 6y = 15\n(k - 2)x + 9y = 22\nwhere k is a constant.",
+        "passage": "Consider the following system of linear equations in variables x and y:\n4x + 6y = 15\n(k - 2)x + 9y = 22\nwhere k is a constant.",
+        "practice_question": "If the system of equations has no solution, what is the value of k?",
+        "question": "If the system of equations has no solution, what is the value of k?",
+        "choices": [
+          "8",
+          "6",
+          "10",
+          "4"
+        ],
+        "correct_choice": "8",
+        "explanation": "For the system to have no solution, the lines must be parallel, so their coefficient ratios for x and y must be equal: 4 / (k - 2) = 6 / 9. Simplifying 6/9 to 2/3 gives 4 / (k - 2) = 2 / 3 => 2(k - 2) = 12 => k - 2 = 6 => k = 8. In Desmos, entering both equations and adding a slider for k reveals that at k = 8 the two lines are parallel with no points of intersection.",
+        "explanation_vi": "Để hệ phương trình vô nghiệm, hai đường thẳng phải song song nhau, tức tỷ số hệ số của x và y phải bằng nhau: 4 / (k - 2) = 6 / 9 = 2 / 3 => 2(k - 2) = 12 => k - 2 = 6 => k = 8. Trên Desmos, nhập 2 phương trình kèm thanh trượt k, tại k = 8 hai đường thẳng song song tuyệt đối không có điểm cắt.",
+        "difficulty": "Hard",
+        "trapRate": 45,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Tỷ lệ song song: 4/(k - 2) = 6/9 => k - 2 = 6 => k = 8."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Bẫy giải ra k - 2 = 6 nhưng quên cộng thêm 2."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Lỗi tính toán nhân chéo."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Bẫy lấy k - 2 = 2."
+          }
+        ],
+        "domain": "Math",
+        "skill": "Hệ phương trình vô nghiệm (Systems with No Solution & Parallel Lines)",
+        "section": "math",
+        "concept_name": "Systems with No Solution via Slopes and Sliders",
+        "theory": "A linear system has no solution if the two lines are parallel and distinct, meaning they share the same slope but different y-intercepts: a1/a2 = b1/b2 != c1/c2. In Desmos, type the equations with variable k and use the slider for k to find where the lines become parallel.",
+        "sample_example": "2x + 4y = 8 and kx + 8y = 12 have no solution when 2/k = 4/8 => k = 4.",
+        "desmos_expression": "4x + 6y = 15; (k - 2)x + 9y = 22",
+        "target_equation": "4 / (k - 2) = 6 / 9"
+      },
+      "createdAt": "2026-11-08T14:10:35.641Z",
+      "usageCount": 0
+    },
+    {
+      "id": "e8b2bba1ee9e25cc",
+      "moduleType": "desmos",
+      "topic": "Biện luận số nghiệm tam thức bậc hai (Quadratic Discriminant & Tangency)",
+      "data": {
+        "title": "Biện luận số nghiệm tam thức bậc hai (Quadratic Discriminant & Tangency)",
+        "full_passage": "A quadratic equation in variable x is given by 3x^2 - 12x + (2c - 1) = 0, where c is a constant.",
+        "passage": "A quadratic equation in variable x is given by 3x^2 - 12x + (2c - 1) = 0, where c is a constant.",
+        "practice_question": "If the equation 3x^2 - 12x + (2c - 1) = 0 has exactly one distinct real solution, what is the value of c?",
+        "question": "If the equation 3x^2 - 12x + (2c - 1) = 0 has exactly one distinct real solution, what is the value of c?",
+        "choices": [
+          "6.5",
+          "12",
+          "6",
+          "13"
+        ],
+        "correct_choice": "6.5",
+        "explanation": "For a quadratic equation to have exactly one real solution, the discriminant must equal zero:\nDelta = b^2 - 4ac = (-12)^2 - 4(3)(2c - 1) = 0\n144 - 12(2c - 1) = 0\n12(2c - 1) = 144 => 2c - 1 = 12 => 2c = 13 => c = 6.5.\nIn Desmos, entering y = 3x^2 - 12x + (2c - 1) with a slider for c shows that at c = 6.5, the vertex touches the x-axis at (2, 0).",
+        "explanation_vi": "Phương trình bậc hai có đúng 1 nghiệm thực khi và chỉ khi biệt thức Delta = 0:\nDelta = (-12)^2 - 4(3)(2c - 1) = 0\n144 - 12(2c - 1) = 0 => 2c - 1 = 12 => 2c = 13 => c = 6.5.\nTrên Desmos, nhập hàm y = 3x^2 - 12x + (2c - 1) và kéo thanh trượt c về 6.5, parabol tiếp xúc trục hoành tại đỉnh (2, 0).",
+        "difficulty": "Hard",
+        "trapRate": 48,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Delta = 144 - 12(2c - 1) = 0 => 2c - 1 = 12 => c = 6.5."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. 12 là giá trị của cụm 2c - 1, chưa giải ra c."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Bẫy quên trừ 1 trong ngoặc (lấy 2c = 12 => c = 6)."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. 13 là giá trị của 2c."
+          }
+        ],
+        "domain": "Math",
+        "skill": "Biện luận số nghiệm tam thức bậc hai (Quadratic Discriminant & Tangency)",
+        "section": "math",
+        "concept_name": "Finding Tangency and Discriminant with Sliders",
+        "theory": "A quadratic equation ax^2 + bx + c = 0 has exactly one real solution if and only if its discriminant Delta = b^2 - 4ac = 0. Graphically in Desmos, this means the parabola is tangent to the x-axis (its vertex lies directly on the x-axis).",
+        "sample_example": "x^2 - 6x + c = 0 has one solution when Delta = 36 - 4c = 0 => c = 9.",
+        "desmos_expression": "y = 3x^2 - 12x + (2c - 1)",
+        "target_equation": "Delta = (-12)^2 - 4(3)(2c - 1) = 0"
+      },
+      "createdAt": "2026-11-08T14:10:35.641Z",
+      "usageCount": 0
+    },
+    {
+      "id": "47679604255516f4",
+      "moduleType": "desmos",
+      "topic": "Giao điểm hàm mũ và tuyến tính (Exponential & Linear Intersections)",
+      "data": {
+        "title": "Giao điểm hàm mũ và tuyến tính (Exponential & Linear Intersections)",
+        "full_passage": "The graphs of the exponential function y = 2^x + 1 and the linear function y = 3x intersect at two points (x1, y1) and (x2, y2) in the xy-plane.",
+        "passage": "The graphs of the exponential function y = 2^x + 1 and the linear function y = 3x intersect at two points (x1, y1) and (x2, y2) in the xy-plane.",
+        "practice_question": "The graphs of y = 2^x + 1 and y = 3x intersect at two points (x1, y1) and (x2, y2) in the xy-plane. What is the value of x1 + x2?",
+        "question": "The graphs of y = 2^x + 1 and y = 3x intersect at two points (x1, y1) and (x2, y2) in the xy-plane. What is the value of x1 + x2?",
+        "choices": [
+          "4",
+          "3",
+          "6",
+          "12"
+        ],
+        "correct_choice": "4",
+        "explanation": "Graph both equations in Desmos:\n1) y = 2^x + 1\n2) y = 3x\nDesmos shows two intersection points: (1, 3) and (3, 9).\nCheck:\nAt x = 1: 2^1 + 1 = 3 and 3(1) = 3 (matches).\nAt x = 3: 2^3 + 1 = 9 and 3(3) = 9 (matches).\nThe x-coordinates of the intersection points are x1 = 1 and x2 = 3. Therefore, x1 + x2 = 1 + 3 = 4.",
+        "explanation_vi": "Nhập cả hai phương trình vào Desmos:\n1) y = 2^x + 1\n2) y = 3x\nDesmos hiển thị 2 điểm cắt nhau rõ ràng tại (1, 3) và (3, 9).\nKiểm tra lại:\nTại x = 1: 2^1 + 1 = 3 và 3(1) = 3.\nTại x = 3: 2^3 + 1 = 9 và 3(3) = 9.\nHoành độ hai giao điểm là x1 = 1 và x2 = 3. Do đó x1 + x2 = 1 + 3 = 4.",
+        "difficulty": "Hard",
+        "trapRate": 42,
+        "choice_analysis": [
+          {
+            "choice_letter": "A",
+            "is_correct": true,
+            "analysis": "Chính xác. Hai giao điểm là (1, 3) và (3, 9), tổng hoành độ x1 + x2 = 1 + 3 = 4."
+          },
+          {
+            "choice_letter": "B",
+            "is_correct": false,
+            "analysis": "Sai. Bẫy chỉ lấy x2 = 3."
+          },
+          {
+            "choice_letter": "C",
+            "is_correct": false,
+            "analysis": "Sai. Lỗi nhầm lẫn phép tính số học."
+          },
+          {
+            "choice_letter": "D",
+            "is_correct": false,
+            "analysis": "Sai. Bẫy tính tổng tung độ y1 + y2 = 3 + 9 = 12 thay vì tổng hoành độ."
+          }
+        ],
+        "domain": "Math",
+        "skill": "Giao điểm hàm mũ và tuyến tính (Exponential & Linear Intersections)",
+        "section": "math",
+        "concept_name": "Graphing Exponential vs Linear Functions",
+        "theory": "Equations combining exponential terms (such as 2^x) and polynomials cannot generally be solved using elementary algebra. In Desmos, entering y = 2^x + 1 and y = 3x instantly plots both curves and pinpoints their exact intersection coordinates.",
+        "sample_example": "Graphing y = 2^x and y = x + 1 in Desmos reveals intersections at (0, 1) and (1, 2).",
+        "desmos_expression": "y = 2^x + 1; y = 3x",
+        "target_equation": "2^x + 1 = 3x"
+      },
+      "createdAt": "2026-11-08T14:10:35.641Z",
+      "usageCount": 0
+    }
+  ]
+}

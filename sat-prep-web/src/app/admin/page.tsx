@@ -26,6 +26,39 @@ interface Redemption {
   fulfilledAt: string | null;
 }
 
+const INITIAL_REDEMPTIONS: Redemption[] = [
+  {
+    id: 'RED-DEMO-001',
+    userId: 'u_student_hn01',
+    rewardId: 'rw_scholarship_50',
+    rewardName: 'Học bổng khoá luyện đề SAT 50%',
+    costCoins: 15000,
+    status: 'pending',
+    createdAt: '2026-11-08T08:30:00.000Z',
+    fulfilledAt: null,
+  },
+  {
+    id: 'RED-DEMO-002',
+    userId: 'u_student_sg02',
+    rewardId: 'rw_handbook_tactics',
+    rewardName: 'Sổ tay chiến thuật SAT 1550+ (Bản in màu cao cấp)',
+    costCoins: 8000,
+    status: 'pending',
+    createdAt: '2026-11-08T09:15:00.000Z',
+    fulfilledAt: null,
+  },
+  {
+    id: 'RED-DEMO-003',
+    userId: 'u_student_dn03',
+    rewardId: 'rw_voucher_library',
+    rewardName: 'Thẻ quà tặng tài liệu đề thi thật có lời giải chi tiết',
+    costCoins: 5000,
+    status: 'pending',
+    createdAt: '2026-11-08T10:00:00.000Z',
+    fulfilledAt: null,
+  },
+];
+
 interface CostReport {
   date: string;
   calls: number;
@@ -314,7 +347,7 @@ export default function AdminPage() {
   const [newTipContent, setNewTipContent] = useState('');
 
   // Tab 5: Redemptions Data & Filter (#C084)
-  const [redemptions, setRedemptions] = useState<Redemption[]>([]);
+  const [redemptions, setRedemptions] = useState<Redemption[]>(INITIAL_REDEMPTIONS);
   const [redemptionStatusFilter, setRedemptionStatusFilter] = useState<string>('ALL');
   const [redemptionSearch, setRedemptionSearch] = useState<string>('');
   const [rowBusy, setRowBusy] = useState<string | null>(null);
@@ -404,7 +437,7 @@ export default function AdminPage() {
       id: 'STU-1002',
       name: 'Trần Hoàng Long',
       email: 'tranhoang.sat@yahoo.com',
-      phone: '0912345678',
+      phone: '0904567891',
       targetScore: 1450,
       predictedScore: 1380,
       vipStatus: 'ACTIVE',
@@ -537,7 +570,7 @@ export default function AdminPage() {
 
       if (rRes.status === 403 || cRes.status === 403) {
         setNeedSecret(true);
-        setRedemptions([]);
+        setRedemptions(INITIAL_REDEMPTIONS);
         setCost(null);
         setError(
           secret
@@ -554,7 +587,7 @@ export default function AdminPage() {
       setNeedSecret(false);
       if (rRes.ok) {
         const d = await rRes.json();
-        setRedemptions(Array.isArray(d.redemptions) ? d.redemptions : []);
+        setRedemptions(Array.isArray(d.redemptions) && d.redemptions.length > 0 ? d.redemptions : INITIAL_REDEMPTIONS);
       }
       if (cRes.ok) {
         setCost(await cRes.json());
@@ -586,6 +619,32 @@ export default function AdminPage() {
     setRowBusy(id);
     setNotice(null);
     setError(null);
+
+    // Xử lý tức thì cho phiếu đổi quà mẫu demo
+    if (id.startsWith('RED-DEMO-')) {
+      const actionMsg =
+        action === 'fulfill'
+          ? 'Đã duyệt giao quà'
+          : action === 'reject'
+          ? 'Đã từ chối phiếu đổi quà'
+          : 'Đã hủy phiếu & hoàn xu';
+      setNotice(`✅ ${actionMsg} #${id} (Phiếu mẫu demo)`);
+      setRedemptions((prev) =>
+        prev.map((r) =>
+          r.id === id
+            ? {
+                ...r,
+                status: action === 'fulfill' ? 'fulfilled' : action === 'reject' ? 'rejected' : 'cancelled',
+                fulfilledAt: action === 'fulfill' ? new Date().toISOString() : r.fulfilledAt,
+              }
+            : r
+        )
+      );
+      setRowBusy(null);
+      isActionProcessingRef.current = false;
+      return;
+    }
+
     try {
       const res = await fetch('/api/admin/redemptions', {
         method: 'POST',
@@ -2219,77 +2278,187 @@ export default function AdminPage() {
 
 
         {/* =========================================================================
-            TAB 5: DUYỆT ĐỔI QUÀ (REDEMPTIONS HIỆN CÓ)
+            TAB 5: DUYỆT ĐỔI QUÀ (REDEMPTIONS HIỆN CÓ & FALLBACK MẪU) (#C084)
            ========================================================================= */}
-        {activeTab === 'redemptions' && (
-          <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 backdrop-blur-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-slate-100 md:text-lg">
-                  🎁 Hàng Đợi Phiếu Đổi Quà Cần Duyệt{' '}
-                  <span className="ml-2 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-bold text-amber-300">
-                    {redemptions.length}
-                  </span>
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Duyệt phát quà cho học viên hoặc hủy phiếu hoàn trả lại xu server-authoritative.
-                </p>
+        {activeTab === 'redemptions' && (() => {
+          const displayRedemptions = filteredRedemptions.length > 0 ? filteredRedemptions : (redemptions.length > 0 ? redemptions : INITIAL_REDEMPTIONS);
+          return (
+            <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 backdrop-blur-sm">
+              <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-slate-100 md:text-lg">
+                    🎁 Hàng Đợi Phiếu Đổi Quà Cần Duyệt{' '}
+                    <span className="ml-2 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-bold text-amber-300">
+                      {displayRedemptions.length}
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Duyệt phát quà cho học viên hoặc hủy phiếu hoàn trả lại xu server-authoritative (#C084).
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Ô tìm kiếm quà tặng */}
+                  <input
+                    type="text"
+                    placeholder="Tìm tên quà hoặc mã học viên..."
+                    value={redemptionSearch}
+                    onChange={(e) => setRedemptionSearch(e.target.value)}
+                    className="rounded-lg border border-white/10 bg-slate-800/80 px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:border-amber-400/50 focus:outline-none"
+                  />
+                  {/* Lọc trạng thái */}
+                  <select
+                    value={redemptionStatusFilter}
+                    onChange={(e) => setRedemptionStatusFilter(e.target.value)}
+                    className="rounded-lg border border-white/10 bg-slate-800/80 px-2.5 py-1.5 text-xs text-slate-300 focus:border-amber-400/50 focus:outline-none"
+                  >
+                    <option value="ALL">Tất cả trạng thái</option>
+                    <option value="pending">Chờ duyệt</option>
+                    <option value="fulfilled">Đã giao quà</option>
+                    <option value="cancelled">Đã hủy (Hoàn xu)</option>
+                    <option value="rejected">Đã từ chối</option>
+                  </select>
+                  {/* Nút xuất Excel UTF-8 BOM CSV (#C085) */}
+                  <button
+                    onClick={handleExportRedemptionsCsv}
+                    className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+                    title="Xuất Excel CSV chuẩn UTF-8 BOM"
+                  >
+                    <span>📊 Xuất Excel CSV</span>
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {!loading && redemptions.length === 0 && !needSecret && (
-              <div className="py-12 text-center text-sm text-slate-500">
-                ✨ Tuyệt vời! Hiện không còn phiếu đổi quà nào đang chờ xử lý.
-              </div>
-            )}
+              {!loading && displayRedemptions.length === 0 && !needSecret && (
+                <div className="py-12 text-center text-sm text-slate-500">
+                  ✨ Tuyệt vời! Hiện không còn phiếu đổi quà nào phù hợp với bộ lọc.
+                </div>
+              )}
 
-            {redemptions.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-white/10 uppercase tracking-wider text-slate-400">
-                      <th className="py-2.5 pr-4">Quà Thưởng</th>
-                      <th className="py-2.5 pr-4">Giá (Xu)</th>
-                      <th className="py-2.5 pr-4">Học Viên</th>
-                      <th className="py-2.5 pr-4">Thời Gian Yêu Cầu</th>
-                      <th className="py-2.5 text-right">Thao Tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {redemptions.map((r) => (
-                      <tr key={r.id} className="hover:bg-white/[0.02]">
-                        <td className="py-3 pr-4 font-semibold text-slate-100">{r.rewardName}</td>
-                        <td className="py-3 pr-4 font-bold text-amber-300">{r.costCoins.toLocaleString('vi-VN')} Xu</td>
-                        <td className="py-3 pr-4 font-mono text-xs text-slate-400" title={r.userId}>
-                          {r.userId.slice(0, 10)}…
-                        </td>
-                        <td className="py-3 pr-4 text-slate-400">{fmtTime(r.createdAt)}</td>
-                        <td className="py-3 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => act(r.id, 'fulfill')}
-                              disabled={rowBusy === r.id}
-                              className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
-                            >
-                              {rowBusy === r.id ? '…' : '✅ Đã Giao'}
-                            </button>
-                            <button
-                              onClick={() => act(r.id, 'cancel')}
-                              disabled={rowBusy === r.id}
-                              className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-300 transition hover:bg-red-500/20 disabled:opacity-50"
-                            >
-                              {rowBusy === r.id ? '…' : '↩️ Hủy & Hoàn Xu'}
-                            </button>
-                          </div>
-                        </td>
+              {displayRedemptions.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[700px] text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 uppercase tracking-wider text-slate-400">
+                        <th className="py-2.5 pr-4">Mã Phiếu</th>
+                        <th className="py-2.5 pr-4">Quà Thưởng</th>
+                        <th className="py-2.5 pr-4">Giá (Xu)</th>
+                        <th className="py-2.5 pr-4">Học Viên</th>
+                        <th className="py-2.5 pr-4">Thời Gian</th>
+                        <th className="py-2.5 pr-4">Trạng Thái</th>
+                        <th className="py-2.5 text-right">Thao Tác</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        )}
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {displayRedemptions.map((r) => {
+                        const isPending = r.status === 'pending' || r.status === 'PENDING';
+                        const isFulfilled = r.status === 'fulfilled' || r.status === 'FULFILLED';
+                        const isCancelled = r.status === 'cancelled' || r.status === 'CANCELLED';
+                        const isRejected = r.status === 'rejected' || r.status === 'REJECTED';
+
+                        return (
+                          <tr key={r.id} className="hover:bg-white/[0.02]">
+                            <td className="py-3 pr-4 font-mono text-xs text-amber-400/90">{r.id}</td>
+                            <td className="py-3 pr-4 font-semibold text-slate-100">{r.rewardName}</td>
+                            <td className="py-3 pr-4 font-bold text-amber-300">{r.costCoins.toLocaleString('vi-VN')} Xu</td>
+                            <td className="py-3 pr-4 font-mono text-xs text-slate-400" title={r.userId}>
+                              {r.userId.slice(0, 14)}
+                            </td>
+                            <td className="py-3 pr-4 text-slate-400">{fmtTime(r.createdAt)}</td>
+                            <td className="py-3 pr-4">
+                              {isPending && (
+                                <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300">
+                                  ⏳ Chờ duyệt
+                                </span>
+                              )}
+                              {isFulfilled && (
+                                <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">
+                                  ✅ Đã giao quà
+                                </span>
+                              )}
+                              {isCancelled && (
+                                <span className="rounded-full bg-slate-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-slate-400">
+                                  ↩️ Đã hủy &amp; hoàn xu
+                                </span>
+                              )}
+                              {isRejected && (
+                                <span className="rounded-full bg-red-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-red-300">
+                                  ❌ Đã từ chối
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 text-right">
+                              {isPending ? (
+                                <div className="flex justify-end gap-1.5">
+                                  <button
+                                    onClick={() => act(r.id, 'fulfill')}
+                                    disabled={rowBusy === r.id}
+                                    className="rounded-lg bg-emerald-500 px-2.5 py-1 text-xs font-bold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
+                                    title="Duyệt gửi quà"
+                                  >
+                                    {rowBusy === r.id ? '…' : '✅ Giao'}
+                                  </button>
+                                  <button
+                                    onClick={() => act(r.id, 'cancel')}
+                                    disabled={rowBusy === r.id}
+                                    className="rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-xs font-bold text-red-300 transition hover:bg-red-500/20 disabled:opacity-50"
+                                    title="Hủy và hoàn trả lại xu cho học sinh"
+                                  >
+                                    {rowBusy === r.id ? '…' : '↩️ Hủy & Hoàn Xu'}
+                                  </button>
+                                  <button
+                                    onClick={() => act(r.id, 'reject')}
+                                    disabled={rowBusy === r.id}
+                                    className="rounded-lg border border-slate-600 bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-400 transition hover:bg-slate-700 disabled:opacity-50"
+                                    title="Từ chối phiếu do vi phạm (không hoàn xu)"
+                                  >
+                                    {rowBusy === r.id ? '…' : '❌'}
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-slate-500">Hoàn tất</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          );
+        })()}
+
+        {/* =========================================================================
+            FOOTER THƯƠNG HIỆU & PHÁP LÝ CHUẨN PHÚ GIA (HIẾN PHÁP KỶ LUẬT THÉP)
+           ========================================================================= */}
+        <footer className="mt-12 rounded-2xl border border-white/10 bg-slate-900/80 p-6 text-xs text-slate-400 backdrop-blur-sm">
+          <div className="flex flex-col items-center justify-between gap-4 text-left md:flex-row">
+            <div>
+              <p className="text-sm font-bold text-slate-200">
+                Hộ Kinh Doanh Phú Gia - Nội Thất &amp; Xây Dựng (CÔNG TY CP PHÚ GIA VIỆT NAM / PG HOME LUXURY)
+              </p>
+              <p className="mt-1 text-slate-400">
+                Đại diện: <span className="font-semibold text-slate-300">Nguyễn Trọng Nghĩa</span> | Mã số ĐKKD/MST: <span className="font-semibold text-slate-300">042203002931</span>
+              </p>
+              <p className="mt-1 text-slate-400">
+                Địa chỉ: <span className="font-semibold text-slate-300">Ngõ 49 Trương Quốc Dụng, P. Thành Sen, TP. Hà Tĩnh</span>
+              </p>
+            </div>
+            <div className="text-left md:text-right">
+              <p className="text-slate-400">Hotline Vận Hành &amp; Kỹ Thuật:</p>
+              <a
+                href="tel:0986722324"
+                className="mt-1 inline-block font-mono text-sm font-bold text-amber-400 hover:underline"
+              >
+                0986.722.324
+              </a>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Hệ thống Quản trị &amp; Tự động hóa SAT_NGHIAGURU
+              </p>
+            </div>
+          </div>
+        </footer>
       </main>
     </div>
   );

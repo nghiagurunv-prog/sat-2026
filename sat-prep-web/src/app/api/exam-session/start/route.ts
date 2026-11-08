@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const section = body.section === 'math' ? 'math' : body.section === 'rw' ? 'rw' : null;
     const mode = body.mode === 'real' ? 'real' : 'mock';
+    const examId = typeof body?.examId === 'string' ? body.examId : 'sat-mock-01';
 
     if (!section) {
       return NextResponse.json({ error: 'section phải là "rw" hoặc "math"' }, { status: 400 });
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
     const origin = request.nextUrl.origin;
     const cookie = request.headers.get('cookie') ?? '';
 
-    const generated = await generateModule(section, 1, origin, cookie);
+    const generated = await generateModule(section, 1, origin, cookie, undefined, examId, user.id);
 
     if (generated.questions.length === 0) {
       return NextResponse.json(
@@ -132,17 +133,24 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        return { ...safe, questionId };
+        return { ...safe, questionId: questionId ?? q.id };
       })
     );
+
+    const isQuickDiagnostic = examId === 'sat-diagnostic-quick';
+    const durationSeconds = isQuickDiagnostic ? 15 * 60 : generated.timeMinutes * 60;
+    const timeMinutes = isQuickDiagnostic ? 15 : generated.timeMinutes;
 
     return NextResponse.json({
       section,
       mode,
+      examId,
+      durationSeconds,
       ...(mode === 'real' ? { levelWarning, level: currentLevel } : {}),
       module: {
-        name: generated.name,
-        timeMinutes: generated.timeMinutes,
+        name: isQuickDiagnostic ? `${generated.name} (Chẩn đoán nhanh 15 phút)` : generated.name,
+        timeMinutes,
+        durationSeconds,
         moduleNum: generated.moduleNum,
         section: generated.section,
         questions: safeQuestions,

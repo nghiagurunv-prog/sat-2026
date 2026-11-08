@@ -683,8 +683,9 @@ export default function ExamRunner({
     if (!currentModule) return [];
     const out: { questionId: string; answer: string }[] = [];
     for (const q of currentModule.questions) {
-      if (q.questionId) {
-        out.push({ questionId: q.questionId, answer: answers[q.questionId] ?? '' });
+      const qId = q.questionId || q.id;
+      if (qId) {
+        out.push({ questionId: qId, answer: answers[qId] ?? '' });
       }
     }
     return out;
@@ -708,7 +709,7 @@ export default function ExamRunner({
       const res = await fetch('/api/exam-session/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ section, mode: effectiveMode }),
+        body: JSON.stringify({ section, mode: effectiveMode, examId: effectiveExamId }),
         signal: ctrl.signal,
       });
       clearTimeout(startTimer);
@@ -747,7 +748,7 @@ export default function ExamRunner({
       setErrorMsg((error as Error)?.message || 'Không thể sinh đề thi. Vui lòng thử lại.');
       setPhase('lobby');
     }
-  }, [effectiveMode]);
+  }, [effectiveMode, effectiveExamId]);
 
   // Hoàn thành bài thi và ghi nhận lịch sử (Điểm 70)
   const finishExam = useCallback(() => {
@@ -865,7 +866,7 @@ export default function ExamRunner({
     }, 2000);
 
     try {
-      const res = await postSubmitWithRetry({ section, moduleNum, mode: effectiveMode, answers: submitted });
+      const res = await postSubmitWithRetry({ section, moduleNum, mode: effectiveMode, examId: effectiveExamId, answers: submitted });
       clearInterval(progressInterval);
 
       if (!res.ok) throw new Error('Không thể nộp module');
@@ -959,7 +960,7 @@ export default function ExamRunner({
     } finally {
       isSubmittingRef.current = false;
     }
-  }, [currentModule, buildSubmittedAnswers, effectiveMode, syncServerEconomy, answers, questionTimes, sectionMode, finishExam]);
+  }, [currentModule, buildSubmittedAnswers, effectiveMode, effectiveExamId, syncServerEconomy, answers, questionTimes, sectionMode, finishExam]);
 
   // Auto-nộp khi hết giờ (#038: có Double-Submit Guard)
   useEffect(() => {

@@ -111,12 +111,18 @@ function validateQuestionSchema(data: unknown): { valid: boolean; reason?: strin
       return { valid: false, reason: '4 nội dung đáp án trắc nghiệm phải phân biệt nhau (không trùng lặp)' };
     }
 
-    // correct_choice phải thuộc ['A', 'B', 'C', 'D']
-    const cc = typeof q.correct_choice === 'string' ? q.correct_choice.trim().toUpperCase() : '';
-    if (!['A', 'B', 'C', 'D'].includes(cc)) {
-      return { valid: false, reason: 'correct_choice phải thuộc [A, B, C, D]' };
+    // correct_choice phải thuộc ['A', 'B', 'C', 'D'], bắt đầu bằng nhãn 'A)'/'A.', hoặc khớp chính xác 1 trong 4 đáp án
+    const rawCorrect = typeof q.correct_choice === 'string' ? q.correct_choice.trim() : '';
+    const ccUpper = rawCorrect.toUpperCase();
+    const isLetter = ['A', 'B', 'C', 'D'].includes(ccUpper);
+    const isPrefixedLetter = /^[A-D][).]\s*/i.test(rawCorrect);
+    const matchesChoiceText = choiceTexts.some((c) => c === rawCorrect);
+    if (!isLetter && !isPrefixedLetter && !matchesChoiceText) {
+      return { valid: false, reason: 'correct_choice phải thuộc [A, B, C, D] hoặc khớp nội dung đáp án' };
     }
-    q.correct_choice = cc;
+    if (isLetter) {
+      q.correct_choice = ccUpper;
+    }
   }
 
   return { valid: true };
