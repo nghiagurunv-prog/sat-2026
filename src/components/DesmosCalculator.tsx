@@ -92,6 +92,11 @@ export function DesmosCalculator({
   const [showSnippets, setShowSnippets] = useState<boolean>(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  // #039: Keep Desmos mounted once opened so graphs/sliders/regression tables persist
+  const hasOpenedRef = useRef<boolean>(false);
+  if (isOpen) {
+    hasOpenedRef.current = true;
+  }
 
   const activeSizeMode = controlledSizeMode || internalSizeMode;
 
@@ -135,7 +140,7 @@ export function DesmosCalculator({
     }
   }, []);
 
-  if (!isOpen) return null;
+  if (!isOpen && !hasOpenedRef.current) return null;
 
   // Size styling
   const sizeStyles = {
@@ -148,7 +153,8 @@ export function DesmosCalculator({
     <div
       role="dialog"
       aria-label="Desmos Graphing Calculator"
-      className={`fixed z-50 flex flex-col bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-2xl rounded-xl overflow-hidden transition-all duration-200 ${sizeStyles} ${className}`}
+      aria-hidden={!isOpen}
+      className={`fixed z-50 ${isOpen ? 'flex' : 'hidden pointer-events-none'} flex-col bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 shadow-2xl rounded-xl overflow-hidden transition-all duration-200 ${sizeStyles} ${className}`}
     >
       {/* Toast thông báo chép công thức */}
       {toastMessage && (
