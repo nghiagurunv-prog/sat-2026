@@ -833,9 +833,9 @@ function ParentVietQRSponsorAndReward({
 
   // Đọc phần thưởng đã lưu từ localStorage
   useEffect(() => {
-    if (typeof window !== 'undefined' && studentCode) {
+    if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem(`sat_reward_${studentCode}`);
+        const stored = (studentCode ? localStorage.getItem(`sat_reward_${studentCode}`) : null) || localStorage.getItem('sat_parent_reward_v1');
         if (stored) {
           const parsed = JSON.parse(stored) as ParentRewardData;
           setReward(parsed);
@@ -864,28 +864,35 @@ function ParentVietQRSponsorAndReward({
   )}&accountName=${encodeURIComponent(ACCOUNT_NAME)}`;
 
   const copyToClipboard = (text: string, fieldKey: string) => {
-    if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(text);
-      setCopiedField(fieldKey);
-      setTimeout(() => setCopiedField(null), 2000);
-    }
+    void copyTextToClipboard(text).then((ok) => {
+      if (ok) {
+        setCopiedField(fieldKey);
+        setTimeout(() => setCopiedField(null), 2000);
+      }
+    });
   };
 
   const handleSaveReward = () => {
     const finalRewardName = rewardNameInput === '__custom__' ? customRewardInput.trim() : rewardNameInput;
     if (!finalRewardName) return;
 
+    const rawScore = Number.isFinite(targetScoreInput) ? targetScoreInput : 1450;
+    const safeTargetScore = Math.min(1600, Math.max(400, Math.round(rawScore / 10) * 10));
+
     const newReward: ParentRewardData = {
-      targetScore: targetScoreInput,
+      targetScore: safeTargetScore,
       rewardName: finalRewardName,
       parentNote: parentNoteInput.trim(),
       createdAt: new Date().toLocaleDateString('vi-VN'),
     };
 
     setReward(newReward);
-    if (typeof window !== 'undefined' && studentCode) {
+    if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(`sat_reward_${studentCode}`, JSON.stringify(newReward));
+        if (studentCode) {
+          localStorage.setItem(`sat_reward_${studentCode}`, JSON.stringify(newReward));
+        }
+        localStorage.setItem('sat_parent_reward_v1', JSON.stringify(newReward));
       } catch {
         // ignore
       }
@@ -900,8 +907,15 @@ function ParentVietQRSponsorAndReward({
   const handleDeleteReward = () => {
     if (confirm('Bố mẹ có chắc chắn muốn xóa phần thưởng động viên này không?')) {
       setReward(null);
-      if (typeof window !== 'undefined' && studentCode) {
-        localStorage.removeItem(`sat_reward_${studentCode}`);
+      if (typeof window !== 'undefined') {
+        try {
+          if (studentCode) {
+            localStorage.removeItem(`sat_reward_${studentCode}`);
+          }
+          localStorage.removeItem('sat_parent_reward_v1');
+        } catch {
+          // ignore
+        }
       }
     }
   };

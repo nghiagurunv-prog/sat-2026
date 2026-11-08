@@ -3,6 +3,11 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { CorePracticeUI, type PracticeQuestion } from './CorePracticeUI';
+import { matchesAnswer } from '@/lib/answer-match';
+
+export function isMistakeAnswerCorrect(userAns: string | undefined | null, correctAns: string | undefined | null): boolean {
+  return Boolean(userAns && correctAns && (userAns === correctAns || matchesAnswer(userAns, correctAns)));
+}
 
 export type Mistake = {
   id?: string;
@@ -709,10 +714,12 @@ export function MistakeNotebook() {
   };
 
   // [Point 50 & 51] Lọc đa chiều & tìm kiếm
+  const archivedIdsSet = useMemo(() => new Set(archivedIds), [archivedIds]);
+
   const filteredMistakes = useMemo(() => {
     return mistakes.filter(m => {
       const id = m.id || '';
-      const isArchived = archivedIds.includes(id);
+      const isArchived = archivedIdsSet.has(id);
 
       if (filterArchive === 'active' && isArchived) return false;
       if (filterArchive === 'archived' && !isArchived) return false;
@@ -757,7 +764,7 @@ export function MistakeNotebook() {
 
       return true;
     });
-  }, [mistakes, archivedIds, filterArchive, filterSubject, filterBox, filterSource, filterRootCause, searchQuery, notes, rootCauses]);
+  }, [mistakes, archivedIdsSet, filterArchive, filterSubject, filterBox, filterSource, filterRootCause, searchQuery, notes, rootCauses]);
 
   // Unique sources for filter dropdown
   const uniqueSources = useMemo(() => {
@@ -780,7 +787,7 @@ export function MistakeNotebook() {
     let taggedTotal = 0;
     mistakes.forEach(m => {
       const id = m.id || '';
-      if (archivedIds.includes(id)) return;
+      if (archivedIdsSet.has(id)) return;
       const c = rootCauses[id];
       if (c && counts[c] !== undefined) {
         counts[c]++;
@@ -798,14 +805,14 @@ export function MistakeNotebook() {
     }
 
     return { counts, taggedTotal, highestCause, highestCount };
-  }, [mistakes, archivedIds, rootCauses]);
+  }, [mistakes, archivedIdsSet, rootCauses]);
 
   // [Point 53] Thanh tiến độ tốt nghiệp sổ tay (Box 4-5 vs Box 1-2)
   const masteryStats = useMemo(() => {
     let mastered = 0;
     let learning = 0;
     let danger = 0;
-    const activeMistakes = mistakes.filter(m => !archivedIds.includes(m.id || ''));
+    const activeMistakes = mistakes.filter(m => !archivedIdsSet.has(m.id || ''));
     const total = activeMistakes.length;
 
     activeMistakes.forEach(m => {
@@ -820,15 +827,15 @@ export function MistakeNotebook() {
     const dangerPercent = total > 0 ? Math.round((danger / total) * 100) : 0;
 
     return { mastered, learning, danger, total, masteredPercent, learningPercent, dangerPercent };
-  }, [mistakes, archivedIds]);
+  }, [mistakes, archivedIdsSet]);
 
   // Số lượng câu đến hạn ôn hôm nay
   const dueCount = useMemo(() => {
     return mistakes.filter(m => {
-      if (archivedIds.includes(m.id || '')) return false;
+      if (archivedIdsSet.has(m.id || '')) return false;
       return getNextReviewInfo(m.next_review || m.nextReviewAt).isDue;
     }).length;
-  }, [mistakes, archivedIds]);
+  }, [mistakes, archivedIdsSet]);
 
   // Đảm bảo currentIndex hợp lệ khi danh sách filteredMistakes thay đổi
   const safeCurrentIndex = Math.min(currentIndex, Math.max(0, filteredMistakes.length - 1));
@@ -898,7 +905,7 @@ export function MistakeNotebook() {
   const sprintQuestions = useMemo(() => {
     if (mode !== 'sprint') return [];
     // Lấy tối đa 5 câu sai ưu tiên box thấp nhất hoặc đến hạn hôm nay
-    const eligible = mistakes.filter(m => !archivedIds.includes(m.id || ''));
+    const eligible = mistakes.filter(m => !archivedIdsSet.has(m.id || ''));
     return [...eligible]
       .sort((a, b) => {
         const boxA = a.box ?? 1;
@@ -909,7 +916,7 @@ export function MistakeNotebook() {
         return dueA - dueB;
       })
       .slice(0, 5);
-  }, [mode, mistakes, archivedIds]);
+  }, [mode, mistakes, archivedIdsSet]);
 
   const sprintChoicesRef = useRef(sprintChoices);
   sprintChoicesRef.current = sprintChoices;
@@ -938,7 +945,7 @@ export function MistakeNotebook() {
             setSprintSubmitted(true);
             let correct = 0;
             sprintQuestions.forEach((q, idx) => {
-              if (sprintChoicesRef.current[idx] && sprintChoicesRef.current[idx] === q.correct_choice) {
+              if (isMistakeAnswerCorrect(sprintChoicesRef.current[idx], q.correct_choice)) {
                 correct++;
               }
             });
@@ -1113,7 +1120,7 @@ export function MistakeNotebook() {
     let correctCount = 0;
     if (sprintSubmitted) {
       sprintQuestions.forEach((q, idx) => {
-        if (sprintChoices[idx] && sprintChoices[idx] === q.correct_choice) {
+        if (isMistakeAnswerCorrect(sprintChoices[idx], q.correct_choice)) {
           correctCount++;
         }
       });
@@ -1174,7 +1181,7 @@ export function MistakeNotebook() {
               <div className="max-w-2xl mx-auto space-y-3 text-left pt-4">
                 {sprintQuestions.map((q, idx) => {
                   const userAns = sprintChoices[idx];
-                  const isCorrect = userAns === q.correct_choice;
+                  const isCorrect = isMistakeAnswerCorrect(userAns, q.correct_choice);
                   return (
                     <div
                       key={idx}
@@ -1234,33 +1241,43 @@ export function MistakeNotebook() {
               </div>
 
               {/* Lựa chọn đáp án */}
-              <div className="space-y-2">
-                {(currentSprintQ?.choices && currentSprintQ.choices.length > 0
-                  ? currentSprintQ.choices
-                  : ['A', 'B', 'C', 'D']
-                ).map((choice, cIdx) => {
-                  const isSelected = sprintChoices[sprintIndex] === choice;
-                  return (
-                    <button
-                      key={cIdx}
-                      type="button"
-                      onClick={() =>
-                        setSprintChoices(prev => ({ ...prev, [sprintIndex]: choice }))
-                      }
-                      className={`w-full text-left p-3.5 rounded-xl border text-sm font-medium transition-all ${
-                        isSelected
-                          ? 'bg-blue-600/30 border-blue-500 text-white shadow-[0_0_10px_rgba(59,130,246,0.3)]'
-                          : 'bg-[#1b2533] border-[#262730] text-gray-300 hover:bg-[#223042]'
-                      }`}
-                    >
-                      <span className="font-bold text-amber-400 mr-2">
-                        {String.fromCharCode(65 + cIdx)}.
-                      </span>
-                      {choice}
-                    </button>
-                  );
-                })}
-              </div>
+              {currentSprintQ?.choices && currentSprintQ.choices.length > 0 ? (
+                <div className="space-y-2">
+                  {currentSprintQ.choices.map((choice, cIdx) => {
+                    const isSelected = sprintChoices[sprintIndex] === choice;
+                    return (
+                      <button
+                        key={cIdx}
+                        type="button"
+                        onClick={() =>
+                          setSprintChoices(prev => ({ ...prev, [sprintIndex]: choice }))
+                        }
+                        className={`w-full text-left p-3.5 rounded-xl border text-sm font-medium transition-all ${
+                          isSelected
+                            ? 'bg-blue-600/30 border-blue-500 text-white shadow-[0_0_10px_rgba(59,130,246,0.3)]'
+                            : 'bg-[#1b2533] border-[#262730] text-gray-300 hover:bg-[#223042]'
+                        }`}
+                      >
+                        <span className="font-bold text-amber-400 mr-2">
+                          {String.fromCharCode(65 + cIdx)}.
+                        </span>
+                        {choice}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="pt-2">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={sprintChoices[sprintIndex] || ''}
+                    onChange={e => setSprintChoices(prev => ({ ...prev, [sprintIndex]: e.target.value }))}
+                    placeholder="Nhập đáp án số / phân số (VD: 3/4, 12.5)..."
+                    className="w-full bg-[#1b2533] border border-[#334155] focus:border-amber-400 rounded-xl p-3.5 text-sm text-white font-mono outline-none"
+                  />
+                </div>
+              )}
 
               {/* Nút chuyển câu / Nộp bài */}
               <div className="flex justify-between items-center pt-4 border-t border-[#262730]">
@@ -1289,7 +1306,7 @@ export function MistakeNotebook() {
                       setSprintSubmitted(true);
                       let correct = 0;
                       sprintQuestions.forEach((q, idx) => {
-                        if (sprintChoices[idx] && sprintChoices[idx] === q.correct_choice) {
+                        if (isMistakeAnswerCorrect(sprintChoices[idx], q.correct_choice)) {
                           correct++;
                         }
                       });
@@ -1585,7 +1602,7 @@ export function MistakeNotebook() {
   const currentMistakeId = currentMistake?.id || `browse-${safeCurrentIndex}`;
   const currentPersonalNote = notes[currentMistakeId] || '';
   const currentCause = rootCauses[currentMistakeId];
-  const isCurrentArchived = archivedIds.includes(currentMistakeId);
+  const isCurrentArchived = archivedIdsSet.has(currentMistakeId);
   const tacticalAdvice = getTacticalAdvice(rootCauseStats.highestCause, rootCauseStats.taggedTotal);
 
   const handleNext = () => {
@@ -2244,7 +2261,7 @@ export function MistakeNotebook() {
                         onClick={() => {
                           if (browseGuess === c) return;
                           setBrowseGuess(c);
-                          if (c === currentMistake.correct_choice) {
+                          if (isMistakeAnswerCorrect(c, currentMistake.correct_choice)) {
                             awardMasteryShard(1, 'Xuất sắc! Nhẩm chính xác đáp án khi che đề! +1 Tinh Thể Phục Thù');
                           }
                         }}
@@ -2311,12 +2328,12 @@ export function MistakeNotebook() {
               {browseGuess && (
                 <div
                   className={`p-3 rounded-lg border text-xs font-bold ${
-                    browseGuess === currentMistake.correct_choice
+                    isMistakeAnswerCorrect(browseGuess, currentMistake.correct_choice)
                       ? 'bg-emerald-950/30 border-emerald-500 text-emerald-300'
                       : 'bg-rose-950/30 border-rose-500 text-rose-300'
                   }`}
                 >
-                  {browseGuess === currentMistake.correct_choice
+                  {isMistakeAnswerCorrect(browseGuess, currentMistake.correct_choice)
                     ? '🎉 Xuất sắc! Bạn đã tự nhẩm đúng đáp án chuẩn!'
                     : `⚠️ Lần này bạn nhẩm "${browseGuess}". Hãy xem lời giải chi tiết bên dưới nhé.`}
                 </div>

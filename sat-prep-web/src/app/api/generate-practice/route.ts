@@ -472,29 +472,20 @@ BẮT BUỘC thêm trường "choice_analysis": MẢNG, mỗi phần tử ứng 
       throw new Error("No content generated");
     }
 
-    // Ghi kế toán cost + chốt quota TRƯỚC khi trả response. AWAIT (audit 2026-07-03,
-    // ROOT D): fire-and-forget trên serverless có thể bị freeze/kill sau khi
-    // response trả về → mất bản ghi → thất thoát trần ngân sách/quota. Vẫn giữ
-    // .catch để lỗi DB KHÔNG làm hỏng câu trả lời AI đã sinh thành công.
-    // finalizeUsage: count đã reserve, chỉ cộng token (reserved:true); pre-migration
-    // (reserved:false) → recordUsage cũ (tăng count + token) → 0 regression.
-    await Promise.allSettled([
-      recordGlobalCost(
-        responseData.usage?.prompt_tokens ?? 0,
-        responseData.usage?.completion_tokens ?? 0,
-        model
-      ).catch((e) => console.error('recordGlobalCost:', e)),
-      finalizeUsage(
-        user.id,
-        'gen',
-        responseData.usage?.prompt_tokens ?? 0,
-        responseData.usage?.completion_tokens ?? 0,
-        reservation.reserved,
-        reservation.date
-      ).catch((e) => console.error('finalizeUsage:', e)),
-    ]);
-
-    const data = JSON.parse(content);
+    let data: any;
+    try {
+      data = JSON.parse(content);
+      if (!data || typeof data !== 'object') {
+        throw new Error('Parsed data is not an object');
+      }
+    } catch (parseErr) {
+      console.error('Failed to parse AI response JSON:', parseErr);
+      await releaseUsage(user.id, 'gen', reservation.reserved, reservation.date);
+      return NextResponse.json(
+        { error: 'Dữ liệu AI trả về không đúng định dạng JSON. Vui lòng thử lại.' },
+        { status: 502 }
+      );
+    }
     
     // Áp dụng thuật toán cleanAiText để chuẩn hóa LaTeX
     const { cleanAiText } = await import('@/helpers/ai-formatter');
@@ -520,11 +511,34 @@ BẮT BUỘC thêm trường "choice_analysis": MẢNG, mỗi phần tử ứng 
     const validation = validateQuestionSchema(data);
     if (!validation.valid) {
       console.error('Generated question failed schema validation:', validation.reason);
+      await releaseUsage(user.id, 'gen', reservation.reserved, reservation.date);
       return NextResponse.json(
         { error: 'Câu hỏi AI sinh ra không đạt chuẩn cấu trúc SAT. Vui lòng thử lại.' },
         { status: 502 }
       );
     }
+
+    // Ghi kế toán cost + chốt quota TRƯỚC khi trả response. AWAIT (audit 2026-07-03,
+    // ROOT D): fire-and-forget trên serverless có thể bị freeze/kill sau khi
+    // response trả về → mất bản ghi → thất thoát trần ngân sách/quota. Vẫn giữ
+    // .catch để lỗi DB KHÔNG làm hỏng câu trả lời AI đã sinh thành công.
+    // finalizeUsage: count đã reserve, chỉ cộng token (reserved:true); pre-migration
+    // (reserved:false) → recordUsage cũ (tăng count + token) → 0 regression.
+    await Promise.allSettled([
+      recordGlobalCost(
+        responseData.usage?.prompt_tokens ?? 0,
+        responseData.usage?.completion_tokens ?? 0,
+        model
+      ).catch((e) => console.error('recordGlobalCost:', e)),
+      finalizeUsage(
+        user.id,
+        'gen',
+        responseData.usage?.prompt_tokens ?? 0,
+        responseData.usage?.completion_tokens ?? 0,
+        reservation.reserved,
+        reservation.date
+      ).catch((e) => console.error('finalizeUsage:', e)),
+    ]);
 
     // Lưu câu mới vào Question Bank để tái sử dụng (§9.4). Không chặn response
     // nếu lưu lỗi — chỉ là tối ưu chi phí, không phải đường tới hạn. skillId

@@ -242,6 +242,33 @@ function validateSprInput(val: string): SprValidationResult {
       type: "error",
     };
   }
+  if (trimmed.includes("/")) {
+    const parts = trimmed.split("/");
+    if (
+      parts.length !== 2 ||
+      !parts[0] ||
+      !parts[1] ||
+      parts[0].includes(".") ||
+      parts[1].includes(".") ||
+      parts[1].startsWith("-") ||
+      Number(parts[1]) === 0 ||
+      isNaN(Number(parts[0])) ||
+      isNaN(Number(parts[1]))
+    ) {
+      return {
+        isValid: false,
+        message: "CẢNH BÁO (#040): Phân số SPR không hợp lệ! Tử và mẫu phải là số nguyên (không chứa dấu chấm thập phân, mẫu số phải dương và khác 0).",
+        type: "error",
+      };
+    }
+  }
+  if (/^-?0?\.(66|67|33)$/.test(trimmed)) {
+    return {
+      isValid: true,
+      message: `LƯU Ý (#040): Số thập phân vô hạn tuần hoàn phải điền kín toàn bộ ${charLimit} ký tự (vd: .6666, .6667 hoặc 2/3) thay vì viết ngắn '${trimmed}'!`,
+      type: "warning",
+    };
+  }
   return {
     isValid: true,
     message: `HỢP LỆ! Độ dài: ${trimmed.length}/${charLimit} ký tự. Thỏa mãn hoàn toàn tiêu chuẩn điền đáp án tự luận Bluebook.`,
@@ -287,9 +314,13 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
   const [isDraggingRef, setIsDraggingRef] = useState(false);
   const refDragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Desmos CDN / iframe retry state (#062)
+  // Desmos CDN / iframe retry state (#062) & persistent mount (#039)
   const [desmosError, setDesmosError] = useState(false);
   const [desmosRetryKey, setDesmosRetryKey] = useState(0);
+  const hasOpenedDesmosRef = useRef(false);
+  if (showDesmos) {
+    hasOpenedDesmosRef.current = true;
+  }
 
   const retryLoadDesmos = useCallback(() => {
     setDesmosError(false);
@@ -748,16 +779,17 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
       )}
 
       {/* ==================================================================== */}
-      {/* 3. DESMOS GRAPHING CALCULATOR (Items 32, 33, 45) */}
+      {/* 3. DESMOS GRAPHING CALCULATOR (Items 32, 33, 45, #039) */}
       {/* ==================================================================== */}
-      {showDesmos && (
+      {(showDesmos || hasOpenedDesmosRef.current) && (
         <div
+          aria-hidden={!showDesmos}
           style={
             desmosSize === "normal" && desmosPos
               ? { left: `${desmosPos.x}px`, top: `${desmosPos.y}px`, bottom: "auto", right: "auto" }
               : undefined
           }
-          className={`fixed z-50 flex flex-col overflow-hidden bg-slate-950 shadow-2xl ${
+          className={`fixed z-50 ${showDesmos ? "flex" : "hidden pointer-events-none"} flex-col overflow-hidden bg-slate-950 shadow-2xl ${
             isDraggingDesmos ? "" : "transition-all duration-200"
           } ${
             desmosSize === "large"
