@@ -99,17 +99,15 @@ export function isPayosConfigured(): boolean {
 }
 
 /**
- * Sinh orderCode SỐ NGUYÊN duy nhất cho payOS (≤ 2^53-1).
- * Kết hợp timestamp mili-giây và crypto.randomInt(1000, 9999) để chống đụng độ (collision-free)
- * khi nhiều học sinh bấm mua cùng mili-giây.
- * Cụ thể: Math.floor((Date.now() % 1_000_000_000) * 10000 + crypto.randomInt(1000, 9999))
- * cho ra 13 chữ số hoàn toàn nằm trong Number.MAX_SAFE_INTEGER và có 9,000 giá trị ngẫu nhiên mỗi mili-giây.
+ * Sinh orderCode SỐ NGUYÊN duy nhất cho payOS (≤ 2^53-1), không wrap-around chu kỳ ngắn.
+ * Kết hợp timestamp mili-giây đầy đủ (`Date.now() * 1000` ~ 1.8e15 < Number.MAX_SAFE_INTEGER 9e15)
+ * và `crypto.randomInt(100, 999)` + đơn điệu hóa khi trùng mili-giây.
  */
 let lastOrderCode = 0;
 export function generateOrderCode(): number {
-  let code = Math.floor((Date.now() % 1_000_000_000) * 10000 + crypto.randomInt(1000, 9999));
-  while (code === lastOrderCode) {
-    code = Math.floor((Date.now() % 1_000_000_000) * 10000 + crypto.randomInt(1000, 9999));
+  let code = Date.now() * 1000 + crypto.randomInt(100, 999);
+  if (code <= lastOrderCode) {
+    code = lastOrderCode + 1;
   }
   lastOrderCode = code;
   return code;

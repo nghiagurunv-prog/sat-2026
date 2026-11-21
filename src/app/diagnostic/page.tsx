@@ -35,7 +35,7 @@ const CONFIDENCE_LABEL: Record<string, string> = {
 
 function routeForFocusSkill(skillId: string, subject: string): string {
   const moduleType = getSkill(skillId)?.moduleType;
-  if (moduleType === 'vocab') return '/vocabulary';
+  if (moduleType === 'vocab') return '/vocab';
   if (moduleType === 'literature') return '/literature';
   if (moduleType === 'desmos') return '/desmos';
   if (moduleType === 'math') return '/math';
@@ -49,6 +49,7 @@ export default function DiagnosticPage() {
   const [answerLog, setAnswerLog] = useState<boolean[]>([]);
   const [targetScore, setTargetScore] = useState<string>('');
   const [prediction, setPrediction] = useState<Prediction | null>(null);
+  const [savedPrediction, setSavedPrediction] = useState<(Prediction & { completedAt?: string }) | null>(null);
   const [tier, setTier] = useState<string>('free');
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +59,21 @@ export default function DiagnosticPage() {
   const isStartingRef = useRef(false);
 
   useEffect(() => {
+    // Tải kết quả chẩn đoán đã lưu từ localStorage nếu có
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('sat_diagnostic_result');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed.total === 'number') {
+            setSavedPrediction(parsed);
+          }
+        }
+      } catch {
+        // ignore localStorage error
+      }
+    }
+
     async function checkStatus() {
       try {
         const res = await fetch('/api/diagnostic');
@@ -66,6 +82,10 @@ export default function DiagnosticPage() {
           return;
         }
         const data = await res.json();
+        if (data.prediction && typeof window !== 'undefined') {
+          const predWithDate = { ...data.prediction, completedAt: new Date().toISOString() };
+          setSavedPrediction((prev) => prev || predWithDate);
+        }
         setPhase(data.completed ? 'done_already' : 'intro');
       } catch {
         setPhase('intro');
@@ -140,7 +160,17 @@ export default function DiagnosticPage() {
         setPhase('fighting');
         return;
       }
-      setPrediction(data.prediction ?? null);
+      const pred = data.prediction ?? null;
+      setPrediction(pred);
+      if (pred && typeof window !== 'undefined') {
+        try {
+          const toSave = { ...pred, completedAt: new Date().toISOString() };
+          localStorage.setItem('sat_diagnostic_result', JSON.stringify(toSave));
+          setSavedPrediction(toSave);
+        } catch {
+          // ignore localStorage error
+        }
+      }
       if (typeof data.tier === 'string') setTier(data.tier);
       setPhase('result');
     } catch {
@@ -206,6 +236,56 @@ export default function DiagnosticPage() {
         </div>
         <div className="bg-[#1b2533] p-8 rounded-xl border border-[#334155] max-w-lg mx-auto text-center space-y-6">
           <p className="text-gray-300">Bài test xếp lớp chỉ làm một lần. Tiếp tục luyện tập để nâng cao dự đoán điểm và mở khóa lộ trình.</p>
+
+          {/* Additive-Only Diagnostic Summary card */}
+          {savedPrediction && (
+            <div className="bg-[#0e1117] p-6 rounded-xl border border-emerald-500/40 text-left space-y-4 shadow-lg">
+              <div className="flex justify-between items-baseline">
+                <span className="text-xs uppercase font-bold tracking-wider text-emerald-400">🎯 Điểm Baseline Đầu Vào</span>
+                {savedPrediction.completedAt && (
+                  <span className="text-xs text-gray-500">
+                    {new Date(savedPrediction.completedAt).toLocaleDateString('vi-VN')}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-baseline gap-3">
+                <span className="text-4xl font-black text-white">{savedPrediction.total}</span>
+                <span className="text-gray-400 text-sm">/ 1600 &middot; {CONFIDENCE_LABEL[savedPrediction.confidence] ?? savedPrediction.confidence}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-center bg-[#131b26] p-3 rounded-lg border border-[#334155]">
+                <div>
+                  <div className="text-blue-300 font-bold text-lg">{savedPrediction.math}</div>
+                  <div className="text-gray-400 text-xs">Toán (Math: 200–800)</div>
+                </div>
+                <div>
+                  <div className="text-purple-300 font-bold text-lg">{savedPrediction.reading}</div>
+                  <div className="text-gray-400 text-xs">Đọc & Viết (RW: 200–800)</div>
+                </div>
+              </div>
+
+              {savedPrediction.focusSkills && savedPrediction.focusSkills.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-[#334155]">
+                  <p className="text-amber-400 font-bold text-xs">🎯 Kỹ năng cần tập trung (Luyện ngay 1 chạm):</p>
+                  <div className="flex flex-col gap-2">
+                    {savedPrediction.focusSkills.map((s) => {
+                      const link = routeForFocusSkill(s.id, s.subject);
+                      return (
+                        <Link
+                          key={s.id}
+                          href={link}
+                          className="flex items-center justify-between px-3 py-2 bg-[#1b2533] hover:bg-[#253346] border border-[#334155] rounded-lg text-sm text-gray-200 transition-colors group"
+                        >
+                          <span className="truncate pr-2 font-medium group-hover:text-amber-300">• {s.label} ({s.score}/100)</span>
+                          <span className="text-xs text-amber-400 font-bold shrink-0">Luyện ngay →</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-col gap-3 items-center">
             <Link href="/skill-tree" className="bg-gradient-to-r from-yellow-300 to-amber-500 hover:from-yellow-200 hover:to-amber-400 text-[#78350f] font-bold px-6 py-3 rounded-xl inline-block">
               🌳 Xem Cây Năng Lực

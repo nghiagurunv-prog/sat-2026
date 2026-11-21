@@ -117,6 +117,32 @@ export default function MockExamsPage() {
 
   // Point 70: Đọc & đồng bộ lịch sử thi từ cả 2 khóa localStorage ('sat_exam_history_v1' & 'sat_exam_history_log_v1')
   useEffect(() => {
+    // Đọc query param ?examId= từ window.location.search ngay khi mount (tự động chọn đề & cuộn mượt xuống runner)
+    try {
+      if (typeof window !== 'undefined' && window.location?.search) {
+        const searchParams = new URLSearchParams(window.location.search);
+        const paramExamId = searchParams.get('examId');
+        if (paramExamId) {
+          const cleanExamId = paramExamId.trim().toLowerCase();
+          const matchedExam = MOCK_EXAM_CATALOG.find(
+            (e) => e.id.toLowerCase() === cleanExamId || e.code.toLowerCase() === cleanExamId
+          );
+          const targetExamId = matchedExam ? matchedExam.id : paramExamId.trim();
+          if (targetExamId) {
+            setSelectedExamId(targetExamId);
+            setTimeout(() => {
+              const el = document.getElementById('exam-runner-workspace');
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth' });
+              }
+            }, 200);
+          }
+        }
+      }
+    } catch (paramErr) {
+      console.warn('Lỗi đọc param examId:', paramErr);
+    }
+
     try {
       if (typeof window === 'undefined' || !window.localStorage) {
         setIsLoaded(true);

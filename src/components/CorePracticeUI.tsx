@@ -78,6 +78,7 @@ interface CorePracticeUIProps {
   isLoading?: boolean;
   onAnswer?: (isCorrect: boolean) => void;
   onSubmitted?: () => void;
+  onAnswerResult?: (isCorrect: boolean, questionId?: string) => void;
   /**
    * Chế độ thi cổng: ẩn nút "Câu Hỏi Mới" cho tới khi đã nộp bài, để người thi
    * KHÔNG bỏ qua câu (skip = không trả lời) làm sai số đếm điểm cổng.
@@ -90,7 +91,7 @@ interface CorePracticeUIProps {
   timeLimit?: number;
 }
 
-export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSubmitted, hideNextUntilSubmitted, timeLimit }: CorePracticeUIProps) {
+export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSubmitted, onAnswerResult, hideNextUntilSubmitted, timeLimit }: CorePracticeUIProps) {
   const { registerGradedResult, spendCoins, toggleBookmark, bookmarkedQuestions, practiceStreak } = useGamification();
   
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
@@ -328,9 +329,40 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
     setRewardData({ xpGiven: granted.xp, coinsGiven: granted.coins, comboMultiplier });
 
     if (onAnswer) onAnswer(isAnsCorrect);
+    if (onAnswerResult) onAnswerResult(isAnsCorrect, questionData?.questionId);
     if (onSubmitted) onSubmitted();
 
     if (!isAnsCorrect) {
+      if (typeof window !== 'undefined') {
+        try {
+          const mistakeId = questionData.questionId ? `practice-${questionData.questionId}` : `practice-${Date.now()}`;
+          const newMistake = {
+            id: mistakeId,
+            subject: questionData.practice_question?.includes('$') || questionData.practice_question?.includes('\\') ? 'Math' : 'Reading & Writing',
+            topic: questionData.skillId || 'Luyện tập kỹ năng Digital SAT',
+            question: questionData.practice_question || '',
+            passage: questionData.full_passage || undefined,
+            choices: Array.isArray(questionData.choices) ? questionData.choices : [],
+            correctChoice: correctChoice || '',
+            userChoice: finalAnswer || '',
+            rootCause: 'Conceptual Gap',
+            trapType: 'Bẫy Điểm Digital SAT',
+            explanationEn: explanationForMistake || '',
+            explanationVi: explanationForMistake || 'Xem phân tích chi tiết bên dưới để nắm vững phương pháp giải.',
+            isMastered: false,
+            retryCount: 0,
+            createdAt: new Date().toISOString(),
+            source: 'Core Practice',
+          };
+          const rawLocal = localStorage.getItem('sat_mistake_bank_v1');
+          const existingList: any[] = rawLocal ? JSON.parse(rawLocal) : [];
+          const filteredList = Array.isArray(existingList) ? existingList.filter((m: any) => m.id !== mistakeId) : [];
+          localStorage.setItem('sat_mistake_bank_v1', JSON.stringify([newMistake, ...filteredList]));
+        } catch (localErr) {
+          console.error("Failed to sync mistake to localStorage", localErr);
+        }
+      }
+
       try {
         await fetch("/api/cau-sai", {
           method: "POST",
@@ -344,6 +376,7 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
             explanation: explanationForMistake,
             source: "Core Practice (Next.js)",
             skill_id: questionData.skillId ?? null,
+            subject: questionData.practice_question?.includes('$') || questionData.practice_question?.includes('\\') ? 'Math' : 'Reading & Writing',
           })
         });
       } catch (e) {
@@ -440,10 +473,33 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
     }
   };
 
-  // Điểm 16: Lưu từ vựng 1-Click vào Kho Từ Vựng (/api/vocab + localStorage fallback)
+  // Điểm 16: Lưu từ vựng 1-Click vào Kho Từ Vựng (/api/vocab + localStorage fallback + Flashcards sync)
   const handleSaveVocab = async (word: string, meaning: string) => {
     setSavingWord(word);
     const contextSentence = questionData.full_passage || questionData.practice_question;
+
+    const syncToCustomVocab = (w: string, m: string, ctx?: string) => {
+      if (typeof window === 'undefined') return;
+      try {
+        const rawCustom = localStorage.getItem('sat_user_custom_vocab_v1');
+        const customList: Array<{ id: string; word: string; meaning: string; example?: string; box: number; nextReview?: number; streak?: number }> = rawCustom ? JSON.parse(rawCustom) : [];
+        if (Array.isArray(customList) && !customList.some(item => item?.word?.toLowerCase()?.trim() === w.toLowerCase().trim())) {
+          customList.push({
+            id: 'custom-' + Date.now(),
+            word: w,
+            meaning: m?.trim() || 'Từ vựng trích xuất từ bài đọc SAT',
+            example: ctx || '',
+            box: 1,
+            nextReview: Date.now(),
+            streak: 0,
+          });
+          localStorage.setItem('sat_user_custom_vocab_v1', JSON.stringify(customList));
+        }
+      } catch (storageErr) {
+        console.warn("Could not sync custom vocab to localStorage:", storageErr);
+      }
+    };
+
     try {
       await fetch('/api/vocab', {
         method: 'POST',
@@ -459,6 +515,7 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
         stored.push({ word, meaning, contextSentence, savedAt: new Date().toISOString() });
         localStorage.setItem('sat_vocab_vault', JSON.stringify(stored));
       }
+      syncToCustomVocab(word, meaning, contextSentence);
       setSavedWords(prev => ({ ...prev, [word.toLowerCase()]: true }));
       setVocabSaveSuccess(`Đã lưu "${word}" vào Kho Từ Vựng Leitner!`);
       setTimeout(() => setVocabSaveSuccess(null), 3000);
@@ -469,6 +526,7 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
           stored.push({ word, meaning, contextSentence, savedAt: new Date().toISOString() });
           localStorage.setItem('sat_vocab_vault', JSON.stringify(stored));
         }
+        syncToCustomVocab(word, meaning, contextSentence);
         setSavedWords(prev => ({ ...prev, [word.toLowerCase()]: true }));
         setVocabSaveSuccess(`Đã lưu "${word}" vào bộ nhớ máy!`);
         setTimeout(() => setVocabSaveSuccess(null), 3000);

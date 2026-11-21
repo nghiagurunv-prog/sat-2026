@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { getExamById } from '@/lib/exams';
 import { issueQuestion } from '@/lib/issued-questions';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
 import { getMasterySummary } from '@/lib/mastery';
 import { loadGates } from '@/lib/gate-store';
 import { buildSkillTree } from '@/lib/skill-tree';
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
 
-    const rl = rateLimit(`exam-start:${user.id}`, 10, 60_000);
+    const rl = rateLimit(getRateLimitKey(req, 'exam-start', user.id), 10, 60_000);
     if (!rl.allowed) {
       return NextResponse.json({ error: 'Quá nhiều request. Thử lại sau.', retryAfterMs: rl.retryAfterMs }, { status: 429 });
     }
@@ -81,9 +81,36 @@ export async function POST(req: Request) {
           mod.questions.map(async (q) => {
             const questionId = await issueQuestion(user.id, q.correct_choice, undefined, q.difficulty, {
               src: 'exam',
+              explanation: q.explanation_vi || q.explanation || undefined,
             });
-            const { correct_choice: _c, explanation: _e, choice_analysis: _ca, ...safe } = q as any;
-            return { ...safe, questionId };
+            // Strip triệt để mọi trường đáp án và lời giải song ngữ trước khi trả về client (#G7)
+            const {
+              correct_choice: _c,
+              correctChoice: _cc,
+              correctAnswer: _ca,
+              correct_answer: _ca2,
+              correctIndex: _ci,
+              explanation: _e,
+              explanation_vi: _evi,
+              explanationVi: _evi2,
+              choice_analysis: _chan,
+              ...safe
+            } = q as unknown as Record<string, unknown>;
+            if (Array.isArray(safe.choices)) {
+              safe.choices = safe.choices.map((choice: unknown) => {
+                if (choice && typeof choice === 'object') {
+                  const {
+                    isCorrect: _ic,
+                    is_correct: _ic2,
+                    correct: _cor,
+                    ...cleanChoice
+                  } = choice as Record<string, unknown>;
+                  return cleanChoice;
+                }
+                return choice;
+              });
+            }
+            return { ...safe, questionId: questionId ?? q.id };
           })
         );
         return { ...mod, questions };

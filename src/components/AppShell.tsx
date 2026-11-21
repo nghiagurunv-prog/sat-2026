@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Sidebar } from '@/components/Sidebar';
+import { flushOfflineQueue } from '@/lib/offline-queue';
+import { UnifiedStudyHubTabs } from '@/components/UnifiedStudyHubTabs';
 
 /** Route chạy full-bleed, KHÔNG sidebar / KHÔNG padding khung (vd trang đăng nhập). */
 const FULL_BLEED_ROUTES = ['/login'];
@@ -68,6 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const handleOnline = () => {
       setIsOffline(false);
       setJustReconnected(true);
+      void flushOfflineQueue();
       const timer = setTimeout(() => setJustReconnected(false), 4000);
       return () => clearTimeout(timer);
     };
@@ -461,6 +464,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </kbd>
             </button>
           </div>
+
+          {(pathname === '/vocab' || pathname === '/vocabulary') && <UnifiedStudyHubTabs hub="vocab" />}
+          {(pathname === '/reading' || pathname === '/literature') && <UnifiedStudyHubTabs hub="reading" />}
 
           {children}
         </div>

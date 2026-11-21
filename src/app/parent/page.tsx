@@ -766,6 +766,132 @@ export default function ParentPage() {
             {/* Báo cáo phân tích chuyên sâu hiện hữu */}
             <ParentReport data={state.data} />
 
+            {/* 🗓️ LỘ TRÌNH ĐỒNG HÀNH 4 TUẦN DÀNH CHO PHỤ HUYNH & CỐ VẤN THẦY NGHĨA GURU */}
+            <div className="bg-[#1b2533] p-5 sm:p-6 rounded-2xl border border-amber-400/30 space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-xl text-amber-300 border border-amber-500/30">
+                    🗓️
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black text-white">
+                      LỘ TRÌNH ĐỒNG HÀNH 4 TUẦN DÀNH CHO PHỤ HUYNH & CỐ VẤN THẦY NGHĨA GURU
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Cột mốc kiểm tra định kỳ hàng tuần giúp Phụ huynh nắm bắt tiến độ thực tế, tiếp lửa tâm lý và tối ưu hóa điểm số SAT cùng con.
+                    </p>
+                  </div>
+                </div>
+                <div className="shrink-0">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 text-xs font-bold text-emerald-300">
+                    <span>✓ Chuẩn Cố Vấn 1:1</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* 4 Cột mốc tuần */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-2 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black uppercase text-amber-400">Tuần 1</span>
+                      <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">Khảo sát & Bắt bệnh</span>
+                    </div>
+                    <h4 className="text-xs font-bold text-white mt-1">Đo điểm nền & Chốt Mục tiêu</h4>
+                    <p className="text-[11px] text-slate-300 leading-relaxed mt-1">
+                      Con hoàn thành Mini-Diagnostic & 1 đề Full-Test. Phụ huynh ngồi cùng con 15 phút rà soát Dashboard, xác định lỗ hổng lớn nhất (Math Desmos hoặc Reading Transitions).
+                    </p>
+                  </div>
+                  <div className="text-[10px] font-medium text-emerald-400 bg-emerald-950/30 px-2 py-1 rounded border border-emerald-500/20">
+                    🎯 Check-in: Con làm tối thiểu 100 câu luyện tập & lập Sổ tay câu sai.
+                  </div>
+                </div>
+
+                <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-2 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black uppercase text-indigo-400">Tuần 2</span>
+                      <span className="rounded bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-bold text-indigo-300">Xóa bẫy & Tăng tốc</span>
+                    </div>
+                    <h4 className="text-xs font-bold text-white mt-1">Diệt sạch Ngân hàng Câu sai</h4>
+                    <p className="text-[11px] text-slate-300 leading-relaxed mt-1">
+                      Rà soát tỷ lệ phục thù câu sai (cần đạt &gt; 80% câu sai đã được giải lại đúng). Phụ huynh gửi 1 tin nhắn động viên tiếp sức tinh thần cuối tuần.
+                    </p>
+                  </div>
+                  <div className="text-[10px] font-medium text-indigo-300 bg-indigo-950/30 px-2 py-1 rounded border border-indigo-500/20">
+                    🎯 Check-in: Giảm tối thiểu 50% lỗi sai lặp lại ở dạng bài sở đoản.
+                  </div>
+                </div>
+
+                <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-2 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black uppercase text-purple-400">Tuần 3</span>
+                      <span className="rounded bg-purple-500/20 px-1.5 py-0.5 text-[10px] font-bold text-purple-300">Thi thử Áp lực cao</span>
+                    </div>
+                    <h4 className="text-xs font-bold text-white mt-1">Mô phỏng Bluebook 100%</h4>
+                    <p className="text-[11px] text-slate-300 leading-relaxed mt-1">
+                      Con thi 1 đề Full-Test vào sáng Thứ Bảy chuẩn giờ thi thật (8h00 - 10h15). Phụ huynh kiểm tra đối chiếu ngưỡng điểm an toàn với FTU, NEU, HUST, VNU, VinUni, Fulbright.
+                    </p>
+                  </div>
+                  <div className="text-[10px] font-medium text-purple-300 bg-purple-950/30 px-2 py-1 rounded border border-purple-500/20">
+                    🎯 Check-in: Tăng ít nhất +40 đến +80 điểm so với tuần 1.
+                  </div>
+                </div>
+
+                <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-2 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black uppercase text-emerald-400">Tuần 4</span>
+                      <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">Về đích & Khóa hồ sơ</span>
+                    </div>
+                    <h4 className="text-xs font-bold text-white mt-1">Tổng kết & Tham vấn Cố vấn</h4>
+                    <p className="text-[11px] text-slate-300 leading-relaxed mt-1">
+                      Phụ huynh đặt lịch tham vấn 1:1 trực tiếp cùng Thầy Nghĩa Guru để chốt chiến thuật nộp hồ sơ xét tuyển sớm và xin học bổng Đại học.
+                    </p>
+                  </div>
+                  <div className="text-[10px] font-medium text-amber-300 bg-amber-950/30 px-2 py-1 rounded border border-amber-500/20">
+                    🎯 Check-in: Chốt danh sách nguyện vọng & hồ sơ quy đổi SAT.
+                  </div>
+                </div>
+              </div>
+
+              {/* Thông tin Cố vấn Học thuật SAT.Guru */}
+              <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-white">👨‍🏫 Kênh Hỗ Trợ Trực Tiếp Phụ Huynh & Học Sinh:</span>
+                    <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">Hotline / Zalo Trực Tuyến</span>
+                  </div>
+                  <div className="text-xs text-slate-300">
+                    Hotline/Zalo Cố vấn Thầy Nghĩa Guru: <strong className="text-amber-300 font-bold">0986.722.324</strong> (Hỗ trợ định hướng chiến lược điểm số Digital SAT 24/7)
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    Nền tảng đào tạo: <span className="text-slate-300">SAT.Guru — Hệ thống Luyện thi Digital SAT Trực tuyến chuẩn College Board Bluebook</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    Chuyên môn: <span className="text-slate-300">Luyện thi SAT 1300–1550+ xét tuyển Đại học Top đầu Việt Nam & Săn học bổng Quốc tế</span>
+                  </div>
+                </div>
+                <div className="shrink-0 flex items-center gap-2">
+                  <a
+                    href="tel:0986722324"
+                    className="inline-flex items-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2.5 text-xs font-black text-slate-950 shadow transition hover:scale-105"
+                  >
+                    <span>📞 Gọi Cố Vấn Ngay</span>
+                  </a>
+                  <a
+                    href="https://zalo.me/0986722324"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2.5 text-xs font-black text-white shadow transition hover:scale-105"
+                  >
+                    <span>💬 Nhắn Zalo</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+
             {/* #C058: Gửi Lời Động Viên Cho Con */}
             <div className="bg-[#1b2533] p-5 rounded-2xl border border-rose-500/20 space-y-3 print:hidden">
               <div className="flex items-center gap-2">

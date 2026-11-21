@@ -432,23 +432,58 @@ export default function MathPage() {
     }
     setIsCorrect(isAnsCorrect);
 
-    if (!isAnsCorrect && lessonData.questionId) {
-      try {
-        await fetch("/api/cau-sai", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            question: lessonData.practice_question,
-            choices: lessonData.choices,
-            correct_choice: gradeCorrectChoice,
-            user_choice: answerToSubmit,
-            explanation: gradeExplanation,
-            source: "Math (Next.js)",
-            skill_id: currentSkillId,
-          }),
-        });
-      } catch (e) {
-        console.error("Failed to save mistake", e);
+    if (!isAnsCorrect) {
+      const mistakeId = `math-${lessonData.questionId || Date.now()}`;
+      const mathExplanation = gradeExplanation || lessonData.explanation || '';
+      const mathCorrectChoice = gradeCorrectChoice || lessonData.correct_choice || '';
+
+      if (typeof window !== 'undefined') {
+        try {
+          const newMathMistake = {
+            id: mistakeId,
+            subject: 'Math',
+            topic: currentTopic || currentSkillId || 'SAT Math',
+            question: lessonData.practice_question || '',
+            choices: Array.isArray(lessonData.choices) ? lessonData.choices : [],
+            correctChoice: mathCorrectChoice,
+            userChoice: answerToSubmit || '',
+            rootCause: 'Conceptual Gap',
+            trapType: 'Bẫy Điểm Digital SAT Math',
+            explanationEn: mathExplanation,
+            explanationVi: mathExplanation || 'Xem phân tích chi tiết các bước giải Toán SAT.',
+            isMastered: false,
+            retryCount: 0,
+            createdAt: new Date().toISOString(),
+            source: 'Math Practice',
+          };
+          const rawLocal = localStorage.getItem('sat_mistake_bank_v1');
+          const existingList: any[] = rawLocal ? JSON.parse(rawLocal) : [];
+          const filteredList = Array.isArray(existingList) ? existingList.filter((m: any) => m.id !== mistakeId) : [];
+          localStorage.setItem('sat_mistake_bank_v1', JSON.stringify([newMathMistake, ...filteredList]));
+        } catch (localErr) {
+          console.error("Failed to sync math mistake to localStorage", localErr);
+        }
+      }
+
+      if (lessonData.questionId) {
+        try {
+          await fetch("/api/cau-sai", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              question: lessonData.practice_question,
+              choices: lessonData.choices,
+              correct_choice: mathCorrectChoice,
+              user_choice: answerToSubmit,
+              explanation: mathExplanation,
+              source: "Math (Next.js)",
+              skill_id: currentSkillId,
+              subject: 'Math',
+            }),
+          });
+        } catch (e) {
+          console.error("Failed to save mistake", e);
+        }
       }
     }
 

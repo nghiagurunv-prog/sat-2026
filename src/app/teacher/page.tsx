@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useId } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import Link from 'next/link';
 
 // Types for Teacher Classroom Management
@@ -55,45 +55,170 @@ interface AtRiskStudent {
   status: 'critical' | 'warning' | 'resolved';
 }
 
+const INITIAL_CLASSROOMS: Classroom[] = [
+  {
+    id: 'cls-1',
+    name: 'Lớp SAT Chuyên Sâu 1500+ Ams - CSP (K26)',
+    code: 'CLASS-AMS-1500',
+    targetScore: 1500,
+    season: 'SAT Tháng 12/2026',
+    studentCount: 32,
+    averageScore: 1410,
+    completionRate: 91,
+    topWeakness: 'Dấu câu Boundaries & Hàm bậc hai nâng cao',
+  },
+  {
+    id: 'cls-2',
+    name: 'Lớp Luyện Đề Nước Rút 1400+ Chu Văn An - Kim Liên',
+    code: 'CLASS-CVA-1400',
+    targetScore: 1400,
+    season: 'SAT Tháng 11/2026',
+    studentCount: 28,
+    averageScore: 1335,
+    completionRate: 84,
+    topWeakness: 'Biến đổi đồ thị & Logical Transitions',
+  },
+  {
+    id: 'cls-3',
+    name: 'Gia Sư 1 kèm 5 - Mục Tiêu Học Bổng Mỹ 1530+',
+    code: 'VIP-IVY-1530',
+    targetScore: 1530,
+    season: 'SAT Tháng 03/2027',
+    studentCount: 5,
+    averageScore: 1470,
+    completionRate: 98,
+    topWeakness: 'Trắc nghiệm từ vựng vĩ mô (Words in Context)',
+  },
+];
+
+const INITIAL_HOMEWORK: HomeworkAssignment[] = [
+  {
+    id: 'hw-101',
+    classId: 'cls-1',
+    title: 'Bẫy Dấu Câu Boundaries - Đề Luyện Cấp Tốc 15 Phút',
+    domain: 'Reading & Writing',
+    questionCount: 10,
+    deadline: '22:00 Hôm nay',
+    submittedCount: 28,
+    totalCount: 32,
+    code: 'HW-BD-101',
+    createdAt: 'Hôm nay, 08:30',
+  },
+  {
+    id: 'hw-102',
+    classId: 'cls-1',
+    title: 'Parabol & Điểm Cực Trị Nâng Cao Không Bấm Máy',
+    domain: 'Math',
+    questionCount: 12,
+    deadline: '23:59 Ngày mai',
+    submittedCount: 19,
+    totalCount: 32,
+    code: 'HW-M-PARABOL',
+    createdAt: 'Hôm qua, 15:00',
+  },
+];
+
 export default function TeacherPortalPage() {
   const customModalId = useId();
 
-  // Initial Classrooms
-  const [classrooms, setClassrooms] = useState<Classroom[]>([
-    {
-      id: 'cls-1',
-      name: 'Lớp SAT Chuyên Sâu 1500+ Ams - CSP (K26)',
-      code: 'CLASS-AMS-1500',
-      targetScore: 1500,
-      season: 'SAT Tháng 12/2026',
-      studentCount: 32,
-      averageScore: 1410,
-      completionRate: 91,
-      topWeakness: 'Dấu câu Boundaries & Hàm bậc hai nâng cao',
-    },
-    {
-      id: 'cls-2',
-      name: 'Lớp Luyện Đề Nước Rút 1400+ Chu Văn An - Kim Liên',
-      code: 'CLASS-CVA-1400',
-      targetScore: 1400,
-      season: 'SAT Tháng 11/2026',
-      studentCount: 28,
-      averageScore: 1335,
-      completionRate: 84,
-      topWeakness: 'Biến đổi đồ thị & Logical Transitions',
-    },
-    {
-      id: 'cls-3',
-      name: 'Gia Sư 1 kèm 5 - Mục Tiêu Học Bổng Mỹ 1530+',
-      code: 'VIP-IVY-1530',
-      targetScore: 1530,
-      season: 'SAT Tháng 03/2027',
-      studentCount: 5,
-      averageScore: 1470,
-      completionRate: 98,
-      topWeakness: 'Trắc nghiệm từ vựng vĩ mô (Words in Context)',
-    },
-  ]);
+  // Initial Classrooms & Homework State with LocalStorage Persistence
+  const [classrooms, setClassrooms] = useState<Classroom[]>(INITIAL_CLASSROOMS);
+  const [homeworkList, setHomeworkList] = useState<HomeworkAssignment[]>(INITIAL_HOMEWORK);
+  const [isStorageLoaded, setIsStorageLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // Mục #22: Ưu tiên đồng bộ lớp học & bài tập từ Supabase RLS Backend (/api/teacher/*)
+        const [clsRes, hwRes] = await Promise.all([
+          fetch('/api/teacher/classrooms').catch(() => null),
+          fetch('/api/teacher/assignments').catch(() => null),
+        ]);
+
+        if (!cancelled && clsRes?.ok) {
+          const clsData = await clsRes.json().catch(() => ({}));
+          if (clsData.available && Array.isArray(clsData.classrooms) && clsData.classrooms.length > 0) {
+            const mapped: Classroom[] = clsData.classrooms.map((c: Record<string, unknown>) => ({
+              id: String(c.id),
+              name: String(c.name || 'Lớp SAT'),
+              code: String(c.code || 'SAT-CLASS'),
+              targetScore: Number(c.target_score || 1450),
+              season: String(c.description || 'SAT 2026'),
+              studentCount: Number(c.studentCount || 0),
+              averageScore: 1380,
+              completionRate: 80,
+              topWeakness: 'Đang tổng hợp từ kết quả luyện tập',
+            }));
+            setClassrooms(mapped);
+            setActiveClassId(mapped[0].id);
+          }
+        }
+
+        if (!cancelled && hwRes?.ok) {
+          const hwData = await hwRes.json().catch(() => ({}));
+          if (hwData.available && Array.isArray(hwData.assignments) && hwData.assignments.length > 0) {
+            const mappedHw: HomeworkAssignment[] = hwData.assignments.map((a: Record<string, unknown>) => ({
+              id: String(a.id),
+              classId: String(a.classroom_id || 'cls-1'),
+              title: String(a.title || 'Bài tập SAT'),
+              domain: Array.isArray(a.skill_ids) && a.skill_ids.length > 0 ? String(a.skill_ids[0]) : 'Reading & Writing',
+              questionCount: Number(a.question_count || 10),
+              deadline: a.due_at ? new Date(String(a.due_at)).toLocaleDateString('vi-VN') : 'Chủ Nhật',
+              submittedCount: 0,
+              totalCount: 1,
+              code: `HW-${String(a.id).slice(0, 6).toUpperCase()}`,
+              createdAt: a.created_at ? new Date(String(a.created_at)).toLocaleDateString('vi-VN') : 'Hôm nay',
+            }));
+            setHomeworkList(mappedHw);
+          }
+        }
+
+        // Fallback mượt về localStorage nếu chưa đăng nhập hoặc chưa có lớp trên Supabase
+        if (!cancelled && typeof window !== 'undefined') {
+          const savedClassrooms = localStorage.getItem('sat_teacher_classrooms_v1');
+          if (savedClassrooms) {
+            const parsed = JSON.parse(savedClassrooms);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setClassrooms((prev) => (prev === INITIAL_CLASSROOMS ? parsed : prev));
+            }
+          }
+          const savedHomework = localStorage.getItem('sat_teacher_assignments_v1');
+          if (savedHomework) {
+            const parsedHw = JSON.parse(savedHomework);
+            if (Array.isArray(parsedHw) && parsedHw.length > 0) {
+              setHomeworkList((prev) => (prev === INITIAL_HOMEWORK ? parsedHw : prev));
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load teacher portal data', e);
+      } finally {
+        if (!cancelled) setIsStorageLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isStorageLoaded || typeof window === 'undefined') return;
+    try {
+      localStorage.setItem('sat_teacher_classrooms_v1', JSON.stringify(classrooms));
+    } catch (e) {
+      console.warn('Failed to save sat_teacher_classrooms_v1', e);
+    }
+  }, [classrooms, isStorageLoaded]);
+
+  useEffect(() => {
+    if (!isStorageLoaded || typeof window === 'undefined') return;
+    try {
+      localStorage.setItem('sat_teacher_assignments_v1', JSON.stringify(homeworkList));
+    } catch (e) {
+      console.warn('Failed to save sat_teacher_assignments_v1', e);
+    }
+  }, [homeworkList, isStorageLoaded]);
 
   const [activeClassId, setActiveClassId] = useState<string>('cls-1');
   const activeClass = classrooms.find((c) => c.id === activeClassId) || classrooms[0] || {
@@ -186,34 +311,7 @@ export default function TeacherPortalPage() {
     },
   ]);
 
-  // Homework Dispatch State
-  const [homeworkList, setHomeworkList] = useState<HomeworkAssignment[]>([
-    {
-      id: 'hw-101',
-      classId: 'cls-1',
-      title: 'Bẫy Dấu Câu Boundaries - Đề Luyện Cấp Tốc 15 Phút',
-      domain: 'Reading & Writing',
-      questionCount: 10,
-      deadline: '22:00 Hôm nay',
-      submittedCount: 28,
-      totalCount: 32,
-      code: 'HW-BD-101',
-      createdAt: 'Hôm nay, 08:30',
-    },
-    {
-      id: 'hw-102',
-      classId: 'cls-1',
-      title: 'Parabol & Điểm Cực Trị Nâng Cao Không Bấm Máy',
-      domain: 'Math',
-      questionCount: 12,
-      deadline: '23:59 Ngày mai',
-      submittedCount: 19,
-      totalCount: 32,
-      code: 'HW-M-PARABOL',
-      createdAt: 'Hôm qua, 15:00',
-    },
-  ]);
-
+  // Homework Dispatch Input State
   const [hwTitle, setHwTitle] = useState('Chuyên đề khắc phục hổng kiến thức Boundaries');
   const [hwDomain, setHwDomain] = useState('Reading & Writing');
   const [hwCount, setHwCount] = useState<number>(10);
@@ -319,23 +417,97 @@ export default function TeacherPortalPage() {
   const activeStudentCount = isClassEmpty ? 0 : Math.max(0, activeClass.studentCount - atRiskForActiveClass.length);
   const activeStudentRate = isClassEmpty ? 0 : Math.round((activeStudentCount / activeClass.studentCount) * 100);
 
-  // Handle Create Classroom
-  const handleCreateClass = (e: React.FormEvent) => {
+  // Xuất Báo Cáo Lớp CSV với UTF-8 BOM (\uFEFF)
+  const handleExportClassReportCSV = () => {
+    if (typeof window === 'undefined') return;
+    const nowStr = new Date().toISOString().split('T')[0];
+    const fileName = `Bao_Cao_Lop_${activeClass.code || 'SAT'}_${nowStr}.csv`;
+
+    const headers = ['Mã Lớp', 'Tên Lớp', 'Mục Tiêu', 'Mùa Thi', 'Sĩ Số', 'Điểm TB', 'Tỷ Lệ Hoàn Thành BTVN (%)', 'Lỗ Hổng Lớn Nhất'];
+    const classRow = [
+      `"${activeClass.code}"`,
+      `"${activeClass.name.replace(/"/g, '""')}"`,
+      activeClass.targetScore,
+      `"${activeClass.season}"`,
+      activeClass.studentCount,
+      displayAverageScore,
+      `${displayCompletionRate}%`,
+      `"${activeClass.topWeakness.replace(/"/g, '""')}"`,
+    ];
+
+    const studentHeaders = ['Họ Tên Học Viên', 'Mã Lớp', 'SĐT Phụ Huynh', 'Số Ngày Không Học', 'Điểm Ước Lượng', 'Biến Động Điểm', 'Vấn Đề Trọng Yếu', 'Trạng Thái'];
+    const studentRows = atRiskForActiveClass.map((s) => [
+      `"${s.name.replace(/"/g, '""')}"`,
+      `"${s.classCode}"`,
+      `"${s.parentPhone}"`,
+      s.inactiveDays,
+      s.currentEstimatedScore,
+      s.scoreDelta,
+      `"${s.primaryIssue.replace(/"/g, '""')}"`,
+      s.status === 'critical' ? 'Báo động đỏ' : s.status === 'resolved' ? 'Đã khắc phục' : 'Cần lưu ý',
+    ]);
+
+    const csvContent = '\uFEFF' + [
+      'BÁO CÁO TỔNG QUAN LỚP HỌC SAT GURU',
+      headers.join(','),
+      classRow.join(','),
+      '',
+      'DANH SÁCH HỌC VIÊN CẦN QUAN TÂM & HỖ TRỢ ĐẶC BIỆT',
+      studentHeaders.join(','),
+      ...studentRows.map((r) => r.join(',')),
+    ].join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    copyToClipboard('', `Đã xuất báo cáo CSV cho lớp ${activeClass.code} thành công!`);
+  };
+
+  // Handle Create Classroom (Mục #22: Lưu thật lên Supabase RLS /api/teacher/classrooms, fallback local)
+  const handleCreateClass = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClassName.trim()) return;
 
-    // Chuẩn hoá mã lớp: .trim().toUpperCase() (#026)
     const sanitizedName = newClassName.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
-    const generatedCode = `CLASS-${sanitizedName || 'SAT'}-${newTargetScore}`;
+    let generatedCode = `CLASS-${sanitizedName || 'SAT'}-${newTargetScore}`;
+    let createdId = `cls-${Date.now()}`;
+
+    try {
+      const res = await fetch('/api/teacher/classrooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newClassName.trim(),
+          targetScore: newTargetScore,
+          description: newSeason,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data?.classroom?.id) {
+          createdId = String(data.classroom.id);
+          generatedCode = String(data.classroom.code || generatedCode);
+        }
+      }
+    } catch {
+      // Offline / chưa đăng nhập → giữ bản local
+    }
+
     const newClass: Classroom = {
-      id: `cls-${Date.now()}`,
+      id: createdId,
       name: newClassName.trim(),
       code: generatedCode,
       targetScore: newTargetScore,
       season: newSeason,
       studentCount: 0,
-      averageScore: 0, // Bảo vệ khỏi số ảo khi chưa có học sinh
-      completionRate: 0, // 0% khi chưa có học sinh
+      averageScore: 0,
+      completionRate: 0,
       topWeakness: 'Chưa có bài test chẩn đoán đầu vào',
     };
 
@@ -346,21 +518,41 @@ export default function TeacherPortalPage() {
     copyToClipboard(generatedCode, `Mã lớp ${generatedCode} đã tạo thành công & sao chép vào bộ nhớ!`);
   };
 
-  // Handle Dispatch Homework
-  const handleDispatchHomework = (e: React.FormEvent) => {
+  // Handle Dispatch Homework (Mục #22 & #23: Giao bài thật qua /api/teacher/assignments)
+  const handleDispatchHomework = async (e: React.FormEvent) => {
     e.preventDefault();
     const newHwCode = `HW-${activeClass.code.slice(6, 9)}-${Math.floor(100 + Math.random() * 900)}`;
     const link = `https://sat.nghiaguru.com/practice?class=${encodeURIComponent(activeClass.code)}&hw=${encodeURIComponent(newHwCode)}`;
+
+    let assignmentId = `hw-${Date.now()}`;
+    try {
+      const res = await fetch('/api/teacher/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          classroomId: activeClass.id,
+          title: hwTitle,
+          skillIds: [hwDomain],
+          questionCount: hwCount,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data?.assignment?.id) assignmentId = String(data.assignment.id);
+      }
+    } catch {
+      // Offline / demo class → tiếp tục hiển thị thông báo Zalo
+    }
 
     const zaloMessage = `📢 [BÀI TẬP SAT - ${activeClass.name.toUpperCase()}]\n` +
       `Thầy Nghĩa gửi cả lớp bài luyện trọng tâm:\n` +
       `🎯 Chuyên đề: ${hwTitle} (${hwCount} câu - ${hwDomain})\n` +
       `⏰ Hạn nộp: ${hwDeadline}\n` +
       `👉 Link làm bài trực tiếp (1-Click không cần cài app): ${link}\n` +
-      `📌 Chú ý: Hệ thống AI SAT Guru sẽ tự động chấm điểm và thông báo bảng xếp hạng ngay khi hết giờ. Chúc các em đạt 100% độ chính xác!`;
+      `📌 Chú ý: Hệ thống AI SAT.Guru sẽ tự động chấm điểm và thông báo bảng xếp hạng ngay khi hết giờ. Chúc các em đạt 100% độ chính xác!`;
 
     const newAssignment: HomeworkAssignment = {
-      id: `hw-${Date.now()}`,
+      id: assignmentId,
       classId: activeClass.id,
       title: hwTitle,
       domain: hwDomain,
@@ -374,7 +566,7 @@ export default function TeacherPortalPage() {
 
     setHomeworkList([newAssignment, ...homeworkList]);
     setGeneratedHwMessage(zaloMessage);
-    copyToClipboard(zaloMessage, 'Đã sao chép tin nhắn Zalo bài tập vào clipboard! Hãy paste ngay vào nhóm lớp.');
+    copyToClipboard(zaloMessage, 'Đã lưu bài tập & sao chép tin nhắn Zalo vào clipboard! Hãy paste ngay vào nhóm lớp.');
   };
 
   // Filter skills
@@ -472,18 +664,27 @@ export default function TeacherPortalPage() {
                   {activeClass.code}
                 </div>
               </div>
-              <button
-                onClick={() => copyToClipboard(
-                  `https://sat.nghiaguru.com/join?code=${encodeURIComponent(activeClass.code)}`,
-                  `Đã chép link tham gia lớp ${activeClass.code} cho học sinh!`
-                )}
-                className="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                <span>Copy Link Zalo</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => copyToClipboard(
+                    `https://sat.nghiaguru.com/join?code=${encodeURIComponent(activeClass.code)}`,
+                    `Đã chép link tham gia lớp ${activeClass.code} cho học sinh!`
+                  )}
+                  className="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <span>Copy Link Zalo</span>
+                </button>
+                <button
+                  onClick={handleExportClassReportCSV}
+                  className="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white px-3 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm"
+                  title="Xuất Báo Cáo Lớp (CSV)"
+                >
+                  <span>📥 Xuất Báo Cáo Lớp (CSV)</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -831,13 +1032,27 @@ export default function TeacherPortalPage() {
                         </div>
                       </div>
 
-                      <div className="text-right shrink-0">
-                        <div className="text-sm font-bold text-emerald-400">
-                          {submitted}/{total} đã nộp
+                      <div className="text-right shrink-0 flex items-center gap-3">
+                        <div>
+                          <div className="text-sm font-bold text-emerald-400">
+                            {submitted}/{total} đã nộp
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            ({percent}%)
+                          </div>
                         </div>
-                        <div className="text-[11px] text-slate-500">
-                          ({percent}%)
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const origin = typeof window !== 'undefined' ? window.location.origin : 'https://sat.nghiaguru.com';
+                            const link = `${origin}/mock-exams?examId=sat-mock-01&hwCode=${encodeURIComponent(hw.code)}&class=${encodeURIComponent(activeClass.code)}`;
+                            copyToClipboard(link, `Đã chép link giao đề ${hw.code}!`);
+                          }}
+                          className="bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-all active:scale-95"
+                          title="Copy Link Giao Đề"
+                        >
+                          <span>🔗 Copy Link Giao Đề</span>
+                        </button>
                       </div>
                     </div>
                   );

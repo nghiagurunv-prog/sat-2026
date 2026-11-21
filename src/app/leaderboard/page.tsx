@@ -148,6 +148,30 @@ const VIRAL_TITLES = [
   'Thợ Săn Học Bổng Toàn Phần Mỹ 🗽',
 ];
 
+interface ExamHistorySummary {
+  highestScore: number;
+  totalExams: number;
+  latestScore: number | null;
+  highestMath: number | null;
+  highestRw: number | null;
+}
+
+function getCollegeBoardPercentile(score: number): { percentileText: string; rankClass: string; badge: string } {
+  if (score >= 1530) {
+    return { percentileText: 'Top 1% Toàn Quốc', rankClass: 'text-amber-300 border-amber-500/40 bg-amber-500/10', badge: '👑 Ivy League / 99th Percentile' };
+  }
+  if (score >= 1450) {
+    return { percentileText: 'Top 5% Toàn Quốc', rankClass: 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10', badge: '🚀 Top Tier / 95th Percentile' };
+  }
+  if (score >= 1350) {
+    return { percentileText: 'Top 10% Toàn Quốc', rankClass: 'text-cyan-300 border-cyan-500/40 bg-cyan-500/10', badge: '🎯 Chuẩn Đại Học / 90th Percentile' };
+  }
+  if (score >= 1200) {
+    return { percentileText: 'Top 25% Toàn Quốc', rankClass: 'text-indigo-300 border-indigo-500/40 bg-indigo-500/10', badge: '📈 Nền Tảng Tốt / 75th Percentile' };
+  }
+  return { percentileText: 'Top 50%', rankClass: 'text-slate-300 border-slate-700 bg-slate-800/40', badge: '🌱 Đang Bứt Phá' };
+}
+
 export default function LeaderboardPage() {
   const { showToast } = useToast();
   const [board, setBoard] = useState<LeaderboardData | null>(null);
@@ -155,6 +179,12 @@ export default function LeaderboardPage() {
   const [loading, setLoading] = useState(true);
   const [nickInput, setNickInput] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Dữ liệu Bảng Vàng Thực Chiến từ sat_exam_history_v1
+  const [userExamStats, setUserExamStats] = useState<ExamHistorySummary | null>(null);
+
+  // Live search input cho trường THPT
+  const [searchSchool, setSearchSchool] = useState('');
 
   // Tabs điều hướng chính
   const [activeTab, setActiveTab] = useState<'individual' | 'schools' | 'viral_card' | 'challenge'>('schools');
@@ -198,6 +228,42 @@ export default function LeaderboardPage() {
         console.error('Failed to load leaderboard', e);
       } finally {
         setLoading(false);
+      }
+
+      // Đọc lịch sử thi thử mock exams từ localStorage (sat_exam_history_v1)
+      try {
+        if (typeof window !== 'undefined') {
+          const rawHistory = localStorage.getItem('sat_exam_history_v1');
+          if (rawHistory) {
+            const parsed = JSON.parse(rawHistory);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              let highest = 0;
+              let latest: number | null = null;
+              let maxMath = 0;
+              let maxRw = 0;
+              parsed.forEach((item, index) => {
+                const sc = Number(item.totalScore ?? item.score ?? 0);
+                if (sc > highest) highest = sc;
+                if (index === parsed.length - 1) latest = sc;
+                const m = Number(item.mathScore ?? 0);
+                if (m > maxMath) maxMath = m;
+                const r = Number(item.rwScore ?? 0);
+                if (r > maxRw) maxRw = r;
+              });
+              if (highest > 0) {
+                setUserExamStats({
+                  highestScore: highest,
+                  totalExams: parsed.length,
+                  latestScore: latest,
+                  highestMath: maxMath > 0 ? maxMath : null,
+                  highestRw: maxRw > 0 ? maxRw : null,
+                });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to parse sat_exam_history_v1', err);
       }
     }
     load();
@@ -478,10 +544,18 @@ export default function LeaderboardPage() {
     }
   }, [cardRatio, cardTheme, selectedTitle, profile, board, selectedSchool]);
 
-  // Lọc trường theo vùng miền
+  // Lọc trường theo vùng miền & tìm kiếm
   const filteredSchools = (board?.schoolRankings || []).filter((s) => {
-    if (regionFilter === 'all') return true;
-    return s.region === regionFilter;
+    const matchesRegion = regionFilter === 'all' || s.region === regionFilter;
+    if (!matchesRegion) return false;
+    if (!searchSchool.trim()) return true;
+    const q = searchSchool.trim().toLowerCase();
+    return (
+      s.name.toLowerCase().includes(q) ||
+      s.shortName.toLowerCase().includes(q) ||
+      s.province.toLowerCase().includes(q) ||
+      s.badge.toLowerCase().includes(q)
+    );
   });
 
   const mySchoolInfo = board?.schoolRankings?.find((s) => s.isMySchool);
@@ -582,6 +656,68 @@ export default function LeaderboardPage() {
         <EmptyState icon="🚧" title="Bảng xếp hạng sắp ra mắt" message="Tính năng đang được hoàn thiện. Hãy quay lại sau nhé!" />
       ) : (
         <>
+          {/* Additive-Only: 🎖️ BẢNG VÀNG THỰC CHIẾN CỦA BẠN */}
+          {userExamStats && (
+            <div className="mb-8 rounded-2xl bg-gradient-to-r from-amber-500/15 via-indigo-950/40 to-slate-900 border-2 border-amber-500/40 p-5 sm:p-6 shadow-xl relative overflow-hidden backdrop-blur-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 text-amber-400 font-black text-xs uppercase tracking-wider">
+                    <span>🎖️</span> BẢNG VÀNG THỰC CHIẾN CỦA BẠN
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                      College Board Standard
+                    </span>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3 flex-wrap">
+                    <span>Điểm Thực Chiến Cao Nhất:</span>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 font-mono text-3xl font-black drop-shadow-sm">
+                      {userExamStats.totalExams > 0 ? `${userExamStats.highestScore} / 1600` : 'Chưa có điểm'}
+                    </span>
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-300">
+                    {userExamStats.totalExams > 0 ? (
+                      <>
+                        Bạn đã hoàn thành <strong className="text-amber-300">{userExamStats.totalExams}</strong> bài thi thử SAT thực chiến.
+                        {userExamStats.latestScore !== null && (
+                          <span className="text-slate-400 ml-2">
+                            (Bài gần nhất: <strong className="text-slate-200">{userExamStats.latestScore}</strong>)
+                          </span>
+                        )}
+                        {userExamStats.highestMath !== null && userExamStats.highestRw !== null && (
+                          <span className="text-slate-400 ml-2">
+                            • Math: <strong className="text-cyan-300">{userExamStats.highestMath}</strong> • RW: <strong className="text-purple-300">{userExamStats.highestRw}</strong>
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      'Chưa có dữ liệu bài thi thử trên trình duyệt này. Hãy hoàn thành đề thi thử để mở khóa xếp hạng Percentile toàn quốc!'
+                    )}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 sm:gap-4 flex-wrap shrink-0">
+                  {userExamStats.totalExams > 0 ? (
+                    <div className="bg-slate-950/80 border border-amber-500/40 rounded-xl px-4 py-3 text-center min-w-[150px] shadow-inner">
+                      <div className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Percentile Toàn Cầu</div>
+                      <div className="text-xl font-black text-amber-300 font-mono">
+                        {getCollegeBoardPercentile(userExamStats.highestScore).percentileText}
+                      </div>
+                      <div className="text-[10px] text-amber-200/80 mt-0.5 max-w-[160px] truncate">
+                        {getCollegeBoardPercentile(userExamStats.highestScore).badge}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <a
+                    href="/mock-exams"
+                    className="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-sm shadow-lg shadow-amber-500/20 transition-all inline-flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    <span>🎯</span> {userExamStats.totalExams > 0 ? 'Thi Thử Bứt Phá' : 'Làm Bài Thi Thử Đầu Tiên'}
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* TAB 1: ĐẤU TRƯỜNG CÁC TRƯỜNG THPT */}
           {activeTab === 'schools' && (
             <div className="space-y-8 animate-in fade-in duration-500">
@@ -767,42 +903,78 @@ export default function LeaderboardPage() {
 
               {/* BẢNG XẾP HẠNG TẤT CẢ CÁC TRƯỜNG */}
               <div className="bg-[#1b2533] border border-[#262730] rounded-2xl overflow-hidden shadow-xl">
-                {/* Header thanh lọc vùng miền */}
-                <div className="p-5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/60">
+                {/* Header thanh lọc vùng miền & tìm kiếm trường */}
+                <div className="p-5 border-b border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900/60">
                   <div className="flex items-center gap-3">
                     <span className="text-xl">📊</span>
                     <div>
                       <h3 className="font-bold text-white text-base">Bảng Xếp Hạng Đầy Đủ Các Trường THPT</h3>
-                      <p className="text-xs text-slate-400">Xếp hạng theo tổng điểm lực chiến tích lũy của toàn thể học sinh</p>
+                      <p className="text-xs text-slate-400">
+                        Xếp hạng theo tổng điểm lực chiến tích lũy của toàn thể học sinh ({filteredSchools.length} trường)
+                      </p>
                     </div>
                   </div>
 
-                  {/* Filter Region Buttons */}
-                  <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 gap-1 shrink-0">
-                    {[
-                      { key: 'all', label: 'Toàn Quốc' },
-                      { key: 'North', label: 'Miền Bắc' },
-                      { key: 'Central', label: 'Miền Trung' },
-                      { key: 'South', label: 'Miền Nam' },
-                    ].map((f) => (
-                      <button
-                        key={f.key}
-                        onClick={() => setRegionFilter(f.key as any)}
-                        className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                          regionFilter === f.key
-                            ? 'bg-amber-500 text-slate-950 shadow'
-                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                        }`}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    {/* Live Search Input */}
+                    <div className="relative min-w-[220px]">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
+                      <input
+                        type="text"
+                        value={searchSchool}
+                        onChange={(e) => setSearchSchool(e.target.value)}
+                        placeholder="Tìm tên trường, tỉnh..."
+                        className="w-full pl-8 pr-7 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400/80 transition-colors"
+                      />
+                      {searchSchool && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchSchool('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 text-xs px-1"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter Region Buttons */}
+                    <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 gap-1 shrink-0 overflow-x-auto">
+                      {[
+                        { key: 'all', label: 'Toàn Quốc' },
+                        { key: 'North', label: 'Miền Bắc' },
+                        { key: 'Central', label: 'Miền Trung' },
+                        { key: 'South', label: 'Miền Nam' },
+                      ].map((f) => (
+                        <button
+                          key={f.key}
+                          onClick={() => setRegionFilter(f.key as any)}
+                          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+                            regionFilter === f.key
+                              ? 'bg-amber-500 text-slate-950 shadow'
+                              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
                 {/* Danh sách trường */}
                 <div className="divide-y divide-slate-800/70">
-                  {filteredSchools.map((school) => {
+                  {filteredSchools.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400">
+                      <p className="text-sm">Không tìm thấy trường THPT nào khớp với "{searchSchool}".</p>
+                      <button
+                        onClick={() => setSearchSchool('')}
+                        className="mt-3 text-xs text-amber-400 hover:underline font-semibold"
+                      >
+                        Xóa bộ lọc tìm kiếm
+                      </button>
+                    </div>
+                  ) : (
+                    filteredSchools.map((school) => {
                     const isMy = school.isMySchool;
                     return (
                       <div
@@ -875,7 +1047,7 @@ export default function LeaderboardPage() {
                         </div>
                       </div>
                     );
-                  })}
+                  }))}
                 </div>
               </div>
 

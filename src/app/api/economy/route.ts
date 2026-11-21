@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { loadEconomy, saveEconomy, loadPvpState, savePvpState, tryConsumePvpFightAtomic, loadQuestClaims, saveQuestClaim, tryClaimQuestRewardAtomic, tryClaimOnceAtomic } from '@/lib/economy-store';
+import { loadEconomy, saveEconomy, ensureEconomyRow, trySpendCoinsAtomic, loadPvpState, savePvpState, tryConsumePvpFightAtomic, loadQuestClaims, saveQuestClaim, tryClaimQuestRewardAtomic, tryClaimOnceAtomic } from '@/lib/economy-store';
 import { getMasterySummary } from '@/lib/mastery';
 import { computeStats, computeDomainStats } from '@/lib/stats';
 import { PVP_OPPONENTS, getPvpRankDomain } from '@/helpers/pvp';
@@ -337,13 +337,46 @@ export async function POST(req: Request) {
       if (!result.ok) {
         return NextResponse.json({ success: false, error: result.error }, { status: 400 });
       }
+      const spentCoins = Math.max(0, state.coins - result.state.coins);
+      if (spentCoins > 0) {
+        await ensureEconomyRow(user.id);
+        const atomic = await trySpendCoinsAtomic(user.id, spentCoins, itemId);
+        if (atomic !== null) {
+          if (!atomic.ok) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: atomic.reason === 'insufficient_coins' ? 'Không đủ xu.' : 'Giao dịch không thành công. Vui lòng thử lại.',
+              },
+              { status: 400 }
+            );
+          }
+          const syncedState = {
+            ...result.state,
+            coins: atomic.coins,
+            inventory: atomic.inventory ?? result.state.inventory,
+          };
+          return NextResponse.json({ success: true, state: syncedState });
+        }
+      }
       await saveEconomy(user.id, result.state);
       return NextResponse.json({ success: true, state: result.state });
     }
 
     if (action === 'spin') {
+      // Khóa atomic theo ngày qua claim_quest_reward (0 xu) chống gửi 10 request song song farm spin
+      const today = todayVN();
+      await ensureEconomyRow(user.id);
+      const spinLock = await tryClaimOnceAtomic(user.id, 'spin_daily', today, 0, 0);
+      if (spinLock !== null && !spinLock.ok && spinLock.reason === 'already_claimed') {
+        return NextResponse.json({
+          success: false,
+          result: { type: 'none', message: 'Hôm nay bạn đã quay rồi. Quay lại vào ngày mai nhé!' },
+          state,
+        });
+      }
       // Random CHẠY Ở SERVER (client không gửi kết quả).
-      const result = applySpin(state, todayVN(), Math.random);
+      const result = applySpin(state, today, Math.random);
       if (result.ok) await saveEconomy(user.id, result.state);
       return NextResponse.json({
         success: result.ok,

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { encodeQrMatrix, qrMatrixToSvgPath } from '@/lib/qr-svg';
 
 /**
  * CHIA SẺ TIẾN ĐỘ VỚI PHỤ HUYNH (student) — sinh/thu hồi mã, copy link, mã QR trực quan.
@@ -44,64 +45,52 @@ async function copyToClipboardSafe(text: string): Promise<boolean> {
   }
 }
 
-// Point 80: Visual SVG QR Code Component với logo SAT trung tâm và fallback dự phòng
+// Mục #20: Native SVG QR Code thuần ISO/IEC 18004 (0 phụ thuộc api.qrserver.com, bảo mật share-code & quét offline 100%)
 function ParentQRCodeSVG({ url, code }: { url: string; code: string }) {
-  const [imgError, setImgError] = useState(false);
-  const encodedUrl = encodeURIComponent(url);
-  const qrSvgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&format=svg&data=${encodedUrl}&margin=10`;
+  const { viewBox, path } = useMemo(() => {
+    const matrix = encodeQrMatrix(url);
+    return qrMatrixToSvgPath(matrix, 2);
+  }, [url]);
+
+  const handleZaloShare = async () => {
+    const shareTitle = 'Báo cáo tiến độ luyện thi Digital SAT — SAT.Guru';
+    const shareText = `Bố mẹ xem báo cáo tiến độ học SAT mới nhất của con tại đây nhé (Mã ${code}): ${url}`;
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: shareTitle, text: shareText, url });
+        return;
+      } catch {
+        // Người dùng hủy share sheet hoặc trình duyệt không hỗ trợ → mở Zalo web share
+      }
+    }
+    const zaloUrl = `https://zalo.me/share?url=${encodeURIComponent(url)}&text=${encodeURIComponent(shareText)}`;
+    window.open(zaloUrl, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <div className="flex flex-col items-center">
       <div className="relative p-3 bg-white rounded-2xl shadow-xl border-4 border-amber-400/40 w-[200px] h-[200px] flex items-center justify-center">
-        {!imgError ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={qrSvgUrl}
-            alt={`Mã QR truy cập báo cáo phụ huynh mã ${code}`}
-            width={180}
-            height={180}
-            onError={() => setImgError(true)}
-            className="w-full h-full object-contain select-none"
-          />
-        ) : (
-          // Fallback SVG trực quan phong cách QR Code nếu không có kết nối internet ngoại mạng
-          <svg className="w-full h-full" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="100" height="100" fill="white" />
-            {/* Top-Left Finder */}
-            <rect x="8" y="8" width="28" height="28" rx="4" fill="#0f172a" />
-            <rect x="13" y="13" width="18" height="18" rx="2" fill="white" />
-            <rect x="17" y="17" width="10" height="10" rx="1" fill="#f59e0b" />
-            {/* Top-Right Finder */}
-            <rect x="64" y="8" width="28" height="28" rx="4" fill="#0f172a" />
-            <rect x="69" y="13" width="18" height="18" rx="2" fill="white" />
-            <rect x="73" y="17" width="10" height="10" rx="1" fill="#f59e0b" />
-            {/* Bottom-Left Finder */}
-            <rect x="8" y="64" width="28" height="28" rx="4" fill="#0f172a" />
-            <rect x="13" y="69" width="18" height="18" rx="2" fill="white" />
-            <rect x="17" y="73" width="10" height="10" rx="1" fill="#f59e0b" />
-            {/* Pattern Dots */}
-            <circle cx="45" cy="18" r="3" fill="#0f172a" />
-            <circle cx="55" cy="18" r="3" fill="#0f172a" />
-            <circle cx="18" cy="45" r="3" fill="#0f172a" />
-            <circle cx="18" cy="55" r="3" fill="#0f172a" />
-            <circle cx="45" cy="45" r="4" fill="#f59e0b" />
-            <circle cx="55" cy="55" r="4" fill="#f59e0b" />
-            <circle cx="82" cy="45" r="3" fill="#0f172a" />
-            <circle cx="82" cy="55" r="3" fill="#0f172a" />
-            <circle cx="45" cy="82" r="3" fill="#0f172a" />
-            <circle cx="55" cy="82" r="3" fill="#0f172a" />
-            <circle cx="72" cy="72" r="5" fill="#f59e0b" />
-            <text x="50" y="96" textAnchor="middle" fontSize="6" fontWeight="bold" fill="#64748b">QUÉT ZALO ĐỂ XEM</text>
-          </svg>
-        )}
-        {/* Logo SAT tâm điểm */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-amber-500 border-2 border-white flex items-center justify-center shadow-md">
-          <span className="text-[10px] font-black text-slate-900 tracking-tighter">SAT</span>
-        </div>
+        <svg
+          className="w-full h-full select-none"
+          viewBox={`0 0 ${viewBox} ${viewBox}`}
+          shapeRendering="crispEdges"
+          role="img"
+          aria-label={`Mã QR truy cập báo cáo phụ huynh mã ${code}`}
+        >
+          <rect width={viewBox} height={viewBox} fill="#ffffff" />
+          <path d={path} fill="#0f172a" />
+        </svg>
       </div>
       <p className="mt-2 text-[11px] font-semibold text-amber-300/90 tracking-wide flex items-center gap-1">
-        <span>📸</span> Mở Zalo quét mã này
+        <span>📸</span> Mở Zalo hoặc Camera quét trực tiếp (QR nội bộ bảo mật)
       </p>
+      <button
+        type="button"
+        onClick={handleZaloShare}
+        className="mt-2.5 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs shadow-md transition-colors cursor-pointer"
+      >
+        <span>📲</span> Gửi báo cáo qua Zalo 1-chạm
+      </button>
     </div>
   );
 }

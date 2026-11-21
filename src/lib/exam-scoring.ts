@@ -7,6 +7,7 @@
  */
 
 import { matchesAnswer } from '@/lib/answer-match';
+import { calibrateQuestionIrt, estimateThetaEAP, thetaToSatScore, type IRTItemResponse } from '@/lib/irt';
 
 export type AdaptivePath = 'hard' | 'easy';
 
@@ -15,6 +16,10 @@ export interface SectionScore {
   total: number;
   scaled: number;
   path: AdaptivePath;
+  /** Tham số IRT 2PL EAP (Mục #10) khi câu hỏi có metadata độ khó / (a, b) */
+  theta?: number;
+  se?: number;
+  scoringMethod?: 'irt-2pl' | 'curve';
 }
 
 export interface ExamScoreResult {
@@ -51,6 +56,79 @@ export function rawToScaled(rawCorrect: number, totalQuestions: number, path: Ad
 export interface AnswerSet {
   answers: Record<string, string>;
   correctAnswers: Record<string, string>;
+  /** Metadata độ khó tùy chọn để kích hoạt IRT 2PL EAP Pattern-Scoring (Mục #10) */
+  difficulties?: Record<string, string>;
+  /** Tham số IRT 2PL (a, b) tường minh nếu kho đề có sẵn */
+  irtParams?: Record<string, { a: number; b: number }>;
+}
+
+/**
+ * Chấm điểm phần thi bằng mô hình IRT 2PL EAP khi có metadata (a, b) hoặc difficulty;
+ * fallback 100% tương thích ngược về `rawToScaled` nếu không có metadata IRT.
+ */
+export function computeSectionScore(
+  sets: AnswerSet[],
+  path: AdaptivePath
+): SectionScore {
+  let raw = 0;
+  let total = 0;
+  const irtResponses: IRTItemResponse[] = [];
+  let hasIrtMetadata = false;
+
+  for (const set of sets) {
+    for (const [qId, correct] of Object.entries(set.correctAnswers)) {
+      total++;
+      const userAns = set.answers[qId];
+      const isCorrect = matchesAnswer(userAns, correct);
+      if (isCorrect) raw++;
+
+      const explicit = set.irtParams?.[qId];
+      const diff = set.difficulties?.[qId];
+      if (explicit || diff) {
+        hasIrtMetadata = true;
+      }
+      const { a, b } = explicit ?? calibrateQuestionIrt(diff ?? 'Medium');
+      irtResponses.push({ a, b, correct: isCorrect });
+    }
+  }
+
+  if (total === 0) {
+    return { raw: 0, total: 0, scaled: SECTION_MIN, path, scoringMethod: 'curve' };
+  }
+
+  const maxCap = path === 'hard' ? HARD_MAX : EASY_MAX;
+
+  if (hasIrtMetadata && irtResponses.length === total) {
+    // Ước lượng theta bằng EAP (tránh phạt kép nhánh Easy: chỉ áp trần cap maxCap = 650)
+    const prior = path === 'hard' ? 0.25 : -0.15;
+    const eap = estimateThetaEAP(irtResponses, prior);
+    let scaled: number;
+    if (raw === 0) {
+      scaled = SECTION_MIN;
+    } else if (raw === total) {
+      scaled = maxCap;
+    } else {
+      const irtSat = thetaToSatScore(eap.theta);
+      scaled = Math.max(SECTION_MIN, Math.min(maxCap, irtSat));
+    }
+    return {
+      raw,
+      total,
+      scaled,
+      path,
+      theta: eap.theta,
+      se: eap.se,
+      scoringMethod: 'irt-2pl',
+    };
+  }
+
+  return {
+    raw,
+    total,
+    scaled: rawToScaled(raw, total, path),
+    path,
+    scoringMethod: 'curve',
+  };
 }
 
 export function computeExamScore(
@@ -61,31 +139,14 @@ export function computeExamScore(
   rwPath: AdaptivePath,
   mathPath: AdaptivePath
 ): ExamScoreResult {
-  const rwRaw = countCorrect(rwM1) + countCorrect(rwM2);
-  const rwTotal = Object.keys(rwM1.correctAnswers).length + Object.keys(rwM2.correctAnswers).length;
-  const mathRaw = countCorrect(mathM1) + countCorrect(mathM2);
-  const mathTotal = Object.keys(mathM1.correctAnswers).length + Object.keys(mathM2.correctAnswers).length;
-
-  const rwScaled = rawToScaled(rwRaw, rwTotal, rwPath);
-  const mathScaled = rawToScaled(mathRaw, mathTotal, mathPath);
+  const rw = computeSectionScore([rwM1, rwM2], rwPath);
+  const math = computeSectionScore([mathM1, mathM2], mathPath);
 
   return {
-    rw: { raw: rwRaw, total: rwTotal, scaled: rwScaled, path: rwPath },
-    math: { raw: mathRaw, total: mathTotal, scaled: mathScaled, path: mathPath },
-    total: rwScaled + mathScaled,
+    rw,
+    math,
+    total: rw.scaled + math.scaled,
   };
-}
-
-function countCorrect(set: AnswerSet): number {
-  let count = 0;
-  for (const [qId, correct] of Object.entries(set.correctAnswers)) {
-    const userAns = set.answers[qId];
-    // 🔴 CRITICAL FIX (ROOT A): so đúng cách (câu thô so toàn chuỗi) — xem answer-match.ts.
-    if (matchesAnswer(userAns, correct)) {
-      count++;
-    }
-  }
-  return count;
 }
 
 /**

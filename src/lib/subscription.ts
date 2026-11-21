@@ -335,3 +335,77 @@ export function applyCouponPrice(
   if (!check.valid || check.discountPercent <= 0) return priceVnd;
   return Math.round((priceVnd * (100 - check.discountPercent)) / 100);
 }
+
+/**
+ * ============================================================================
+ *  B2B CENTER / SCHOOL LICENSE & SCORE GUARANTEE POLICY (Mục #25)
+ * ============================================================================
+ */
+export interface CenterBulkPlan {
+  id: 'center_10' | 'center_30' | 'center_50';
+  name: string;
+  seats: number;
+  durationDays: number;
+  discountPercent: number;
+  pricePerSeatVnd: number;
+  totalPriceVnd: number;
+  badge?: string;
+  highlights: string[];
+}
+
+export const CENTER_BULK_PLANS: readonly CenterBulkPlan[] = [
+  {
+    id: 'center_10',
+    name: 'Gói Lớp Nhỏ — 10 Học sinh',
+    seats: 10,
+    durationDays: 90,
+    discountPercent: 30,
+    pricePerSeatVnd: 245_000,
+    totalPriceVnd: 2_450_000,
+    badge: 'Giảm 30% cho Giáo viên',
+    highlights: [
+      '10 tài khoản Premium + 1 Cổng Quản trị Giáo viên Supabase Realtime',
+      'Heatmap lỗ hổng kỹ năng cả lớp & giao bài biến thể AI 1-chạm',
+      'Xuất báo cáo tuần cá nhân hóa gửi Phụ huynh qua Zalo',
+    ],
+  },
+  {
+    id: 'center_30',
+    name: 'Gói Trung Tâm — 30 Học sinh',
+    seats: 30,
+    durationDays: 180,
+    discountPercent: 38,
+    pricePerSeatVnd: 390_000,
+    totalPriceVnd: 11_700_000,
+    badge: 'Phổ biến nhất B2B',
+    highlights: [
+      '30 tài khoản Ultimate (6 tháng) + 3 tài khoản Giáo viên/Trợ giảng',
+      'Chấm điểm chuẩn IRT 2PL & ngân hàng đề QAS mở khóa 100%',
+      'Hỗ trợ thiết lập lộ trình nước rút riêng cho từng khóa thi SAT',
+    ],
+  },
+  {
+    id: 'center_50',
+    name: 'Gói Trường Chuyên / Học Viện — 50+ Ghế',
+    seats: 50,
+    durationDays: 365,
+    discountPercent: 45,
+    pricePerSeatVnd: 620_000,
+    totalPriceVnd: 31_000_000,
+    badge: 'Tiết kiệm tối đa 45%',
+    highlights: [
+      '50 tài khoản Ultimate trọn năm + không giới hạn lớp học',
+      'Báo cáo tiến độ tự động hàng tuần qua ZNS/Webhook cho Phụ huynh',
+      'Hỗ trợ kỹ thuật ưu tiên từ đội ngũ học thuật SAT.Guru',
+    ],
+  },
+];
+
+export const SCORE_GUARANTEE_POLICY = {
+  minGainPoints: 100,
+  requiredCompletionPct: 90,
+  eligibleTiers: ['ultimate'] as readonly SubscriptionTier[],
+  headlineVi: 'Cam kết tăng tối thiểu +100 điểm SAT hoặc hoàn 100% học phí',
+  conditionVi:
+    'Áp dụng cho học viên gói Ultimate hoàn thành >= 90% lộ trình Sprint & tối thiểu 6 đề thi thử Full-length Bluebook trên SAT.Guru.',
+} as const;

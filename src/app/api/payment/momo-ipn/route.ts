@@ -54,15 +54,16 @@ export async function POST(req: Request) {
       return new NextResponse(null, { status: 204 });
     }
 
-    // 4.2) Kiểm tra lỗi xác nhận
+    // 4.2) Kiểm tra lỗi xác nhận (chuẩn #G8: lệch tiền / không tìm thấy đơn → log cảnh báo,
+    // KHÔNG cấp gói, trả HTTP 204 ACK để MoMo không retry vô hạn)
     if (!outcome.ok) {
       if (outcome.reason === 'amount_mismatch') {
         console.warn(`[momo-ipn] Số tiền không khớp hoặc không đủ cho đơn orderId=${orderId}: nhận ${amountVnd} VND`);
-        return NextResponse.json({ message: 'Amount mismatch or insufficient' }, { status: 400 });
+        return new NextResponse(null, { status: 204 });
       }
       if (outcome.reason === 'not_found') {
         console.warn(`[momo-ipn] Không tìm thấy đơn hàng: orderId=${orderId}`);
-        return NextResponse.json({ message: 'Order not found' }, { status: 404 });
+        return new NextResponse(null, { status: 204 });
       }
       // MoMo: Lỗi hệ thống / DB thất bại → 500 để MoMo retry
       console.error(`[momo-ipn] Lỗi hệ thống khi xác nhận thanh toán orderId=${orderId}:`, outcome.reason);

@@ -23,78 +23,70 @@ function readProjectFile(relPath) {
   return fs.readFileSync(fullPath, 'utf8');
 }
 
-describe('W8 Verification - Chuẩn Thương Hiệu & Pháp Lý Phú Gia', () => {
+describe('W8 Verification - Chuẩn Thương Hiệu Độc Lập SAT.Guru (Tách biệt hoàn toàn khỏi Nội thất Phú Gia)', () => {
   const pricingContent = readProjectFile('src/app/pricing/page.tsx');
   const parentContent = readProjectFile('src/app/parent/page.tsx');
   const upgradeContent = readProjectFile('src/app/upgrade/page.tsx');
+  const adminContent = readProjectFile('src/app/admin/page.tsx');
+  const analyticsContent = readProjectFile('src/app/analytics/page.tsx');
+  const onboardingContent = readProjectFile('src/app/onboarding/page.tsx');
+  const layoutContent = readProjectFile('src/app/layout.tsx');
 
-  test('Pháp lý Phú Gia: Đúng chuẩn MST / ĐKKD 042203002931', () => {
+  test('SAT.Guru Brand: Đúng thương hiệu nền tảng luyện thi Digital SAT độc lập', () => {
     assert.match(
       pricingContent,
-      /042203002931/,
-      'Trang pricing phải công khai MST/ĐKKD chuẩn: 042203002931'
+      /SAT\.Guru/,
+      'Trang pricing phải hiển thị đúng thương hiệu EdTech SAT.Guru'
+    );
+    assert.match(
+      pricingContent,
+      /Thầy Nghĩa Guru|Nguyễn Trọng Nghĩa/,
+      'Trang pricing phải hiển thị cố vấn học thuật Thầy Nghĩa Guru'
     );
   });
 
-  test('Pháp lý Phú Gia: Đúng chuẩn Hotline duy nhất 0986.722.324', () => {
+  test('SAT.Guru Brand: Đúng chuẩn Hotline tư vấn học thuật 0986.722.324', () => {
     assert.match(
       pricingContent,
       /0986\.722\.324/,
-      'Trang pricing phải có hotline duy nhất: 0986.722.324'
+      'Trang pricing phải có hotline tư vấn: 0986.722.324'
     );
   });
 
-  test('Pháp lý Phú Gia: Đúng chuẩn Địa chỉ Trương Quốc Dụng (Hà Tĩnh)', () => {
-    assert.match(
-      pricingContent,
-      /Trương Quốc Dụng/,
-      'Trang pricing phải ghi đúng tên đường có dấu: Trương Quốc Dụng'
-    );
-    assert.match(
-      pricingContent,
-      /Hà Tĩnh/,
-      'Trang pricing phải có địa bàn Thành Sen, Hà Tĩnh'
-    );
-  });
-
-  test('Pháp lý Phú Gia: Tên đơn vị / thương hiệu chuẩn Phú Gia', () => {
-    assert.match(
-      pricingContent,
-      /Phú Gia/,
-      'Trang pricing phải hiển thị thương hiệu Phú Gia'
-    );
-    assert.match(
-      pricingContent,
-      /Nguyễn Trọng Nghĩa/,
-      'Trang pricing phải ghi nhận người đại diện hợp pháp: Nguyễn Trọng Nghĩa'
-    );
-  });
-
-  test('Kỷ Luật Thép: Tuyệt đối CẤM các số điện thoại / MST / Địa chỉ giả hoặc cũ', () => {
+  test('SAT.Guru Brand: Tách biệt tuyệt đối — KHÔNG rò rỉ thương hiệu Nội thất / Phú Gia hay dữ liệu giả', () => {
     const forbiddenPatterns = [
+      { pattern: /Phú\s+Gia/i, label: 'Rò rỉ thương hiệu Phú Gia sang dự án SAT độc lập' },
+      { pattern: /PG\s+HOME\s+LUXURY/i, label: 'Rò rỉ thương hiệu PG HOME LUXURY sang dự án SAT' },
+      { pattern: /Nội\s+[Tt]hất/i, label: 'Rò rỉ ngành Nội Thất sang dự án luyện thi SAT' },
+      { pattern: /042203002931/, label: 'Rò rỉ MST hộ kinh doanh nội thất sang dự án SAT' },
+      { pattern: /Trương\s+Quốc\s+Dụng/i, label: 'Rò rỉ địa chỉ xưởng nội thất sang dự án SAT' },
+      { pattern: /Tổ\s+hợp/i, label: 'Cụm từ cấm "Tổ hợp"' },
+      { pattern: /xưởng\s+mộc/i, label: 'Danh xưng cấm "xưởng mộc"' },
       { pattern: /0973\.?562\.?789/, label: 'SĐT giả 0973.562.789' },
       { pattern: /0912\.?345\.?678/, label: 'SĐT giả 0912.345.678' },
       { pattern: /0988\.?888\.?999/, label: 'SĐT giả 0988.888.999' },
       { pattern: /0868\.?448\.?625/, label: 'SĐT giả 0868.448.625' },
-      { pattern: /2500732386/, label: 'MST giả Vĩnh Phúc 2500732386' },
+      { pattern: /2500732386/, label: 'MST giả 2500732386' },
       { pattern: /3002228888/, label: 'MST giả 3002228888' },
       { pattern: /35\s+Ngô\s+Đức\s+Kế/i, label: 'Địa chỉ cũ sai 35 Ngô Đức Kế' },
       { pattern: /đường\s+Hàm\s+Nghi/i, label: 'Địa chỉ bịa đặt Hàm Nghi' },
-      { pattern: /Trương\s+Quốc\s+Dung(?!\w)/i, label: 'Sai chính tả Trương Quốc Dung (thiếu dấu nặng)' },
-      { pattern: /xưởng\s+mộc/i, label: 'Danh xưng cấm "xưởng mộc"' }
     ];
 
     const filesToCheck = [
       { name: 'pricing', content: pricingContent },
       { name: 'parent', content: parentContent },
-      { name: 'upgrade', content: upgradeContent }
+      { name: 'upgrade', content: upgradeContent },
+      { name: 'admin', content: adminContent },
+      { name: 'analytics', content: analyticsContent },
+      { name: 'onboarding', content: onboardingContent },
+      { name: 'layout', content: layoutContent },
     ];
 
     for (const { name, content } of filesToCheck) {
       for (const { pattern, label } of forbiddenPatterns) {
         assert.ok(
           !pattern.test(content),
-          `Phát hiện vi phạm Kỷ luật Thép Phú Gia [${label}] trong file ${name}`
+          `Phát hiện vi phạm tách biệt thương hiệu SAT.Guru [${label}] trong file ${name}`
         );
       }
     }
@@ -152,7 +144,8 @@ describe('W8 Verification - Parent Portal & Parent Sharing Features', () => {
 
   test('Point 80: Visual SVG QR Code cho phụ huynh quét Zalo trên trang parent-share', () => {
     assert.match(parentShareContent, /svg/i, 'Trang parent-share phải có SVG QR Code');
-    assert.match(parentShareContent, /viewBox="0 0 100 100"/, 'QR code SVG phải có viewBox hợp lệ');
+    assert.match(parentShareContent, /viewBox=/, 'QR code SVG phải có viewBox hợp lệ');
+    assert.match(parentShareContent, /encodeQrMatrix|qrMatrixToSvgPath/, 'QR code phải sinh SVG nội bộ không phụ thuộc third-party');
     assert.match(parentShareContent, /Zalo/, 'Phải hỗ trợ quét mã hoặc chia sẻ qua Zalo');
   });
 });

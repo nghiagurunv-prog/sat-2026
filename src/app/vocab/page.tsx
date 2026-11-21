@@ -293,6 +293,108 @@ export default function VocabPage() {
     }
   };
 
+  // Tải & hợp nhất từ vựng người dùng từ cả sat_user_custom_vocab_v1 và sat_vocab_vault
+  const mergeUserCustomVocab = (baseWords: VocabWord[]): VocabWord[] => {
+    if (typeof window === 'undefined') return baseWords;
+    const existingWordsLower = new Set(baseWords.map(w => (w.word || '').toLowerCase().trim()));
+    const existingIds = new Set(baseWords.map(w => w.id));
+    const merged = [...baseWords];
+
+    // 1. Đọc từ sat_user_custom_vocab_v1
+    try {
+      const cached = localStorage.getItem('sat_user_custom_vocab_v1');
+      if (cached) {
+        const parsed: VocabWord[] = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          for (const p of parsed) {
+            if (!p || !p.word) continue;
+            const wordLower = p.word.toLowerCase().trim();
+            if (!existingWordsLower.has(wordLower) && !existingIds.has(p.id)) {
+              existingWordsLower.add(wordLower);
+              existingIds.add(p.id);
+              merged.push({
+                ...p,
+                word: p.word.trim(),
+                box: p.box ?? 1,
+                example: p.example || '',
+              });
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Could not read sat_user_custom_vocab_v1:", e);
+    }
+
+    // 2. Đọc & đồng bộ từ sat_vocab_vault (lưu từ CorePracticeUI, reading, grind)
+    try {
+      const vaultRaw = localStorage.getItem('sat_vocab_vault');
+      if (vaultRaw) {
+        const vaultItems = JSON.parse(vaultRaw);
+        if (Array.isArray(vaultItems)) {
+          vaultItems.forEach((v: { word?: string; meaning?: string; contextSentence?: string; example?: string; savedAt?: string | number }, idx: number) => {
+            if (!v || !v.word) return;
+            const wordLower = v.word.toLowerCase().trim();
+            if (!existingWordsLower.has(wordLower)) {
+              existingWordsLower.add(wordLower);
+              const newId = `vault-${v.savedAt || Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`;
+              existingIds.add(newId);
+              merged.push({
+                id: newId,
+                box: 1,
+                word: v.word.trim(),
+                meaning: v.meaning || 'Từ vựng lưu từ phòng luyện thi',
+                example: v.example || v.contextSentence || '',
+              });
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Could not read sat_vocab_vault:", e);
+    }
+
+    return merged;
+  };
+
+  // Xuất sổ từ vựng người dùng ra định dạng CSV với UTF-8 BOM (\uFEFF)
+  const handleExportVocabCsv = () => {
+    if (!words || words.length === 0) {
+      if (typeof window !== 'undefined') {
+        window.alert('Chưa có từ vựng nào trong sổ để xuất!');
+      }
+      return;
+    }
+
+    const headers = ['Từ vựng (Word)', 'Định nghĩa (Meaning)', 'Ví dụ (Example)', 'Hộp Leitner (Box)', 'Gốc từ (Roots)', 'Đã ghim (Pinned)'];
+    const rows = words.map(w => {
+      const escapeCsv = (str: string | undefined | null) => {
+        if (!str) return '""';
+        const sanitized = String(str).replace(/"/g, '""');
+        return `"${sanitized}"`;
+      };
+      return [
+        escapeCsv(w.word),
+        escapeCsv(w.meaning),
+        escapeCsv(w.example),
+        w.box ?? 1,
+        escapeCsv(w.roots ? w.roots.join('; ') : ''),
+        pinnedIds.includes(w.id) ? 'Có' : 'Không',
+      ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `so_tu_vung_sat_nghiaguru_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // Fetch dữ liệu gốc từ API
   const runFetch = () => {
     fetch('/api/vocab')
@@ -306,27 +408,21 @@ export default function VocabPage() {
           initialWords = data.words;
         }
 
-        // Tải thêm từ đã lưu vào localStorage nếu có
-        try {
-          const cached = localStorage.getItem('sat_user_custom_vocab_v1');
-          if (cached) {
-            const parsed: VocabWord[] = JSON.parse(cached);
-            if (Array.isArray(parsed)) {
-              const existingIds = new Set(initialWords.map(w => w.id));
-              const nonDupes = parsed.filter(p => !existingIds.has(p.id));
-              initialWords = [...initialWords, ...nonDupes];
-            }
-          }
-        } catch (e) {
-          console.warn("Could not read custom vocab cache:", e);
-        }
-
-        setWords(initialWords);
+        // Tải thêm từ đã lưu vào localStorage (sat_user_custom_vocab_v1 & sat_vocab_vault)
+        const combined = mergeUserCustomVocab(initialWords);
+        setWords(combined);
         setIsLoading(false);
       })
       .catch(err => {
         console.error(err);
-        setLoadError(true);
+        // Fallback: Nếu fetch API lỗi hoặc offline, vẫn tải từ vựng cục bộ đã lưu
+        const localWords = mergeUserCustomVocab([]);
+        if (localWords.length > 0) {
+          setWords(localWords);
+          setLoadError(false);
+        } else {
+          setLoadError(true);
+        }
         setIsLoading(false);
       });
   };
@@ -720,6 +816,16 @@ export default function VocabPage() {
         >
           <span>📖</span> Trung Tâm Đọc Hiểu (730+)
         </Link>
+
+        {/* Nút Xuất Sổ Từ Vựng (CSV) */}
+        <button
+          type="button"
+          onClick={handleExportVocabCsv}
+          className="ml-auto flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-[#1b2533] text-emerald-300 hover:text-emerald-200 hover:bg-emerald-950/40 border border-emerald-500/30 transition-all shadow-sm"
+          title="Xuất toàn bộ danh sách từ vựng ra file CSV hỗ trợ tiếng Việt (UTF-8 BOM)"
+        >
+          <span>📥</span> Xuất Sổ Từ Vựng (CSV)
+        </button>
       </div>
 
       {/* Header */}
@@ -1419,15 +1525,23 @@ export default function VocabPage() {
                 </p>
               </div>
 
-              {/* Ô tìm kiếm từ vựng */}
-              <div className="w-full md:w-80">
+              {/* Ô tìm kiếm từ vựng & Nút Xuất CSV */}
+              <div className="w-full md:w-auto flex items-center gap-2">
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="🔍 Tìm từ tiếng Anh hoặc nghĩa..."
-                  className="w-full px-4 py-2 rounded-xl bg-[#0e1117] border border-[#262730] text-sm text-white focus:outline-none focus:border-purple-400 placeholder:text-gray-500"
+                  className="w-full md:w-72 px-4 py-2 rounded-xl bg-[#0e1117] border border-[#262730] text-sm text-white focus:outline-none focus:border-purple-400 placeholder:text-gray-500"
                 />
+                <button
+                  type="button"
+                  onClick={handleExportVocabCsv}
+                  className="shrink-0 px-3.5 py-2 rounded-xl bg-[#0e1117] hover:bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm"
+                  title="Xuất danh sách từ vựng ra file CSV (UTF-8 BOM)"
+                >
+                  <span>📥</span> Xuất CSV
+                </button>
               </div>
             </div>
 

@@ -216,6 +216,8 @@ export default function AnalyticsCenterPage() {
   const [score, setScore] = useState<ScorePrediction | null>(null);
   const [mastery, setMastery] = useState<MasterySummary | null>(null);
   const [examHistory, setExamHistory] = useState<ExamHistoryItem[]>([]);
+  const [mistakeList, setMistakeList] = useState<any[]>([]);
+  const [copiedZalo, setCopiedZalo] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Bộ lọc mô phỏng xét tuyển ĐH Việt Nam
@@ -250,7 +252,7 @@ export default function AnalyticsCenterPage() {
         setLoading(false);
       }
 
-      // Đọc lịch sử thi thử từ localStorage
+      // Đọc lịch sử thi thử và sổ tay lỗi sai từ localStorage
       if (typeof window !== 'undefined') {
         try {
           const raw = localStorage.getItem('sat_exam_history_v1');
@@ -263,11 +265,60 @@ export default function AnalyticsCenterPage() {
         } catch (e) {
           console.warn('Lỗi đọc sat_exam_history_v1:', e);
         }
+
+        try {
+          const rawMistakes = localStorage.getItem('sat_mistake_bank_v1');
+          if (rawMistakes) {
+            const parsedMistakes = JSON.parse(rawMistakes);
+            if (Array.isArray(parsedMistakes)) {
+              setMistakeList(parsedMistakes);
+            }
+          }
+        } catch (e) {
+          console.warn('Lỗi đọc sat_mistake_bank_v1:', e);
+        }
       }
     }
 
     initData();
   }, []);
+
+  // Lấy điểm bài thi gần nhất từ sat_exam_history_v1
+  const latestExamScore = useMemo(() => {
+    if (!examHistory || examHistory.length === 0) return null;
+    const sorted = [...examHistory].sort((a, b) => {
+      const tA = new Date(a.completedAt || a.date || 0).getTime();
+      const tB = new Date(b.completedAt || b.date || 0).getTime();
+      return tB - tA;
+    });
+    const latest = sorted[0];
+    const scoreVal = latest?.totalScore ?? latest?.score ?? null;
+    return typeof scoreVal === 'number' && Number.isFinite(scoreVal) && scoreVal >= 400 ? scoreVal : null;
+  }, [examHistory]);
+
+  // Phân tích thất thoát điểm từ sổ tay lỗi sai (sat_mistake_bank_v1)
+  const mistakeAnalysis = useMemo(() => {
+    const totalMistakes = mistakeList.length;
+    const mathMistakes = mistakeList.filter((m) => {
+      const subj = (m.subject || m.source || '').toLowerCase();
+      const q = m.question || '';
+      return subj.includes('math') || q.includes('\\frac');
+    });
+    const rwMistakes = mistakeList.filter((m) => !mathMistakes.includes(m));
+
+    // Điểm thất thoát ước tính: mỗi câu sai chưa chữa dứt điểm làm mất ~10-15 điểm
+    const estimatedLoss = totalMistakes > 0 ? Math.min(280, Math.max(30, totalMistakes * 15)) : 50;
+    const recoverablePoints = Math.min(1600 - satInput, estimatedLoss);
+    const potentialScore = Math.min(1600, satInput + recoverablePoints);
+
+    return {
+      totalMistakes,
+      mathCount: mathMistakes.length,
+      rwCount: rwMistakes.length,
+      recoverablePoints,
+      potentialScore,
+    };
+  }, [mistakeList, satInput]);
 
   // Tính điểm Mastery cho từng chuyên đề trong 8 chuyên đề Digital SAT
   const domainMasteryMap = useMemo(() => {
@@ -364,7 +415,7 @@ export default function AnalyticsCenterPage() {
     );
   }, [satInput]);
 
-  // Tính toán Xét tuyển 6 Đại Học Hàng Đầu Việt Nam (2026)
+  // Tính toán Xét tuyển 7 Đại Học Hàng Đầu Việt Nam (2026)
   const vnAdmissions = useMemo(() => {
     // 1. FTU (Ngoại Thương): Thang 30 = (SAT/1600)*30. Sàn >= 1300 + GPA >= 8.5. An toàn >= 1420
     const ftuScore = Number(((satInput / 1600) * 30).toFixed(2));
@@ -391,7 +442,12 @@ export default function AnalyticsCenterPage() {
     const vinScholarship = satInput >= 1450;
     const vinFullRide = satInput >= 1520;
 
-    // 6. RMIT: Tuyển thẳng Kinh doanh >= 1190, Công nghệ >= 1240. Học bổng Hiệu trưởng >= 1400
+    // 6. Fulbright University Vietnam: Sàn nhận hồ sơ >= 1350 & GPA >= 8.5. Học bổng/Hỗ trợ tài chính >= 1420 & GPA >= 8.8. Toàn phần >= 1500 & GPA >= 9.0
+    const fulbrightEligible = satInput >= 1350 && gpaInput >= 8.5;
+    const fulbrightAid = satInput >= 1420 && gpaInput >= 8.8;
+    const fulbrightFullRide = satInput >= 1500 && gpaInput >= 9.0;
+
+    // 7. RMIT: Tuyển thẳng Kinh doanh >= 1190, Công nghệ >= 1240. Học bổng Hiệu trưởng >= 1400
     const rmitDirect = satInput >= 1240;
     const rmitScholarship = satInput >= 1400;
 
@@ -401,6 +457,7 @@ export default function AnalyticsCenterPage() {
       hust: { score: hustScore, eligible: hustEligible, safeIT: hustSafeIT, safeEng: hustSafeEng },
       vnu: { eligible: vnuEligible, safe: vnuSafe },
       vinuni: { eligible: vinEligible, scholarship: vinScholarship, fullRide: vinFullRide },
+      fulbright: { eligible: fulbrightEligible, aid: fulbrightAid, fullRide: fulbrightFullRide },
       rmit: { direct: rmitDirect, scholarship: rmitScholarship },
     };
   }, [satInput, gpaInput]);
@@ -472,6 +529,38 @@ export default function AnalyticsCenterPage() {
       dataPoints,
     };
   }, [score, examHistory]);
+
+  // Hành động sao chép tóm tắt Zalo chuẩn SAT.Guru & Xuất bản in/PDF
+  const handleCopyZaloSummary = () => {
+    const text = `📊 [BÁO CÁO CHIẾN LƯỢC DIGITAL SAT 2026]
+🎯 Điểm mô phỏng: ${satInput}/1600 | GPA: ${gpaInput.toFixed(1)} | IELTS: ${ieltsInput.toFixed(1)}
+🛡️ Phân tích Sổ tay lỗi sai: ${mistakeAnalysis.totalMistakes} câu chưa dứt điểm (Toán: ${mistakeAnalysis.mathCount}, Đọc-Viết: ${mistakeAnalysis.rwCount})
+🚀 Tiềm năng hồi phục điểm: +${mistakeAnalysis.recoverablePoints} điểm ➔ Mục tiêu khả thi: ${mistakeAnalysis.potentialScore}/1600
+🏫 Cơ hội ĐH Việt Nam:
+• FTU: ${vnAdmissions.ftu.safe ? '✅ Rất an toàn (≥ 1420)' : vnAdmissions.ftu.eligible ? '⚡ Đủ điều kiện xét tuyển' : '⚠️ Cần nâng điểm'}
+• NEU: ${vnAdmissions.neu.safe ? '✅ An toàn Top 1' : vnAdmissions.neu.eligible ? '⚡ Đủ điều kiện' : '⚠️ Cần nâng điểm'}
+• HUST: ${vnAdmissions.hust.safeIT ? '✅ Cơ hội cao IT1/IT2' : vnAdmissions.hust.eligible ? '⚡ Đủ điều kiện sàn' : '⚠️ Cần nâng điểm'}
+• VNU: ${vnAdmissions.vnu.safe ? '✅ Rất an toàn mọi ngành' : vnAdmissions.vnu.eligible ? '⚡ Đủ điều kiện' : '⚠️ Cần nâng điểm'}
+• VinUni: ${vnAdmissions.vinuni.fullRide ? '💎 Học bổng 90-100%' : vnAdmissions.vinuni.scholarship ? '✅ Học bổng 50-80%' : vnAdmissions.vinuni.eligible ? '⚡ Chuẩn nộp' : '⚠️ Cần nâng điểm'}
+• Fulbright: ${vnAdmissions.fulbright.fullRide ? '💎 Học bổng Toàn phần (≥ 1500 & GPA ≥ 9.0)' : vnAdmissions.fulbright.aid ? '✅ Học bổng/Hỗ trợ tài chính (≥ 1420 & GPA ≥ 8.8)' : vnAdmissions.fulbright.eligible ? '⚡ Sàn nhận hồ sơ (≥ 1350 & GPA ≥ 8.5)' : '⚠️ Cần nâng điểm'}
+• RMIT: ${vnAdmissions.rmit.scholarship ? '✅ Học bổng 50-100%' : vnAdmissions.rmit.direct ? '⚡ Tuyển thẳng' : '⚠️ Cần nâng điểm'}
+🌎 Học bổng Mỹ: ${currentScholarshipTier.tierName} (${currentScholarshipTier.scholarshipPerYear})
+---
+📍 Hệ Thống Luyện Thi Digital SAT — SAT.GURU (Thầy Nghĩa Guru)
+📞 Hotline/Zalo tư vấn học thuật: 0986.722.324`;
+
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+      setCopiedZalo(true);
+      setTimeout(() => setCopiedZalo(false), 2500);
+    }
+  };
+
+  const handleExportPrint = () => {
+    if (typeof window !== 'undefined') {
+      window.print();
+    }
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-20 max-w-7xl mx-auto">
@@ -732,7 +821,7 @@ export default function AnalyticsCenterPage() {
               </h2>
             </div>
             <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Tích hợp công thức tuyển sinh chính thức: Ngoại Thương (FTU), KT Quốc Dân (NEU), Bách Khoa (HUST), ĐHQG, VinUni, RMIT.
+              Tích hợp công thức tuyển sinh chính thức: Ngoại Thương (FTU), KT Quốc Dân (NEU), Bách Khoa (HUST), ĐHQG, VinUni, Fulbright, RMIT.
             </p>
           </div>
           <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 self-start sm:self-auto">
@@ -745,7 +834,19 @@ export default function AnalyticsCenterPage() {
           <div>
             <div className="flex justify-between items-center mb-1">
               <label className="text-xs font-bold text-slate-300">Điểm Digital SAT:</label>
-              <span className="text-sm font-black text-amber-400">{satInput} / 1600</span>
+              <div className="flex items-center gap-2">
+                {(latestExamScore || score?.total) && (
+                  <button
+                    type="button"
+                    onClick={() => setSatInput(latestExamScore || score?.total || 1420)}
+                    className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 transition flex items-center gap-1 font-bold cursor-pointer"
+                    title={`Dùng điểm thi/dự đoán gần nhất: ${latestExamScore || score?.total}`}
+                  >
+                    ⚡ Dùng điểm bài thi gần nhất ({latestExamScore || score?.total})
+                  </button>
+                )}
+                <span className="text-sm font-black text-amber-400">{satInput} / 1600</span>
+              </div>
             </div>
             <input
               type="range"
@@ -806,7 +907,7 @@ export default function AnalyticsCenterPage() {
           </div>
         </div>
 
-        {/* 6 Thẻ Phân Tích Cơ Hội Vào Các Trường */}
+        {/* 7 Thẻ Phân Tích Cơ Hội Vào Các Trường Đại Học Hàng Đầu */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* 1. FTU */}
           <div className="p-5 rounded-2xl bg-[#0f172a] border border-[#334155] flex flex-col justify-between hover:border-emerald-500/50 transition">
@@ -1026,7 +1127,53 @@ export default function AnalyticsCenterPage() {
             </div>
           </div>
 
-          {/* 6. RMIT Việt Nam */}
+          {/* 6. Fulbright University Vietnam */}
+          <div className="p-5 rounded-2xl bg-[#0f172a] border border-[#334155] flex flex-col justify-between hover:border-emerald-500/50 transition">
+            <div>
+              <div className="flex justify-between items-start gap-2">
+                <h3 className="font-bold text-white text-base">Fulbright University Vietnam</h3>
+                <span className="text-[10px] font-black px-2 py-0.5 rounded bg-teal-500/20 text-teal-300">
+                  Giáo Dục Khai Phóng
+                </span>
+              </div>
+              <div className="text-xs text-slate-400 mt-1">
+                Kinh tế, Khoa học Máy tính, Nghiên cứu Xã hội & Nhân văn
+              </div>
+
+              <div className="mt-3 p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Sàn nhận hồ sơ:</span>
+                  <span className="font-bold text-white">SAT ≥ 1350 & GPA ≥ 8.5</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Học bổng / Hỗ trợ TC:</span>
+                  <span className="text-teal-300 font-bold">SAT ≥ 1420 & GPA ≥ 8.8</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-[#334155]">
+              {vnAdmissions.fulbright.fullRide ? (
+                <div className="p-2 rounded-lg bg-yellow-500/20 text-yellow-300 text-xs font-bold text-center border border-yellow-500/40">
+                  💎 Ứng viên Học bổng Toàn phần (SAT ≥ 1500 & GPA ≥ 9.0)
+                </div>
+              ) : vnAdmissions.fulbright.aid ? (
+                <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-300 text-xs font-bold text-center border border-emerald-500/30">
+                  ✅ Cơ hội cao nhận Học bổng & Hỗ trợ Tài chính (Need-based)
+                </div>
+              ) : vnAdmissions.fulbright.eligible ? (
+                <div className="p-2 rounded-lg bg-amber-500/20 text-amber-300 text-xs font-bold text-center border border-amber-500/30">
+                  ⚡ Đạt sàn nộp hồ sơ (Cần nâng GPA ≥ 8.8 & SAT ≥ 1420 để xin học bổng)
+                </div>
+              ) : (
+                <div className="p-2 rounded-lg bg-red-500/20 text-red-300 text-xs font-bold text-center border border-red-500/30">
+                  ⚠️ Chưa đạt sàn SAT ≥ 1350 hoặc GPA ≥ 8.5
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 7. RMIT Việt Nam */}
           <div className="p-5 rounded-2xl bg-[#0f172a] border border-[#334155] flex flex-col justify-between hover:border-emerald-500/50 transition">
             <div>
               <div className="flex justify-between items-start gap-2">
@@ -1065,6 +1212,66 @@ export default function AnalyticsCenterPage() {
                   Cần nâng SAT ≥ 1190 để tuyển thẳng
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* ADDITIVE-ONLY: PHÂN TÍCH THẤT THOÁT ĐIỂM TỪ SỔ TAY LỖI SAI */}
+        <div className="mt-8 p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-[#131f30] to-slate-900 border-2 border-amber-500/40 shadow-2xl">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-5 border-b border-[#334155]">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold uppercase tracking-wider">
+                <span>🛡️</span> PHÂN TÍCH THẤT THOÁT ĐIỂM TỪ SỔ TAY LỖI SAI
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black text-white">
+                Tiềm Năng Hồi Phục Điểm Khi Khắc Phục Lỗ Hổng Kiến Thức
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+                Đồng bộ trực tiếp từ Sổ tay lỗi sai cá nhân (<span className="text-amber-400 font-bold">{mistakeAnalysis.totalMistakes} câu chưa dứt điểm</span>: {mistakeAnalysis.mathCount} câu Toán, {mistakeAnalysis.rwCount} câu Đọc-Viết). Mỗi câu chữa triệt để đóng góp trực tiếp vào quỹ điểm tuyển sinh.
+              </p>
+            </div>
+
+            {/* Recoverable Points Badge */}
+            <div className="flex items-center gap-4 bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl">
+              <div className="text-center">
+                <div className="text-xs text-amber-300/80 font-bold uppercase">Điểm Thất Thoát Có Thể Lấy Lại</div>
+                <div className="text-3xl font-black text-amber-400">+{mistakeAnalysis.recoverablePoints} <span className="text-base font-normal text-amber-200">điểm</span></div>
+              </div>
+              <div className="h-10 w-px bg-amber-500/30" />
+              <div className="text-center">
+                <div className="text-xs text-emerald-300/80 font-bold uppercase">Điểm Tiềm Năng Khả Thi</div>
+                <div className="text-3xl font-black text-emerald-400">{mistakeAnalysis.potentialScore} <span className="text-base font-normal text-emerald-200">/ 1600</span></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Row: Zalo Summary & Print/PDF */}
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <span>💡 Mẹo: Chữa dứt điểm các bẫy đề thi và lỗi sai tại mục</span>
+              <Link href="/mistakes" className="text-amber-400 hover:underline font-bold">
+                Sổ Tay Lỗi Sai →
+              </Link>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleCopyZaloSummary}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg transition flex items-center gap-2 border border-blue-400/30 cursor-pointer active:scale-95"
+              >
+                <span>{copiedZalo ? '✅' : '📲'}</span>
+                <span>{copiedZalo ? 'Đã Sao Chép Báo Cáo!' : 'Sao Chép Bản Tóm Tắt Zalo'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportPrint}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold shadow transition flex items-center gap-2 border border-slate-600 cursor-pointer active:scale-95"
+              >
+                <span>🖨️</span>
+                <span>Xuất Báo Cáo (In/PDF)</span>
+              </button>
             </div>
           </div>
         </div>

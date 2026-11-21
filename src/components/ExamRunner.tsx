@@ -8,6 +8,13 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { rawToScaled, type AdaptivePath } from '@/lib/exam-scoring';
 import { BluebookTools } from './BluebookTools';
+import {
+  computeHighlightOffsets,
+  evaluateInExamPacing,
+  inspectReviewQuestionStatus,
+  type PassageHighlightRange,
+} from '@/lib/exam-runner-helpers';
+import { enqueueOfflineSync } from '@/lib/offline-queue';
 
 // Câu thi ĐÃ GIẤU đáp án (ROOT A): chỉ có questionId để nộp lên server chấm.
 interface ExamQuestion {
@@ -28,8 +35,8 @@ interface ModuleData {
 
 type Phase = 'lobby' | 'loading' | 'in-module' | 'between-modules' | 'break' | 'finished' | 'submit-error';
 
-// Kiểu dữ liệu Highlight đoạn văn (Điểm 01)
-interface PassageHighlight {
+// Kiểu dữ liệu Highlight đoạn văn (Điểm 01 + Mục #16: kèm startOffset/endOffset chuẩn Bluebook)
+interface PassageHighlight extends PassageHighlightRange {
   id: string;
   text: string;
   color: 'yellow' | 'green' | 'pink';
@@ -441,6 +448,11 @@ export default function ExamRunner({
     mathPathResult: AdaptivePath;
   } | null>(null);
   const [reviewItems, setReviewItems] = useState<ExamReviewItem[]>([]);
+  const reviewItemsRef = useRef<ExamReviewItem[]>([]);
+  useEffect(() => {
+    reviewItemsRef.current = reviewItems;
+  }, [reviewItems]);
+  const [copiedZalo, setCopiedZalo] = useState(false);
   const [reviewFilter, setReviewFilter] = useState<'all' | 'wrong' | 'correct'>('wrong');
   const [savingMistakes, setSavingMistakes] = useState(false);
   const [mistakesSavedCount, setMistakesSavedCount] = useState<number | null>(null);
@@ -683,8 +695,9 @@ export default function ExamRunner({
     if (!currentModule) return [];
     const out: { questionId: string; answer: string }[] = [];
     for (const q of currentModule.questions) {
-      if (q.questionId) {
-        out.push({ questionId: q.questionId, answer: answers[q.questionId] ?? '' });
+      const qId = q.questionId || q.id;
+      if (qId) {
+        out.push({ questionId: qId, answer: answers[qId] ?? '' });
       }
     }
     return out;
@@ -708,7 +721,7 @@ export default function ExamRunner({
       const res = await fetch('/api/exam-session/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ section, mode: effectiveMode }),
+        body: JSON.stringify({ section, mode: effectiveMode, examId: effectiveExamId }),
         signal: ctrl.signal,
       });
       clearTimeout(startTimer);
@@ -747,7 +760,56 @@ export default function ExamRunner({
       setErrorMsg((error as Error)?.message || 'Không thể sinh đề thi. Vui lòng thử lại.');
       setPhase('lobby');
     }
-  }, [effectiveMode]);
+  }, [effectiveMode, effectiveExamId]);
+
+  // Đồng bộ câu sai trực tiếp vào localStorage sat_mistake_bank_v1 cho Guest/Offline users
+  const syncWrongAnswersToLocalStorage = useCallback((itemsToSync: ExamReviewItem[]) => {
+    try {
+      const wrong = itemsToSync.filter((item) => !item.correct);
+      if (wrong.length === 0) return;
+
+      const raw = localStorage.getItem('sat_mistake_bank_v1');
+      const existingList: any[] = raw ? JSON.parse(raw) : [];
+
+      const newMistakes = wrong.map((item) => {
+        const isMath = item.section === 'math' || (!item.section && item.question?.includes('\\frac'));
+        const qId = item.questionId || `q_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        return {
+          id: `mistake_exam_${qId}`,
+          questionId: qId,
+          question: item.question || '',
+          questionText: item.question || '',
+          passage: item.passage || '',
+          choices: item.choices || [],
+          options: item.choices || [],
+          userAnswer: item.userAnswer || '',
+          userChoice: item.userAnswer || '',
+          correctAnswer: item.correctChoice || '',
+          correctChoice: item.correctChoice || '',
+          explanationVi: item.explanation || 'Xem phân tích chi tiết bên dưới để nắm vững phương pháp giải.',
+          explanationEn: item.explanation || '',
+          subject: (isMath ? 'Math' : 'Reading & Writing') as 'Math' | 'Reading & Writing',
+          topic: item.skillId || item.moduleName || 'Luyện thi Mock Digital SAT',
+          rootCause: 'Conceptual Gap' as const,
+          trapType: 'Bẫy Điểm Digital SAT',
+          createdAt: new Date().toISOString(),
+          isMastered: false,
+          retryCount: 0,
+          source: effectiveMode === 'real' ? `Thi Thật QAS - ${item.moduleName || title}` : `Thi Thử SAT - ${item.moduleName || title}`,
+        };
+      });
+
+      const newIds = new Set(newMistakes.map((m) => m.questionId));
+      const filteredExisting = Array.isArray(existingList)
+        ? existingList.filter((m: any) => !newIds.has(m.questionId || m.id))
+        : [];
+
+      const merged = [...newMistakes, ...filteredExisting].slice(0, 500);
+      localStorage.setItem('sat_mistake_bank_v1', JSON.stringify(merged));
+    } catch (err) {
+      console.warn('Lỗi đồng bộ sat_mistake_bank_v1:', err);
+    }
+  }, [effectiveMode, title]);
 
   // Hoàn thành bài thi và ghi nhận lịch sử (Điểm 70)
   const finishExam = useCallback(() => {
@@ -836,8 +898,12 @@ export default function ExamRunner({
       console.warn('Lỗi ghi lịch sử thi vào localStorage:', e);
     }
 
+    // Tự động đồng bộ câu sai vào sat_mistake_bank_v1 cho Guest / Offline users
+    const allItems = reviewItemsRef.current.length > 0 ? reviewItemsRef.current : reviewItems;
+    syncWrongAnswersToLocalStorage(allItems);
+
     setPhase('finished');
-  }, [updateQuestProgress, effectiveMode, sectionMode, effectiveExamId, title, questionTimes, reviewItems]);
+  }, [updateQuestProgress, effectiveMode, sectionMode, effectiveExamId, title, questionTimes, reviewItems, syncWrongAnswersToLocalStorage]);
 
   const submitModule = useCallback(async () => {
     // #038: Double-Submit Guard chống nộp bài kép (hết giờ + bấm nộp cùng lúc)
@@ -865,7 +931,7 @@ export default function ExamRunner({
     }, 2000);
 
     try {
-      const res = await postSubmitWithRetry({ section, moduleNum, mode: effectiveMode, answers: submitted });
+      const res = await postSubmitWithRetry({ section, moduleNum, mode: effectiveMode, examId: effectiveExamId, answers: submitted });
       clearInterval(progressInterval);
 
       if (!res.ok) throw new Error('Không thể nộp module');
@@ -904,7 +970,9 @@ export default function ExamRunner({
         });
         setReviewItems((prev) => {
           const existingIds = new Set(moduleReview.map((m) => m.questionId));
-          return [...prev.filter((p) => !existingIds.has(p.questionId)), ...moduleReview];
+          const updated = [...prev.filter((p) => !existingIds.has(p.questionId)), ...moduleReview];
+          reviewItemsRef.current = updated;
+          return updated;
         });
       }
 
@@ -959,7 +1027,7 @@ export default function ExamRunner({
     } finally {
       isSubmittingRef.current = false;
     }
-  }, [currentModule, buildSubmittedAnswers, effectiveMode, syncServerEconomy, answers, questionTimes, sectionMode, finishExam]);
+  }, [currentModule, buildSubmittedAnswers, effectiveMode, effectiveExamId, syncServerEconomy, answers, questionTimes, sectionMode, finishExam]);
 
   // Auto-nộp khi hết giờ (#038: có Double-Submit Guard)
   useEffect(() => {
@@ -1019,33 +1087,58 @@ export default function ExamRunner({
     setPhase('lobby');
   };
 
-  // Điểm 55: 1-Click Lưu Tất Cả N Câu Sai Vào Sổ Tay Cải Thiện
+  // Điểm 55 + Mục #13: Batch Bulk Ingestion (1 request duy nhất) + Heuristic Root-Cause Tagging theo thời gian làm bài
   const saveAllWrongToNotebook = async () => {
     const wrongItems = reviewItems.filter((item) => !item.correct);
     if (wrongItems.length === 0 || savingMistakes) return;
     setSavingMistakes(true);
-    let saved = 0;
     try {
-      for (const item of wrongItems) {
-        const res = await fetch('/api/cau-sai', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            passage: item.passage || '',
-            question: item.question,
-            choices: item.choices,
-            correct_choice: item.correctChoice || 'Xem lời giải',
-            user_choice: item.userAnswer || '(Bỏ trống)',
-            explanation: item.explanation || 'Hãy ôn lại dạng bài này trong lộ trình kỹ năng.',
-            source: effectiveMode === 'real' ? `Thi Thật QAS - ${item.moduleName}` : `Thi Thử SAT - ${item.moduleName}`,
-            skill_id: item.skillId,
-          }),
-        });
-        if (res.ok) saved++;
+      // Đồng bộ offline vào localStorage trước cho Guest/Offline users
+      syncWrongAnswersToLocalStorage(wrongItems);
+
+      const batchPayload = {
+        items: wrongItems.map((item) => ({
+          passage: item.passage || '',
+          question: item.question,
+          choices: item.choices,
+          correctChoice: item.correctChoice || 'Xem lời giải',
+          correct_choice: item.correctChoice || 'Xem lời giải',
+          userChoice: item.userAnswer || '(Bỏ trống)',
+          user_choice: item.userAnswer || '(Bỏ trống)',
+          explanation: item.explanation || 'Hãy ôn lại dạng bài này trong lộ trình kỹ năng.',
+          domain: item.moduleName || 'SAT Exam',
+          source: effectiveMode === 'real' ? `Thi Thật QAS - ${item.moduleName}` : `Thi Thử SAT - ${item.moduleName}`,
+          skill_id: item.skillId,
+          timeSpentSec: typeof item.timeSpent === 'number' ? item.timeSpent : undefined,
+        })),
+      };
+
+      const res = await fetch('/api/cau-sai/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(batchPayload),
+      });
+
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setMistakesSavedCount(Number(data?.savedCount ?? wrongItems.length));
+      } else {
+        enqueueOfflineSync('/api/cau-sai/batch', batchPayload);
+        setMistakesSavedCount(wrongItems.length);
       }
-      setMistakesSavedCount(saved);
     } catch (e) {
-      console.error('Lỗi lưu câu sai:', e);
+      console.error('Lỗi lưu câu sai hàng loạt (đã đưa vào hàng đợi đồng bộ offline):', e);
+      enqueueOfflineSync('/api/cau-sai/batch', {
+        items: wrongItems.map((item) => ({
+          question: item.question,
+          userChoice: item.userAnswer || '(Bỏ trống)',
+          correctChoice: item.correctChoice || '',
+          explanation: item.explanation || '',
+          skill_id: item.skillId,
+          timeSpentSec: typeof item.timeSpent === 'number' ? item.timeSpent : undefined,
+        })),
+      });
+      setMistakesSavedCount(wrongItems.length);
     } finally {
       setSavingMistakes(false);
     }
@@ -1079,17 +1172,21 @@ export default function ExamRunner({
     });
   };
 
-  // Điểm 01: Áp dụng Highlight 3 màu trên đoạn văn
+  // Điểm 01 + Mục #16: Áp dụng Highlight 3 màu kèm Offset chính xác trên full_passage
   const applyHighlight = (color: 'yellow' | 'green' | 'pink') => {
     if (!qKey) return;
     const selection = window.getSelection();
     const selectedText = selection?.toString().trim();
 
     if (selectedText && selectedText.length > 0 && selectedText.length <= 600) {
+      const passageSource = currentQuestion?.full_passage || currentQuestion?.practice_question || '';
+      const existing = highlights[qKey] || [];
+      const range = computeHighlightOffsets(passageSource, selectedText, existing);
       const newH: PassageHighlight = {
         id: `${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         text: selectedText,
         color,
+        ...(range ? { startOffset: range.startOffset, endOffset: range.endOffset } : {}),
       };
       setHighlights((prev) => ({
         ...prev,
@@ -1665,6 +1762,45 @@ export default function ExamRunner({
     const totalTimeSpent = reviewItems.reduce((acc, i) => acc + (i.timeSpent || 0), 0);
     const avgTimeSpent = reviewItems.length > 0 ? Math.round(totalTimeSpent / reviewItems.length) : 0;
 
+    const handleCopyZaloReport = () => {
+      if (!displayScore) return;
+      const totalPossible = sectionMode === 'full' ? '1600' : '800';
+      const totalQuestions = reviewItems.length;
+      const accuracy = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+      const reportExamTitle = title || 'Bài thi Thử Digital SAT';
+
+      const reportText = `📊 BÁO CÁO KẾT QUẢ THI DIGITAL SAT — SAT GURU
+📝 Bài thi: ${reportExamTitle}
+🎯 Tổng điểm: ${displayScore.total} / ${totalPossible}
+📖 Reading & Writing: ${displayScore.rw}/800 (${displayScore.rwRaw}/${displayScore.rwTotal} câu đúng • Path ${displayScore.rwPathResult === 'hard' ? 'Hard' : 'Easy'})
+📐 Math: ${displayScore.math}/800 (${displayScore.mathRaw}/${displayScore.mathTotal} câu đúng • Path ${displayScore.mathPathResult === 'hard' ? 'Hard' : 'Easy'})
+✅ Độ chính xác: ${accuracy}% (${correctCount}/${totalQuestions} câu)
+⏱️ Thời gian làm bài: ${formatTime(totalTimeSpent)} (TB ~${avgTimeSpent}s/câu)
+${overTimeCount > 0 ? `⚠️ Câu ngâm quá 120s: ${overTimeCount} câu\n` : ''}
+----------------------------------------
+📍 Cố vấn Học thuật Thầy Nghĩa Guru — Hệ thống SAT.Guru | Hotline/Zalo: 0986.722.324`;
+
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(reportText).then(() => {
+          setCopiedZalo(true);
+          setTimeout(() => setCopiedZalo(false), 3000);
+        }).catch(() => {
+          try {
+            const textarea = document.createElement('textarea');
+            textarea.value = reportText;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            setCopiedZalo(true);
+            setTimeout(() => setCopiedZalo(false), 3000);
+          } catch (e) {
+            console.error('Failed to copy to clipboard', e);
+          }
+        });
+      }
+    };
+
     const filteredReview = reviewItems.filter((item) => {
       if (reviewFilter === 'wrong') return !item.correct;
       if (reviewFilter === 'correct') return item.correct;
@@ -1741,6 +1877,14 @@ export default function ExamRunner({
                     </span>
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={handleCopyZaloReport}
+                  className="px-6 py-3 font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-xl transition-all shadow-lg flex items-center gap-2"
+                >
+                  <span>{copiedZalo ? '✅' : '📲'}</span>
+                  <span>{copiedZalo ? 'Đã sao chép báo cáo Zalo!' : 'Sao Chép Báo Cáo Phụ Huynh (Zalo)'}</span>
+                </button>
                 <button
                   onClick={resetToLobby}
                   className="px-8 py-3 font-bold text-white rounded-xl transition-colors shadow-lg"
@@ -2299,7 +2443,9 @@ export default function ExamRunner({
                     <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-9 gap-2">
                       {filteredQList.map(({ q, idx }) => {
                         const itemK = q.questionId ?? q.id;
-                        const answered = Boolean(answers[itemK]);
+                        const itemIsSpr = Boolean((!q.choices || q.choices.length < 2) || (currentModule?.section === 'math' && sprModeMap[itemK]));
+                        const status = inspectReviewQuestionStatus(answers[itemK], itemIsSpr, validateSprInput);
+                        const answered = status.isAnswered;
                         const flagged = Boolean(flaggedQuestions[itemK]);
                         const isCurrent = idx === currentQuestionIndex;
 
@@ -2311,17 +2457,27 @@ export default function ExamRunner({
                               setCurrentQuestionIndex(idx);
                               setShowModuleReviewGrid(false);
                             }}
+                            title={status.hasSprSyntaxError ? `Lỗi định dạng SPR: ${status.sprError}` : itemIsSpr ? 'Câu điền số SPR' : 'Câu trắc nghiệm'}
                             className={`p-2 rounded-lg border text-xs font-bold transition flex flex-col items-center justify-center relative ${
-                              isCurrent
+                              status.hasSprSyntaxError
+                                ? 'bg-red-600/30 border-red-400 text-red-200 ring-1 ring-red-400'
+                                : isCurrent
                                 ? 'bg-blue-600 border-white text-white shadow-md'
                                 : answered
                                 ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/30'
                                 : 'bg-[#161f2e] border-rose-500/40 text-rose-300 hover:bg-rose-500/20'
                             }`}
                           >
-                            <span>Câu {idx + 1}</span>
+                            <span className="flex items-center gap-1">
+                              <span>Câu {idx + 1}</span>
+                              {itemIsSpr && (
+                                <span className="text-[9px] font-mono px-1 rounded bg-sky-500/25 text-sky-300 border border-sky-400/40">
+                                  123
+                                </span>
+                              )}
+                            </span>
                             <span className="text-[10px] mt-0.5 opacity-80">
-                              {answered ? 'Đã chọn' : 'Trống'}
+                              {status.hasSprSyntaxError ? '⚠️ Lỗi SPR' : answered ? 'Đã chọn' : 'Trống'}
                             </span>
                             {flagged && (
                               <span className="absolute -top-1.5 -right-1 text-xs">🚩</span>
@@ -2433,6 +2589,37 @@ export default function ExamRunner({
             </div>
           </div>
         </div>
+
+        {/* Mục #12: Real-time In-Exam Pacing Radar (Soft Ambient Nudge — 0 popup, giữ nguyên bố cục Bluebook #G2) */}
+        {(() => {
+          const pacing = evaluateInExamPacing(questionTimes[qKey] || 0, currentModule?.section === 'math' ? 'math' : 'rw');
+          if (pacing.level === 'normal' || !pacing.message) return null;
+          return (
+            <div
+              role="status"
+              aria-live="polite"
+              className={`mx-6 mt-3 px-3.5 py-2 rounded-lg border text-xs flex items-center justify-between gap-3 transition-all ${
+                pacing.level === 'trap'
+                  ? 'bg-rose-950/50 border-rose-500/60 text-rose-200'
+                  : 'bg-amber-950/40 border-amber-500/50 text-amber-200'
+              }`}
+            >
+              <span className="flex items-center gap-2 font-medium">
+                <span>{pacing.level === 'trap' ? '🚨' : '⏳'}</span>
+                <span>{pacing.message}</span>
+              </span>
+              {!isFlagged && (
+                <button
+                  type="button"
+                  onClick={toggleFlagCurrent}
+                  className="shrink-0 px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 text-amber-200 font-bold text-[11px] transition"
+                >
+                  🚩 Gắn cờ & đi tiếp
+                </button>
+              )}
+            </div>
+          );
+        })()}
 
         {/* NỘI DUNG CÂU HỎI & ĐOẠN VĂN */}
         <div className="flex-1 p-6 flex flex-col md:flex-row gap-6">

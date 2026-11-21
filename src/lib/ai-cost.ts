@@ -21,9 +21,10 @@ import type { AiTier } from './ai-quota';
  * ============================================================================
  */
 
-/** Giá USD cho mỗi 1 TRIỆU token (input / output). Nguồn: OpenAI pricing. */
+/** Giá USD cho mỗi 1 TRIỆU token (input / output). */
 export const PRICING: Record<string, { inputPer1M: number; outputPer1M: number }> = {
   'gpt-4o-mini': { inputPer1M: 0.15, outputPer1M: 0.60 },
+  'gemini-2.5-flash': { inputPer1M: 0.15, outputPer1M: 0.60 },
   // Model cao cấp cho gói Ultimate (quyền lợi A1 — QUYẾT ĐỊNH user 2026-07-07).
   // Giá gpt-4o gấp ~16× mini → kill-switch ngân sách PHẢI tính đúng để 1 nhóm
   // Ultimate không đốt vượt trần mà sổ cái vẫn tưởng đang xài mini.

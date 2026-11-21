@@ -50,6 +50,8 @@ interface ChatRequest {
   explanation?: string;
   history?: { role: 'user' | 'ai'; text: string }[];
   userMessage?: string;
+  messages?: { role?: string; content?: string; text?: string }[];
+  context?: { stem?: string; question?: string; domain?: string; explanation?: string };
   targetScore?: number | string;
   skillId?: string;
   questionType?: string;
@@ -118,6 +120,83 @@ function normalizeQuestionQuery(raw: string): string {
   return text;
 }
 
+/**
+ * Tạo lời giải Socratic cục bộ (Local Socratic Fallback Engine).
+ * Cung cấp phản hồi sư phạm chuẩn mực theo phương pháp Socratic Digital SAT của Thầy Nghĩa Guru
+ * khi môi trường local chưa có OPENAI_API_KEY hoặc khi kết nối OpenAI gặp sự cố.
+ */
+function buildLocalSocraticFallback({
+  userMessage,
+  ctxQuestion,
+  ctxSelected,
+  ctxCorrect,
+  ctxExplanation,
+}: {
+  userMessage?: string;
+  ctxQuestion?: string;
+  ctxSelected?: string;
+  ctxCorrect?: string;
+  ctxExplanation?: string;
+}): string {
+  const sections: string[] = [];
+
+  sections.push(
+    `Chào em! Thầy Nghĩa Guru đây. Dù kết nối AI trực tiếp đang được tối ưu hóa, thầy vẫn đồng hành cùng em với chế độ gia sư Socratic cục bộ để hướng dẫn em suy luận ngay lập tức:`
+  );
+
+  // Bước 1: Xác định từ khóa / đại lượng trọng tâm trong câu hỏi
+  if (ctxQuestion && ctxQuestion.trim()) {
+    const qSnippet = ctxQuestion.length > 300 ? ctxQuestion.slice(0, 300) + '...' : ctxQuestion;
+    sections.push(
+      `💡 **Bước 1: Xác định từ khóa & đại lượng trọng tâm**\n` +
+      `- Ngữ cảnh đề bài: "${qSnippet}"\n` +
+      `- Trọng tâm khảo thí: Hãy chú ý kỹ dữ kiện tiên quyết, đơn vị đo lường hoặc từ khóa bản lề trong câu hỏi để nắm bắt đúng mục tiêu mà College Board đang kiểm tra.`
+    );
+  } else if (userMessage && userMessage.trim()) {
+    sections.push(
+      `💡 **Bước 1: Phân tích trọng tâm câu hỏi**\n` +
+      `- Câu hỏi của em: "${userMessage}"\n` +
+      `- Trọng tâm khảo thí: Hãy quy chiếu thắc mắc này về nguyên lý nền tảng hoặc quy tắc suy luận cốt lõi của bài thi Digital SAT.`
+    );
+  }
+
+  // Bước 2: Đối chiếu giữa đáp án đã chọn và đáp án đúng (nếu có)
+  const hasSelected = ctxSelected && ctxSelected !== 'Chưa chọn' && ctxSelected.trim() !== '';
+  const hasCorrect = ctxCorrect && ctxCorrect.trim() !== '';
+
+  if (hasSelected && hasCorrect) {
+    sections.push(
+      `🪤 **Bước 2: Đối chiếu phương án & nhận diện bẫy College Board**\n` +
+      `- Phương án em đang cân nhắc/đã chọn: **${ctxSelected}**\n` +
+      `- Đáp án chuẩn College Board: **${ctxCorrect}**\n` +
+      `- Hướng đối chiếu: College Board thường giăng các bẫy phổ biến như "Out of Scope" (ngoài phạm vi), "Extreme Language" (tuyệt đối hóa), hoặc bẫy nhầm biến số/dấu âm trong Math. Hãy so sánh sự khác biệt bản chất giữa hai phương án này dựa trên điều kiện của đề bài.`
+    );
+  } else if (hasCorrect) {
+    sections.push(
+      `🪤 **Bước 2: Hướng tới đáp án chuẩn College Board**\n` +
+      `- Đáp án chính xác là: **${ctxCorrect}**\n` +
+      `- Hướng suy luận: Hãy xem xét phương án này đã thỏa mãn trọn vẹn những ràng buộc logic hoặc công thức toán học nào của câu hỏi.`
+    );
+  }
+
+  // Bước 3: Tóm tắt gợi ý cốt lõi từ ctxExplanation (nếu có)
+  if (ctxExplanation && ctxExplanation.trim()) {
+    const expSnippet = ctxExplanation.length > 350 ? ctxExplanation.slice(0, 350) + '...' : ctxExplanation;
+    sections.push(
+      `⚡ **Bước 3: Gợi ý cốt lõi từ lời giải chuyên gia**\n` +
+      `${expSnippet}`
+    );
+  }
+
+  // Bước 4: Kết thúc bằng 1 câu hỏi gợi mở Socratic để học sinh tự suy luận tiếp
+  sections.push(
+    `❓ **Câu hỏi gợi mở Socratic cho em:**\n` +
+    `Dựa trên các phân tích và manh mối ở trên, em nhận thấy đâu là chi tiết then chốt giúp loại trừ các phương án gây nhiễu và khẳng định đáp án chính xác? Em hãy thử diễn giải cách suy luận tiếp theo của mình nhé!`
+  );
+
+  return sections.join('\n\n');
+}
+
 export async function POST(request: Request) {
   try {
     const user = await getCurrentUser();
@@ -142,7 +221,10 @@ export async function POST(request: Request) {
 
     const body: ChatRequest = await request.json();
 
-    const rawUserMsg = clamp(body.userMessage, MAX_MSG_LEN);
+    const fallbackMsgFromMessages = Array.isArray(body.messages) && body.messages.length > 0
+      ? (body.messages[body.messages.length - 1]?.content || body.messages[body.messages.length - 1]?.text || '')
+      : '';
+    const rawUserMsg = clamp(body.userMessage || fallbackMsgFromMessages, MAX_MSG_LEN);
     const userMessage = sanitizePromptInjection(rawUserMsg);
     if (!userMessage.trim()) {
       return NextResponse.json({ error: "Thiếu nội dung câu hỏi" }, { status: 400 });
@@ -152,10 +234,10 @@ export async function POST(request: Request) {
     const normalizedQuery = normalizeQuestionQuery(userMessage) || userMessage.trim().toLowerCase();
 
     // Ngữ cảnh câu hỏi (clamp 1 lần, dùng lại cho cả hash cache lẫn system prompt).
-    const ctxQuestion = clamp(body.question, MAX_CTX_LEN);
+    const ctxQuestion = clamp(body.question || body.context?.stem || body.context?.question, MAX_CTX_LEN);
     const ctxCorrect = clamp(body.correctAnswer, MAX_MSG_LEN);
     const ctxSelected = clamp(body.selectedAnswer, MAX_MSG_LEN);
-    const ctxExplanation = clamp(body.explanation, MAX_CTX_LEN);
+    const ctxExplanation = clamp(body.explanation || body.context?.explanation, MAX_CTX_LEN);
 
     // Metadata tùy chọn từ body để cá nhân hóa độ sâu lời giải
     const targetScore = body.targetScore ? String(body.targetScore).slice(0, 50) : null;
@@ -193,7 +275,20 @@ export async function POST(request: Request) {
     // KHÔNG chiếm slot). Xem khối reserve phía dưới.
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: "Chưa cấu hình OPENAI_API_KEY ở server" }, { status: 500 });
+      return NextResponse.json(
+        {
+          reply: buildLocalSocraticFallback({
+            userMessage,
+            ctxQuestion,
+            ctxSelected,
+            ctxCorrect,
+            ctxExplanation,
+          }),
+          isFallback: true,
+          quota: { used: 0, limit: 5, remaining: 5 },
+        },
+        { status: 200 }
+      );
     }
 
     // 2) Kill-switch ngân sách toàn hệ thống (§9.5): chặn gọi AI mới nếu đã vượt
@@ -209,14 +304,31 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2b) RESERVE 1 lượt NGUYÊN TỬ (increment có khóa dòng) TRƯỚC khi gọi OpenAI.
-    // N request đồng thời không cùng vượt cap (mỗi cái thấy count đã +1 của cái
-    // trước) → không burst đốt OpenAI vượt hạn mức. Lỗi RPC → fail-closed (từ chối).
-    const reservation = await reserveQuota(user.id, tier, 'chat');
+    // 2b) RESERVE 1 lượt NGUYÊN TỬ TRƯỚC khi gọi OpenAI.
+    // Khách vãng lai (!isAuthenticated) dùng bucket quota ngày theo IP (3 lượt/24h/IP)
+    // để tránh lỗi UUID 22P02 và không bao giờ vượt trần chi phí AI.
+    let reservation: { allowed: boolean; used: number; limit: number; remaining: number; reserved: boolean; date: string };
+    if (!user.isAuthenticated) {
+      const guestDailyLimit = 3;
+      const guestDailyKey = getRateLimitKey(request, 'ai-chat-guest-daily', null);
+      const guestRl = rateLimit(guestDailyKey, guestDailyLimit, 86_400_000);
+      reservation = {
+        allowed: guestRl.allowed,
+        used: guestDailyLimit - guestRl.remaining,
+        limit: guestDailyLimit,
+        remaining: guestRl.remaining,
+        reserved: false,
+        date: new Date().toISOString().split('T')[0],
+      };
+    } else {
+      reservation = await reserveQuota(user.id, tier, 'chat');
+    }
     if (!reservation.allowed) {
       return NextResponse.json(
         {
-          error: `Bạn đã dùng hết ${reservation.limit} lượt hỏi Gia sư AI hôm nay. Nâng cấp Premium để hỏi không giới hạn nhé!`,
+          error: user.isAuthenticated
+            ? `Bạn đã dùng hết ${reservation.limit} lượt hỏi Gia sư AI hôm nay. Nâng cấp Premium để hỏi không giới hạn nhé!`
+            : `Bạn đã dùng hết ${reservation.limit} lượt hỏi thử miễn phí hôm nay. Đăng nhập để tiếp tục học cùng Gia sư AI nhé!`,
           quotaExceeded: true,
           used: reservation.used,
           limit: reservation.limit,
@@ -319,19 +431,59 @@ export async function POST(request: Request) {
         const errorData = await response.text();
         console.error("OpenAI API Error:", errorData);
         await releaseUsage(user.id, 'chat', reservation.reserved, reservation.date);
-        return NextResponse.json({ error: "Lỗi gọi OpenAI API" }, { status: response.status });
+        return NextResponse.json(
+          {
+            reply: buildLocalSocraticFallback({
+              userMessage,
+              ctxQuestion,
+              ctxSelected,
+              ctxCorrect,
+              ctxExplanation,
+            }),
+            isFallback: true,
+            quota: { used: 0, limit: 5, remaining: 5 },
+          },
+          { status: 200 }
+        );
       }
 
       data = await response.json();
     } catch (e) {
       await releaseUsage(user.id, 'chat', reservation.reserved, reservation.date);
-      throw e;
+      console.warn("OpenAI fetch exception, falling back to local Socratic reply:", e);
+      return NextResponse.json(
+        {
+          reply: buildLocalSocraticFallback({
+            userMessage,
+            ctxQuestion,
+            ctxSelected,
+            ctxCorrect,
+            ctxExplanation,
+          }),
+          isFallback: true,
+          quota: { used: 0, limit: 5, remaining: 5 },
+        },
+        { status: 200 }
+      );
     }
 
     const reply: string = data.choices?.[0]?.message?.content ?? '';
     if (!reply.trim()) {
       await releaseUsage(user.id, 'chat', reservation.reserved, reservation.date);
-      return NextResponse.json({ error: 'Gia sư AI trả lời rỗng. Vui lòng thử lại.' }, { status: 502 });
+      return NextResponse.json(
+        {
+          reply: buildLocalSocraticFallback({
+            userMessage,
+            ctxQuestion,
+            ctxSelected,
+            ctxCorrect,
+            ctxExplanation,
+          }),
+          isFallback: true,
+          quota: { used: 0, limit: 5, remaining: 5 },
+        },
+        { status: 200 }
+      );
     }
 
     // 5) Chốt usage: count đã reserve ở bước 2b, giờ chỉ cộng token (reserved:true).

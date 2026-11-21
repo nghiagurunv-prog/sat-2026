@@ -145,10 +145,18 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Độ khó ZPD theo mastery THẬT của skill (getSkillMastery trả rỗng nếu chưa làm).
+  // Độ khó ZPD theo mastery THẬT của skill + hiệu chỉnh theo Hộp Leitner & Bẫy tư duy (Mục #14)
   const mastery = await getSkillMastery(user.id, skillId).catch(() => null);
-  const difficulty = selectDifficulty(mastery?.score ?? 0);
-  const req = buildVariantRequest(skill, difficulty)!;
+  const baseDifficulty = selectDifficulty(mastery?.score ?? 0);
+  const leitnerBoxRaw = request.nextUrl.searchParams.get('leitnerBox');
+  const leitnerBox = leitnerBoxRaw ? parseInt(leitnerBoxRaw, 10) : undefined;
+  const targetTrapType = sanitizeInput(request.nextUrl.searchParams.get('trapType') ?? '', 60) || undefined;
+  const userWrongChoice = sanitizeInput(request.nextUrl.searchParams.get('wrongChoice') ?? '', 120) || undefined;
+  const req = buildVariantRequest(skill, baseDifficulty, {
+    leitnerBox: Number.isFinite(leitnerBox) ? leitnerBox : undefined,
+    targetTrapType,
+    userWrongChoice,
+  })!;
 
   try {
     const res = await fetch(new URL('/api/generate-practice', request.nextUrl.origin), {
@@ -159,6 +167,7 @@ export async function GET(request: NextRequest) {
         topic: req.topic,
         skillId: req.skillId,
         difficulty: req.difficulty,
+        ...(req.targetTrapType ? { targetTrapType: req.targetTrapType, trapPromptHint: req.trapPromptHint } : {}),
       }),
     });
 

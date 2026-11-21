@@ -115,10 +115,17 @@ export async function POST(req: Request) {
       console.warn("Lưu structured progress vào DB không thành công (tiếp tục lưu raw):", dbErr);
     }
 
-    // Ưu tiên Supabase (bền vững qua deploy serverless). FAIL-SAFE: bảng chưa
-    // có / user không phải uuid / lỗi → false → fallback ghi file như cũ.
+    // Ưu tiên Supabase (bền vững qua deploy serverless).
+    // Trên Vercel/Production (FS chỉ đọc): tuyệt đối KHÔNG ghi fs.writeFileSync (tránh crash EROFS).
     const savedToDb = await saveProgressRaw(user.id, serialized);
     if (!savedToDb) {
+      const isReadOnlyServerless = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
+      if (isReadOnlyServerless) {
+        return NextResponse.json(
+          { error: 'Tạm thời không thể đồng bộ tiến độ lên máy chủ. Vui lòng thử lại sau giây lát.' },
+          { status: 503 }
+        );
+      }
       const filePath = getUserDataPath(user.id, 'streak_data.json');
       fs.writeFileSync(filePath, serialized, 'utf-8');
     }

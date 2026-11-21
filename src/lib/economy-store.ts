@@ -276,6 +276,46 @@ export async function tryClaimOnceAtomic(
   return tryClaimQuestRewardAtomic(userId, itemId, bucketKey, coins, xp);
 }
 
+export interface SpendCoinsAtomicResult {
+  ok: boolean;
+  reason: string;
+  coins: number;
+  inventory?: string[];
+}
+
+/**
+ * Trừ xu ATOMIC qua RPC `spend_coins` (khóa dòng SELECT ... FOR UPDATE chống double-spend).
+ * Trả null nếu RPC chưa migrate (42883/PGRST202) để caller fallback an toàn.
+ */
+export async function trySpendCoinsAtomic(
+  userId: string,
+  amount: number,
+  itemId?: string
+): Promise<SpendCoinsAtomicResult | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc('spend_coins', {
+    p_user_id: userId,
+    p_amount: amount,
+    p_item_id: itemId ?? null,
+  });
+
+  if (error) {
+    if (error.code === '42883' || error.code === 'PGRST202') {
+      return null; // pre-migration
+    }
+    console.error('spend_coins RPC lỗi (fail-closed):', error.message);
+    return { ok: false, reason: 'rpc_error', coins: 0 };
+  }
+
+  const r = (data ?? {}) as Partial<SpendCoinsAtomicResult>;
+  return {
+    ok: !!r.ok,
+    reason: typeof r.reason === 'string' ? r.reason : 'unknown',
+    coins: typeof r.coins === 'number' ? r.coins : 0,
+    inventory: Array.isArray(r.inventory) ? r.inventory : undefined,
+  };
+}
+
 /**
  * ============================================================================
  *  PvP STATE (server-authoritative, tách RIÊNG khỏi coins) — anti-faucet

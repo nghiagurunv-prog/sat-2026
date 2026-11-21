@@ -287,13 +287,10 @@ drop policy if exists "auth_read_questions" on public.questions;
 create policy "auth_read_questions" on public.questions
   for select to authenticated using (true);
 
+-- KHÓA QUYỀN INSERT/UPDATE/DELETE TRỰC TIẾP TỪ CLIENT AUTHENTICATED (chỉ service_role được ghi ngân hàng đề)
 drop policy if exists "auth_insert_questions" on public.questions;
-create policy "auth_insert_questions" on public.questions
-  for insert to authenticated with check (true);
-
--- 🔴 FIX #050 (CRITICAL): KHÓA QUYỀN UPDATE TRỰC TIẾP TỪ CLIENT AUTHENTICATED
--- Tuyệt đối không mở update policy cho authenticated để bảo vệ nội dung và đáp án đề thi.
 drop policy if exists "auth_update_questions" on public.questions;
+revoke insert, update, delete on public.questions from authenticated;
 
 create or replace function public.increment_question_usage(p_ids text[])
 returns void

@@ -1,5 +1,36 @@
 import crypto from 'crypto';
 import { createClient } from '@/lib/supabase/server';
+import localBankJson from '../../data/question_bank.json';
+
+interface LocalBankItem {
+  id: string;
+  moduleType: string;
+  topic: string;
+  data: Record<string, unknown>;
+}
+
+const LOCAL_BANK_ITEMS: LocalBankItem[] = Array.isArray((localBankJson as { questions?: unknown[] })?.questions)
+  ? ((localBankJson as { questions: LocalBankItem[] }).questions)
+  : [];
+
+function getLocalPoolCount(moduleType: string): number {
+  return LOCAL_BANK_ITEMS.filter((q) => q.moduleType === moduleType).length;
+}
+
+function pickFromLocalBank(moduleType: string, topic?: string, difficulty?: string): unknown | null {
+  let candidates = LOCAL_BANK_ITEMS.filter((q) => q.moduleType === moduleType);
+  if (difficulty) {
+    const byDiff = candidates.filter((q) => q.data?.difficulty === difficulty);
+    if (byDiff.length > 0) candidates = byDiff;
+  }
+  if (candidates.length === 0) return null;
+  if (topic) {
+    const byTopic = candidates.filter((q) => q.topic === topic);
+    if (byTopic.length > 0) candidates = byTopic;
+  }
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  return pick?.data ?? null;
+}
 
 /**
  * ============================================================================
@@ -181,17 +212,18 @@ export function buildBankRow(
  * FAIL-SAFE: bảng chưa có / lỗi → 0 → route sinh câu qua AI.
  */
 export async function poolSize(moduleType: string): Promise<number> {
+  const localCount = getLocalPoolCount(moduleType);
   try {
     const supabase = await createClient();
     const { count, error } = await supabase
       .from('questions')
       .select('*', { count: 'exact', head: true })
       .eq('module_type', moduleType);
-    if (error || count == null) return 0;
-    return count;
+    if (error || count == null) return localCount;
+    return Math.max(count, localCount);
   } catch (e) {
     console.error('Lỗi đếm question bank:', e);
-    return 0;
+    return localCount;
   }
 }
 
@@ -231,7 +263,9 @@ export async function getFromBank(
       .limit(Math.max(count * 4, 40));
 
     const { data: rows, error } = await query;
-    if (error || !rows || rows.length === 0) return null;
+    if (error || !rows || rows.length === 0) {
+      return pickFromLocalBank(moduleType, topic, difficulty);
+    }
 
     const typedRows = rows as Array<{ id: string; topic: string; data: unknown }>;
     const matchTopic = topic ? typedRows.filter((r) => r.topic === topic) : [];
@@ -292,7 +326,7 @@ export async function getFromBank(
     return pick.data;
   } catch (e) {
     console.error('Lỗi đọc question bank:', e);
-    return null;
+    return pickFromLocalBank(moduleType, topic, difficulty);
   }
 }
 

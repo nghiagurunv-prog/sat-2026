@@ -1,5 +1,26 @@
 import { NextResponse } from 'next/server';
 import { OPENAI_CHAT_COMPLETIONS_URL } from '@/lib/openai';
+import { getCurrentUser } from '@/lib/auth';
+import { rateLimit, rateLimitDistributed, getRateLimitKey } from '@/lib/rate-limit';
+import { getUserTier } from '@/lib/subscription-store';
+import { reserveQuota, finalizeUsage, releaseUsage, type AiTier } from '@/lib/ai-quota';
+import { checkBudget, recordGlobalCost } from '@/lib/ai-cost';
+import {
+  chatCacheHash,
+  getCachedReply,
+  bumpHitCount,
+  saveCachedReply,
+} from '@/lib/chat-cache-store';
+import {
+  augmentSystemPrompt,
+  buildLocalMicroCheckFallback,
+  callUnifiedLlm,
+  createTextSseStream,
+  parseMicroCheckJson,
+  sseResponse,
+  streamGeminiSse,
+  type InteractionMode,
+} from '@/lib/ai-router';
 
 /**
  * ============================================================================
@@ -34,6 +55,10 @@ interface TutorRequest {
   targetScore?: number | string;
   skillId?: string;
   questionType?: string;
+  /** Mục #18: bật SSE Streaming (`text/event-stream`) giảm TTFT < 500ms */
+  stream?: boolean;
+  /** Mục #19: chế độ Socratic Micro-Check 2 lựa chọn A/B trước khi mở lời giải */
+  interaction_mode?: InteractionMode;
 }
 
 function clamp(s: unknown, max: number): string {
@@ -60,10 +85,16 @@ function sanitizeInput(text: string): string {
   return cleaned;
 }
 
+interface LlmCallResult {
+  text: string;
+  tokensIn: number;
+  tokensOut: number;
+}
+
 /**
  * Gọi Google Gemini API (gemini-2.5-flash)
  */
-async function callGemini(apiKey: string, systemPrompt: string, userPrompt: string): Promise<string> {
+async function callGemini(apiKey: string, systemPrompt: string, userPrompt: string): Promise<LlmCallResult> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
   const res = await fetch(url, {
@@ -96,7 +127,9 @@ async function callGemini(apiKey: string, systemPrompt: string, userPrompt: stri
   if (!text || !text.trim()) {
     throw new Error('Gemini API returned empty text');
   }
-  return text.trim();
+  const tokensIn = Number(data?.usageMetadata?.promptTokenCount ?? 0) || Math.ceil((systemPrompt.length + userPrompt.length) / 4);
+  const tokensOut = Number(data?.usageMetadata?.candidatesTokenCount ?? 0) || Math.ceil(text.length / 4);
+  return { text: text.trim(), tokensIn, tokensOut };
 }
 
 /**
@@ -107,7 +140,7 @@ async function callOpenAI(
   systemPrompt: string,
   userPrompt: string,
   history: { role: 'user' | 'assistant'; content: string }[] = []
-): Promise<string> {
+): Promise<LlmCallResult> {
   const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
   const url = OPENAI_CHAT_COMPLETIONS_URL || 'https://api.openai.com/v1/chat/completions';
 
@@ -139,7 +172,9 @@ async function callOpenAI(
   if (!text || !text.trim()) {
     throw new Error('OpenAI API returned empty text');
   }
-  return text.trim();
+  const tokensIn = Number(data?.usage?.prompt_tokens ?? 0) || Math.ceil((systemPrompt.length + userPrompt.length) / 4);
+  const tokensOut = Number(data?.usage?.completion_tokens ?? 0) || Math.ceil(text.length / 4);
+  return { text: text.trim(), tokensIn, tokensOut };
 }
 
 /**
@@ -182,6 +217,21 @@ function generateLocalSocraticFallback(ctx: {
 
 export async function POST(request: Request) {
   try {
+    // 1. Xác thực + Rate-limit chống spam/wallet-drain (#G9)
+    const user = await getCurrentUser();
+    const rateLimitKey = getRateLimitKey(request, 'ai-tutor', user.isAuthenticated ? user.id : null);
+    const rl = await rateLimitDistributed(rateLimitKey, 10, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Bạn hỏi hơi nhanh. Vui lòng chờ một chút rồi thử lại nhé!',
+          retryAfterMs: rl.retryAfterMs,
+        },
+        { status: 429 }
+      );
+    }
+
     const body: TutorRequest = await request.json();
 
     const rawQuestion = clamp(body.question, 4000);
@@ -190,6 +240,9 @@ export async function POST(request: Request) {
     const rawCorrectChoice = clamp(body.correctChoice || body.correctAnswer, 1000);
     const rawExplanation = clamp(body.explanation, 4000);
     const rawCustomPrompt = clamp(body.prompt || body.userMessage, 2000);
+    const wantStream = body.stream === true;
+    const interactionMode: InteractionMode = body.interaction_mode === 'micro_check' ? 'micro_check' : 'full';
+    const isMathContext = /[\d=+\-*/^\\$]/.test(rawQuestion) || String(body.questionType || '').toLowerCase().includes('math');
 
     const question = sanitizeInput(rawQuestion);
     const passage = sanitizeInput(rawPassage);
@@ -197,6 +250,118 @@ export async function POST(request: Request) {
     const correctChoice = sanitizeInput(rawCorrectChoice);
     const explanation = sanitizeInput(rawExplanation);
     const customPrompt = sanitizeInput(rawCustomPrompt);
+
+    // 2. Lớp 1 Cache dùng chung (ai_chat_cache) — tra TRƯỚC quota & budget để không tốn token (#G9)
+    const historyArr = Array.isArray(body.history) ? body.history : [];
+    const cacheable = historyArr.length === 0 && (question.length > 0 || customPrompt.length > 0);
+    let cacheHash = '';
+    if (cacheable) {
+      cacheHash = chatCacheHash({
+        question,
+        correctAnswer: correctChoice,
+        selectedAnswer: userChoice,
+        userMessage: (customPrompt || 'socratic-default').trim().toLowerCase(),
+        model: 'ai-tutor-socratic',
+      });
+      const cached = await getCachedReply(cacheHash).catch(() => null);
+      if (cached && interactionMode !== 'micro_check') {
+        bumpHitCount(cacheHash, cached.hitCount).catch((e) => console.error('ai-tutor bumpHitCount:', e));
+        if (wantStream) {
+          return sseResponse(createTextSseStream(cached.reply, { provider: 'ai-chat-cache', cached: true }));
+        }
+        return NextResponse.json({
+          success: true,
+          response: cached.reply,
+          answer: cached.reply,
+          explanation: cached.reply,
+          reply: cached.reply,
+          provider: 'ai-chat-cache',
+          cached: true,
+        });
+      }
+    }
+
+    // 3. Nếu chưa cấu hình API key → trả ngay Local Socratic Fallback (không tốn quota)
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!geminiKey && !openaiKey) {
+      if (interactionMode === 'micro_check') {
+        const mc = buildLocalMicroCheckFallback(question);
+        return NextResponse.json({
+          success: true,
+          interactionMode: 'micro_check',
+          microCheck: mc,
+          response: mc.question,
+          reply: mc.question,
+          provider: 'local-socratic-engine',
+        });
+      }
+      const localReply = generateLocalSocraticFallback({ question, userChoice, correctChoice, explanation });
+      if (wantStream) {
+        return sseResponse(createTextSseStream(localReply, { provider: 'local-socratic-engine' }));
+      }
+      return NextResponse.json({
+        success: true,
+        response: localReply,
+        answer: localReply,
+        explanation: localReply,
+        reply: localReply,
+        provider: 'local-socratic-engine',
+      });
+    }
+
+    // 4. Kill-switch ngân sách toàn hệ thống (#G9)
+    const budget = await checkBudget().catch(() => ({ allowed: true, spentUsd: 0, budgetUsd: 5, remainingUsd: 5 }));
+    if (!budget.allowed) {
+      const localReply = generateLocalSocraticFallback({ question, userChoice, correctChoice, explanation });
+      if (wantStream && interactionMode === 'full') {
+        return sseResponse(createTextSseStream(localReply, { provider: 'local-socratic-budget-guard', budgetExceeded: true }));
+      }
+      return NextResponse.json({
+        success: true,
+        response: localReply,
+        answer: localReply,
+        explanation: localReply,
+        reply: localReply,
+        provider: 'local-socratic-budget-guard',
+        budgetExceeded: true,
+      });
+    }
+
+    // 5. Enforce Quota NGHIÊM NGẶT trước khi gọi LLM (Guest: 3 lượt/24h/IP; User đăng nhập: reserveQuota atomic)
+    let userTier: AiTier = 'free';
+    let reservation: { allowed: boolean; used: number; limit: number; remaining: number; reserved: boolean; date: string } | null = null;
+    if (!user.isAuthenticated) {
+      const guestDailyLimit = 3;
+      const guestRl = rateLimit(getRateLimitKey(request, 'ai-tutor-guest-daily', null), guestDailyLimit, 86_400_000);
+      if (!guestRl.allowed) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Bạn đã dùng hết 3 lượt Gia sư AI miễn phí hôm nay. Đăng nhập để tiếp tục học cùng Thầy Nghĩa Guru nhé!',
+            quotaExceeded: true,
+            used: guestDailyLimit,
+            limit: guestDailyLimit,
+          },
+          { status: 429 }
+        );
+      }
+    } else {
+      userTier = await getUserTier(user.id);
+      reservation = await reserveQuota(user.id, userTier, 'chat');
+      if (!reservation.allowed) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Bạn đã dùng hết ${reservation.limit} lượt hỏi Gia sư AI hôm nay. Nâng cấp Premium để hỏi không giới hạn nhé!`,
+            quotaExceeded: true,
+            used: reservation.used,
+            limit: reservation.limit,
+          },
+          { status: 429 }
+        );
+      }
+    }
 
     // Xây dựng System Prompt với ĐỘNG CƠ SƯ PHẠM SOCRATIC + BACK-SUBSTITUTION VERIFICATION
     const systemPrompt =
@@ -237,42 +402,102 @@ export async function POST(request: Request) {
       userPrompt += `\nHãy giải thích câu này theo phương pháp Socratic và kiểm chứng nghiệm thế ngược (nếu là câu Toán).`;
     }
 
-    // MULTI-LLM ROUTER
-    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    const openaiKey = process.env.OPENAI_API_KEY;
+    // UNIFIED MULTI-LLM ROUTER + SSE STREAMING (#18) + SOCRATIC MICRO-CHECK (#19)
+    const effectiveSystemPrompt = augmentSystemPrompt(systemPrompt, interactionMode, isMathContext);
+    const normalizedHistory = historyArr.slice(-6).map((h) => ({
+      role: h.role === 'ai' || h.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+      content: sanitizeInput(clamp(h.text || h.content, 1000)),
+    }));
+
+    // Nhánh SSE Streaming thật (chế độ full)
+    if (wantStream && interactionMode === 'full') {
+      const stream = await streamGeminiSse(
+        {
+          tier: userTier,
+          systemPrompt: effectiveSystemPrompt,
+          userPrompt,
+          history: normalizedHistory,
+          interactionMode: 'full',
+        },
+        {
+          onComplete: async (text, tIn, tOut) => {
+            if (text) {
+              if (user.isAuthenticated && reservation) {
+                await finalizeUsage(user.id, 'chat', tIn, tOut, reservation.reserved, reservation.date).catch(() => {});
+              }
+              await recordGlobalCost(tIn, tOut, 'gemini-2.5-flash').catch(() => {});
+              if (cacheable && cacheHash) {
+                await saveCachedReply(cacheHash, customPrompt || question.slice(0, 200), text).catch(() => {});
+              }
+            } else if (user.isAuthenticated && reservation) {
+              await releaseUsage(user.id, 'chat', reservation.reserved, reservation.date).catch(() => {});
+            }
+          },
+          onError: async () => {
+            if (user.isAuthenticated && reservation) {
+              await releaseUsage(user.id, 'chat', reservation.reserved, reservation.date).catch(() => {});
+            }
+          },
+        }
+      );
+      if (stream) {
+        return sseResponse(stream);
+      }
+    }
 
     let finalReply = '';
     let providerUsed = '';
+    let tokensIn = 0;
+    let tokensOut = 0;
 
-    // 1. PRIMARY: Gemini 2.5 Flash
-    if (geminiKey) {
-      try {
-        finalReply = await callGemini(geminiKey, systemPrompt, userPrompt);
-        providerUsed = 'gemini-2.5-flash';
-      } catch (geminiError) {
-        console.warn('Gemini 2.5 Flash failed, attempting fallback to OpenAI:', geminiError);
-      }
+    try {
+      const unified = await callUnifiedLlm({
+        tier: userTier,
+        systemPrompt: effectiveSystemPrompt,
+        userPrompt,
+        history: normalizedHistory,
+        interactionMode,
+      });
+      finalReply = unified.text;
+      tokensIn = unified.tokensIn;
+      tokensOut = unified.tokensOut;
+      providerUsed = unified.model;
+    } catch (routerError) {
+      console.warn('Unified AI router failed, using local fallback:', routerError);
     }
 
-    // 2. FALLBACK: OpenAI (gpt-4o-mini)
-    if (!finalReply && openaiKey) {
-      try {
-        const history = Array.isArray(body.history)
-          ? body.history.slice(-6).map((h) => ({
-              role: h.role === 'ai' ? ('assistant' as const) : ('user' as const),
-              content: sanitizeInput(clamp(h.text || h.content, 1000)),
-            }))
-          : [];
-
-        finalReply = await callOpenAI(openaiKey, systemPrompt, userPrompt, history);
-        providerUsed = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-      } catch (openaiError) {
-        console.warn('OpenAI fallback failed:', openaiError);
+    // 3. Chốt sổ chi phí / hoàn slot quota nếu cả 2 LLM lỗi (#G9)
+    if (finalReply) {
+      if (user.isAuthenticated && reservation) {
+        await finalizeUsage(user.id, 'chat', tokensIn, tokensOut, reservation.reserved, reservation.date).catch((e) =>
+          console.error('ai-tutor finalizeUsage:', e)
+        );
       }
-    }
-
-    // 3. LEVEL 3: Fallback Socratic tại chỗ nếu cả hai API đều không thể kết nối
-    if (!finalReply) {
+      await recordGlobalCost(tokensIn, tokensOut, providerUsed).catch((e) =>
+        console.error('ai-tutor recordGlobalCost:', e)
+      );
+      if (cacheable && cacheHash && interactionMode === 'full') {
+        await saveCachedReply(cacheHash, customPrompt || question.slice(0, 200), finalReply).catch((e) =>
+          console.error('ai-tutor saveCachedReply:', e)
+        );
+      }
+    } else {
+      if (user.isAuthenticated && reservation) {
+        await releaseUsage(user.id, 'chat', reservation.reserved, reservation.date).catch((e) =>
+          console.error('ai-tutor releaseUsage:', e)
+        );
+      }
+      if (interactionMode === 'micro_check') {
+        const mc = buildLocalMicroCheckFallback(question);
+        return NextResponse.json({
+          success: true,
+          interactionMode: 'micro_check',
+          microCheck: mc,
+          response: mc.question,
+          reply: mc.question,
+          provider: 'local-socratic-engine',
+        });
+      }
       finalReply = generateLocalSocraticFallback({
         question,
         userChoice,
@@ -280,6 +505,22 @@ export async function POST(request: Request) {
         explanation,
       });
       providerUsed = 'local-socratic-engine';
+    }
+
+    if (interactionMode === 'micro_check') {
+      const parsedMc = parseMicroCheckJson(finalReply) ?? buildLocalMicroCheckFallback(question);
+      return NextResponse.json({
+        success: true,
+        interactionMode: 'micro_check',
+        microCheck: parsedMc,
+        response: parsedMc.question,
+        reply: parsedMc.question,
+        provider: providerUsed,
+      });
+    }
+
+    if (wantStream) {
+      return sseResponse(createTextSseStream(finalReply, { provider: providerUsed }));
     }
 
     return NextResponse.json({
@@ -290,12 +531,12 @@ export async function POST(request: Request) {
       reply: finalReply,
       provider: providerUsed,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in AI Tutor Route:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error?.message || 'Lỗi xử lý yêu cầu Gia sư AI',
+        error: error instanceof Error ? error.message : 'Lỗi xử lý yêu cầu Gia sư AI',
       },
       { status: 500 }
     );

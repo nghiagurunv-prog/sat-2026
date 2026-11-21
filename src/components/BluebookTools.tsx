@@ -532,11 +532,10 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
         <button
           type="button"
           onClick={() => setShowDesmos((v) => !v)}
-          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition shadow-xs ${
-            showDesmos
+          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition shadow-xs ${showDesmos
               ? "border-cyan-400 bg-cyan-500/25 text-cyan-200 ring-2 ring-cyan-500/40"
               : "border-slate-700 bg-slate-900/90 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-200"
-          }`}
+            }`}
           title="Bật/Tắt Máy tính đồ thị Desmos chuẩn Digital SAT Bluebook"
         >
           <span>🧮</span>
@@ -547,11 +546,10 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
         <button
           type="button"
           onClick={() => setShowReference((v) => !v)}
-          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition shadow-xs ${
-            showReference
+          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition shadow-xs ${showReference
               ? "border-amber-400 bg-amber-500/25 text-amber-200 ring-2 ring-amber-500/40"
               : "border-slate-700 bg-slate-900/90 text-slate-300 hover:border-amber-500/50 hover:text-amber-200"
-          }`}
+            }`}
           title="Xem Bảng công thức, Tuyệt chiêu toán học, Từ điển và Quy tắc dấu câu"
         >
           <span>📐</span>
@@ -562,11 +560,10 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
         <button
           type="button"
           onClick={() => setShowScratchpad((v) => !v)}
-          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition shadow-xs ${
-            showScratchpad
+          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition shadow-xs ${showScratchpad
               ? "border-emerald-400 bg-emerald-500/25 text-emerald-200 ring-2 ring-emerald-500/40"
               : "border-slate-700 bg-slate-900/90 text-slate-300 hover:border-emerald-500/50 hover:text-emerald-200"
-          }`}
+            }`}
           title="Bật/Tắt Bảng nháp điện tử tự động lưu vào bộ nhớ"
         >
           <span>📝</span>
@@ -580,11 +577,10 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
         <button
           type="button"
           onClick={() => setShowSprRules((v) => !v)}
-          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition shadow-xs ${
-            showSprRules
+          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition shadow-xs ${showSprRules
               ? "border-purple-400 bg-purple-500/25 text-purple-200 ring-2 ring-purple-500/40"
               : "border-slate-700 bg-slate-900/90 text-slate-300 hover:border-purple-500/50 hover:text-purple-200"
-          }`}
+            }`}
           title="Quy định và cách điền đáp án tự luận Student-Produced Response chuẩn College Board"
         >
           <span>📋</span>
@@ -761,13 +757,12 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
                 </div>
                 {sprTestInput && (
                   <div
-                    className={`mt-2 rounded-lg p-2.5 text-xs font-medium ${
-                      sprValidation.type === "success"
+                    className={`mt-2 rounded-lg p-2.5 text-xs font-medium ${sprValidation.type === "success"
                         ? "border border-emerald-500/40 bg-emerald-950/40 text-emerald-200"
                         : sprValidation.type === "error"
-                        ? "border border-rose-500/40 bg-rose-950/40 text-rose-200"
-                        : "border border-amber-500/40 bg-amber-950/40 text-amber-200"
-                    }`}
+                          ? "border border-rose-500/40 bg-rose-950/40 text-rose-200"
+                          : "border border-amber-500/40 bg-amber-950/40 text-amber-200"
+                      }`}
                   >
                     {sprValidation.message}
                   </div>
@@ -789,24 +784,21 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
               ? { left: `${desmosPos.x}px`, top: `${desmosPos.y}px`, bottom: "auto", right: "auto" }
               : undefined
           }
-          className={`fixed z-50 ${showDesmos ? "flex" : "hidden pointer-events-none"} flex-col overflow-hidden bg-slate-950 shadow-2xl ${
-            isDraggingDesmos ? "" : "transition-all duration-200"
-          } ${
-            desmosSize === "large"
+          className={`fixed z-50 ${showDesmos ? "flex" : "hidden pointer-events-none"} flex-col overflow-hidden bg-slate-950 shadow-2xl ${isDraggingDesmos ? "" : "transition-all duration-200"
+            } ${desmosSize === "large"
               ? "inset-3 md:inset-6 rounded-2xl border-2 border-cyan-500/70"
               : desmosSize === "split"
-              ? "top-0 right-0 bottom-0 w-full sm:w-[50vw] h-full rounded-none border-l-2 border-cyan-500/70"
-              : desmosPos
-              ? "h-[490px] w-[95vw] max-w-[560px] md:h-[540px] rounded-2xl border-2 border-cyan-500/70"
-              : "bottom-4 right-4 h-[490px] w-[95vw] max-w-[560px] md:h-[540px] rounded-2xl border-2 border-cyan-500/70"
-          }`}
+                ? "top-0 right-0 bottom-0 w-full sm:w-[50vw] h-full rounded-none border-l-2 border-cyan-500/70"
+                : desmosPos
+                  ? "h-[490px] w-[95vw] max-w-[560px] md:h-[540px] rounded-2xl border-2 border-cyan-500/70"
+                  : "bottom-4 right-4 h-[490px] w-[95vw] max-w-[560px] md:h-[540px] rounded-2xl border-2 border-cyan-500/70"
+            }`}
         >
           {/* Desmos Window Header */}
           <div
             onMouseDown={handleDesmosDragStart}
-            className={`flex flex-wrap items-center justify-between border-b border-slate-800 bg-slate-900 px-3 py-2 gap-2 ${
-              desmosSize === "normal" ? "cursor-move select-none" : ""
-            }`}
+            className={`flex flex-wrap items-center justify-between border-b border-slate-800 bg-slate-900 px-3 py-2 gap-2 ${desmosSize === "normal" ? "cursor-move select-none" : ""
+              }`}
             title={desmosSize === "normal" ? "Kéo thả thanh tiêu đề để di chuyển máy tính" : undefined}
           >
             <div className="flex items-center gap-2">
@@ -827,11 +819,10 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
               <button
                 type="button"
                 onClick={() => setShowDesmosCheats((v) => !v)}
-                className={`rounded border px-2 py-1 text-[11px] font-bold transition ${
-                  showDesmosCheats
+                className={`rounded border px-2 py-1 text-[11px] font-bold transition ${showDesmosCheats
                     ? "border-amber-400 bg-amber-500/25 text-amber-200"
                     : "border-slate-700 bg-slate-800 text-amber-300 hover:bg-slate-700"
-                }`}
+                  }`}
                 title="Bật/Tắt 10 tuyệt chiêu bấm Desmos thực chiến 1-Click Copy"
               >
                 🔥 10 Mẹo Desmos
@@ -842,11 +833,10 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
                 <button
                   type="button"
                   onClick={() => handleSetDesmosSize("normal")}
-                  className={`rounded px-1.5 py-0.5 transition ${
-                    desmosSize === "normal"
+                  className={`rounded px-1.5 py-0.5 transition ${desmosSize === "normal"
                       ? "bg-cyan-500 text-black font-bold"
                       : "text-slate-300 hover:text-white"
-                  }`}
+                    }`}
                   title="Kích thước vừa phải ở góc phải"
                 >
                   Thu gọn
@@ -854,11 +844,10 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
                 <button
                   type="button"
                   onClick={() => handleSetDesmosSize("large")}
-                  className={`rounded px-1.5 py-0.5 transition ${
-                    desmosSize === "large"
+                  className={`rounded px-1.5 py-0.5 transition ${desmosSize === "large"
                       ? "bg-cyan-500 text-black font-bold"
                       : "text-slate-300 hover:text-white"
-                  }`}
+                    }`}
                   title="Phóng to gần toàn màn hình"
                 >
                   Mở rộng
@@ -866,11 +855,10 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
                 <button
                   type="button"
                   onClick={() => handleSetDesmosSize("split")}
-                  className={`rounded px-1.5 py-0.5 transition ${
-                    desmosSize === "split"
+                  className={`rounded px-1.5 py-0.5 transition ${desmosSize === "split"
                       ? "bg-cyan-500 text-black font-bold"
                       : "text-slate-300 hover:text-white"
-                  }`}
+                    }`}
                   title="Chia đôi 50% màn hình bên phải"
                 >
                   Chia đôi 50%
@@ -931,11 +919,10 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
                       <button
                         type="button"
                         onClick={() => handleCopyTrick(trick)}
-                        className={`rounded px-2 py-0.5 text-[10px] font-bold transition ${
-                          copiedTrickId === trick.id
+                        className={`rounded px-2 py-0.5 text-[10px] font-bold transition ${copiedTrickId === trick.id
                             ? "bg-emerald-500 text-black"
                             : "border border-amber-500/40 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30"
-                        }`}
+                          }`}
                       >
                         {copiedTrickId === trick.id ? "✓ Đã copy! Dán Ctrl+V" : "📋 Copy mẫu"}
                       </button>
@@ -986,16 +973,15 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
             style={
               refPos
                 ? {
-                    position: "fixed",
-                    left: `${refPos.x}px`,
-                    top: `${refPos.y}px`,
-                    margin: 0,
-                  }
+                  position: "fixed",
+                  left: `${refPos.x}px`,
+                  top: `${refPos.y}px`,
+                  margin: 0,
+                }
                 : undefined
             }
-            className={`flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border-2 border-amber-500/40 bg-slate-950 text-slate-100 shadow-2xl ${
-              isDraggingRef ? "" : "transition-all duration-200"
-            }`}
+            className={`flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border-2 border-amber-500/40 bg-slate-950 text-slate-100 shadow-2xl ${isDraggingRef ? "" : "transition-all duration-200"
+              }`}
           >
             {/* Modal Header */}
             <div
@@ -1025,44 +1011,40 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
               <button
                 type="button"
                 onClick={() => setActiveRefTab("bluebook")}
-                className={`border-b-2 px-3.5 py-2.5 text-xs font-bold whitespace-nowrap transition ${
-                  activeRefTab === "bluebook"
+                className={`border-b-2 px-3.5 py-2.5 text-xs font-bold whitespace-nowrap transition ${activeRefTab === "bluebook"
                     ? "border-amber-400 text-amber-300"
                     : "border-transparent text-slate-400 hover:text-slate-200"
-                }`}
+                  }`}
               >
                 📐 Chuẩn Bluebook
               </button>
               <button
                 type="button"
                 onClick={() => setActiveRefTab("must_know")}
-                className={`border-b-2 px-3.5 py-2.5 text-xs font-bold whitespace-nowrap transition ${
-                  activeRefTab === "must_know"
+                className={`border-b-2 px-3.5 py-2.5 text-xs font-bold whitespace-nowrap transition ${activeRefTab === "must_know"
                     ? "border-rose-400 text-rose-300"
                     : "border-transparent text-slate-400 hover:text-slate-200"
-                }`}
+                  }`}
               >
                 🔥 Phải Thuộc Lòng
               </button>
               <button
                 type="button"
                 onClick={() => setActiveRefTab("dictionary")}
-                className={`border-b-2 px-3.5 py-2.5 text-xs font-bold whitespace-nowrap transition ${
-                  activeRefTab === "dictionary"
+                className={`border-b-2 px-3.5 py-2.5 text-xs font-bold whitespace-nowrap transition ${activeRefTab === "dictionary"
                     ? "border-cyan-400 text-cyan-300"
                     : "border-transparent text-slate-400 hover:text-slate-200"
-                }`}
+                  }`}
               >
                 🇬🇧 Từ Điển Toán Anh-Việt ({MATH_VOCABULARY.length})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveRefTab("rw_stats")}
-                className={`border-b-2 px-3.5 py-2.5 text-xs font-bold whitespace-nowrap transition ${
-                  activeRefTab === "rw_stats"
+                className={`border-b-2 px-3.5 py-2.5 text-xs font-bold whitespace-nowrap transition ${activeRefTab === "rw_stats"
                     ? "border-purple-400 text-purple-300"
                     : "border-transparent text-slate-400 hover:text-slate-200"
-                }`}
+                  }`}
               >
                 ✍️ Dấu Câu R&W & Thống Kê
               </button>
@@ -1402,11 +1384,10 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
                           key={cat.id}
                           type="button"
                           onClick={() => setVocabCategory(cat.id)}
-                          className={`rounded-lg px-2.5 py-1.5 font-bold transition whitespace-nowrap ${
-                            vocabCategory === cat.id
+                          className={`rounded-lg px-2.5 py-1.5 font-bold transition whitespace-nowrap ${vocabCategory === cat.id
                               ? "bg-cyan-500 text-black shadow-sm shadow-cyan-500/20"
                               : "border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
-                          }`}
+                            }`}
                         >
                           {cat.label}
                         </button>
@@ -1431,10 +1412,10 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
                             {v.cat === "arithmetic"
                               ? "Số học"
                               : v.cat === "algebra"
-                              ? "Đại số"
-                              : v.cat === "geometry"
-                              ? "Hình học"
-                              : "Thống kê"}
+                                ? "Đại số"
+                                : v.cat === "geometry"
+                                  ? "Hình học"
+                                  : "Thống kê"}
                           </span>
                         </div>
                         <div className="text-slate-100 font-medium mb-1.5">{v.vi}</div>

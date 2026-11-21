@@ -48,6 +48,13 @@ export interface RecommendOptions {
   moduleType?: string;
   /** Danh sách skillId vừa mới luyện tập gần đây (chống lặp kỹ năng gây chán - Anti-Skill-Fatigue) */
   recentSkillIds?: string[];
+  /**
+   * Domain / cụm kỹ năng đang tập trung (Mục #17 — Domain-Clustered Adaptive Path).
+   * Khi truyền vào, ưu tiên xoay vòng các kỹ năng chưa thành thạo trong cùng cụm
+   * (trừ điểm ưu tiên `domainClusterBonus`, mặc định 18) để tránh context-switching.
+   */
+  currentDomainFocus?: string;
+  domainClusterBonus?: number;
 }
 
 /**
@@ -82,10 +89,18 @@ export function recommendNext(
   // Sao chép trước khi sort để không mutate mảng của summary (tránh tác dụng phụ).
   const working = [...(notMastered.length > 0 ? notMastered : pool)];
 
-  // Sắp xếp theo điểm hiệu dụng (score + cooldown penalty); cùng score thì ít luyện hơn trước (độ phủ).
+  const focusDomain = opts.currentDomainFocus?.trim().toLowerCase() ?? '';
+  const clusterBonus = typeof opts.domainClusterBonus === 'number' ? opts.domainClusterBonus : 18;
+  const getClusterBonus = (skill: (typeof working)[number]): number => {
+    if (!focusDomain || skill.mastered) return 0;
+    const domainStr = String((skill as unknown as { domain?: string }).domain ?? skill.moduleType ?? '').toLowerCase();
+    return domainStr === focusDomain ? clusterBonus : 0;
+  };
+
+  // Sắp xếp theo điểm hiệu dụng (score + cooldown penalty - domain cluster bonus); cùng score thì ít luyện hơn trước.
   working.sort((a, b) => {
-    const effA = a.score + getCooldownPenalty(a.id);
-    const effB = b.score + getCooldownPenalty(b.id);
+    const effA = a.score + getCooldownPenalty(a.id) - getClusterBonus(a);
+    const effB = b.score + getCooldownPenalty(b.id) - getClusterBonus(b);
     return effA - effB || a.attempts - b.attempts;
   });
   const pick = working[0];

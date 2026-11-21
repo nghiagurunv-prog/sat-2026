@@ -388,6 +388,7 @@ export default function LiteraturePage() {
   const handleQuestionSubmitted = (evalResult?: boolean | any) => {
     if (currentTopic && questionStartTimeRef.current) {
       const elapsed = Math.max(5, Math.round((Date.now() - questionStartTimeRef.current) / 1000));
+      questionStartTimeRef.current = null; // Chống ghi nhận trùng (double-count) giữa onAnswerResult & onSubmitted
       const cat = ALL_CATEGORIES.find(c => c.name === currentTopic);
       if (cat) {
         // Nhận diện kết quả thực tế: nếu component truyền boolean thì dùng, nếu không thì tạm tính true và mở nút tự sửa
@@ -1032,7 +1033,7 @@ export default function LiteraturePage() {
               questionData={questionData as PracticeQuestion}
               isLoading={isLoading}
               onNext={() => handleGenerateQuestion(currentTopic)}
-              onSubmitted={handleQuestionSubmitted}
+              onAnswerResult={(isCorrect) => handleQuestionSubmitted(isCorrect)}
             />
           )}
 

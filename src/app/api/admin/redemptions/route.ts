@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdmin, logAdminAudit } from '@/lib/admin-auth';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import {
   listPendingRedemptions,
   fulfillRedemption,
@@ -25,22 +25,15 @@ import { rejectRedemption } from '@/lib/economy';
  * ============================================================================
  */
 
-/** IP client (x-forwarded-for đầu tiên) để rate-limit brute-force secret. */
-function clientIp(req: Request): string {
-  const xff = req.headers.get('x-forwarded-for');
-  if (xff) return xff.split(',')[0].trim();
-  return req.headers.get('x-real-ip') || '127.0.0.1';
-}
-
 /**
  * DUAL-AUTH (session-admin HOẶC secret) + chống brute-force qua verifyAdmin:
- * CHỈ rate-limit các lần thử THẤT BẠI theo IP (10 lần/phút).
+ * CHỈ rate-limit các lần thử THẤT BẠI theo IP tin cậy (10 lần/phút).
  */
 async function verifyAdminOrLimit(req: Request): Promise<{ ok: true; actor: string } | { ok: false; res: NextResponse }> {
   const auth = await verifyAdmin(req as NextRequest);
   if (auth.ok) return { ok: true, actor: auth.actor || 'admin' };
 
-  const rl = rateLimit(`admin-auth-fail:${clientIp(req)}`, 10, 60_000);
+  const rl = rateLimit(`admin-auth-fail:${getClientIp(req)}`, 10, 60_000);
   if (!rl.allowed) {
     return {
       ok: false,

@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { gradeAnswer } from '@/lib/issued-questions';
-import { rateLimit } from '@/lib/rate-limit';
+import { getExamById, getExamQuestionMap, isChoiceCorrect } from '@/lib/exams';
+import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
 import { loadEconomy, saveEconomy, ensureEconomyRow, tryIncrementEconomyAtomic } from '@/lib/economy-store';
 import { applyExamRewardFromDifficulties, MAX_EXAM_QUESTIONS, type Difficulty, type EconomyState } from '@/lib/economy';
 import { getUserTier } from '@/lib/subscription-store';
 import { TIER_COIN_MULTIPLIER } from '@/lib/subscription';
 import { bumpDailyActivity } from '@/lib/daily-activity-store';
-import { matchesAnswer } from '@/lib/answer-match';
 
 /**
  * NỘP BÀI THI (ROOT A follow-up đường thi) — server chấm + thưởng.
@@ -34,13 +34,14 @@ export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
 
-    const rl = rateLimit(`exam-grade:${user.id}`, 10, 60_000);
+    const rl = rateLimit(getRateLimitKey(req, 'exam-grade', user.id), 10, 60_000);
     if (!rl.allowed) {
       return NextResponse.json({ error: 'Quá nhiều request. Thử lại sau.', retryAfterMs: rl.retryAfterMs }, { status: 429 });
     }
 
     const body = await req.json();
     const rawAnswers = Array.isArray(body?.answers) ? body.answers : [];
+    const examId = typeof body?.examId === 'string' ? body.examId.trim() : '';
 
     // Lọc + kẹp về trần (chống mảng phi lý). total = số câu client khai đã trả lời.
     const answers: SubmittedAnswer[] = rawAnswers
@@ -55,25 +56,60 @@ export async function POST(req: Request) {
     // Chấm từng câu server-side (CAS). Kết quả correct/độ khó lấy TỪ SERVER, không
     // tin client. Câu đã answered (nộp lại) → gradeAnswer trả null → không tính.
     const correctDifficulties: Difficulty[] = [];
+    const results: Array<{ questionId: string; correct: boolean; correctChoice: string; explanation?: string | null }> = [];
     let correct = 0;
     let graded = 0;
+
+    // Fallback server-authoritative CHỈ dành cho khách vãng lai (Guest Trial — 0 thưởng xu/XP)
+    // khi chưa có dòng issued_questions trên DB (non-UUID guest).
+    const guestQuestionMap =
+      !user.isAuthenticated && examId
+        ? (() => {
+            const exam = getExamById(examId);
+            return exam ? getExamQuestionMap(exam) : null;
+          })()
+        : null;
 
     // Tuần tự để tránh dồn nhiều update đồng thời lên cùng user (đề ~vài chục câu).
     for (const item of answers) {
       const { questionId, answer } = item;
       const userAns = item.userAns ?? answer;
       const result = await gradeAnswer(questionId, user.id, userAns);
-      if (!result) continue; // câu lạ / không sở hữu / đã trả lời → bỏ qua
-      graded++;
-      const isCorrect =
-        result.correct ||
-        (item.correctAns ? matchesAnswer(String(userAns ?? ''), String(item.correctAns ?? '')) : false);
-      if (isCorrect) {
-        correct++;
-        const d: Difficulty = VALID_DIFFICULTY.includes(result.difficulty as Difficulty)
-          ? (result.difficulty as Difficulty)
-          : 'Medium';
-        correctDifficulties.push(d);
+      if (result) {
+        graded++;
+        // CHỈ tin tưởng kết quả chấm server-authoritative từ gradeAnswer (cấm nhận item.correctAns từ client)
+        const isCorrect = result.correct;
+        results.push({
+          questionId,
+          correct: isCorrect,
+          correctChoice: result.correctChoice,
+          explanation: result.explanation,
+        });
+        if (isCorrect) {
+          correct++;
+          const d: Difficulty = VALID_DIFFICULTY.includes(result.difficulty as Difficulty)
+            ? (result.difficulty as Difficulty)
+            : 'Medium';
+          correctDifficulties.push(d);
+        }
+        continue;
+      }
+
+      if (guestQuestionMap) {
+        const q = guestQuestionMap.get(questionId);
+        if (q) {
+          graded++;
+          const isCorrect = isChoiceCorrect(userAns, q.correct_choice);
+          results.push({
+            questionId,
+            correct: isCorrect,
+            correctChoice: q.correct_choice,
+            explanation: q.explanation_vi || q.explanation || null,
+          });
+          if (isCorrect) {
+            correct++;
+          }
+        }
       }
     }
 
@@ -109,6 +145,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       correct,
       graded,
+      results,
       granted,
       economy: economyOut,
     });

@@ -65,13 +65,30 @@ export async function loadMastery(userId: string): Promise<MasteryStore> {
   return { skills: data.skills ?? {} };
 }
 
+async function loadMasteryForMutation(userId: string): Promise<MasteryStore> {
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from('user_mastery')
+      .select('skills')
+      .eq('user_id', userId)
+      .single();
+    if (!error && data) {
+      return { skills: data.skills ?? {} };
+    }
+  } catch {
+    // Fallback xuống client cookie nếu môi trường không cấu hình admin client
+  }
+  return loadMastery(userId);
+}
+
 /**
  * Lưu toàn bộ MasteryStore của user với cơ chế serialize + merge state mới nhất (Fix #019).
  */
 export async function saveMastery(userId: string, store: MasteryStore): Promise<void> {
   return enqueueUserMasteryUpdate(userId, async () => {
-    // Đọc lại state mới nhất từ Supabase ngay trước khi ghi
-    const latest = await loadMastery(userId);
+    // Đọc lại state mới nhất qua adminClient để không bao giờ bị mất dữ liệu khi chạy nền không có cookie
+    const latest = await loadMasteryForMutation(userId);
     const mergedSkills = {
       ...(latest.skills ?? {}),
       ...(store.skills ?? {}),
@@ -103,7 +120,7 @@ export async function recordMasteryAttemptInDb(
     | ((current: MasteryStore) => void | MasteryStore | Promise<void | MasteryStore>)
 ): Promise<MasteryStore> {
   return enqueueUserMasteryUpdate(userId, async () => {
-    const latest = await loadMastery(userId);
+    const latest = await loadMasteryForMutation(userId);
     if (!latest.skills) latest.skills = {};
 
     if (typeof updater === 'function') {

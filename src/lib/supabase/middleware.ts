@@ -3,26 +3,74 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { isE2E, E2E_COOKIE } from '@/lib/e2e'
 
 /**
- * Các path CÔNG KHAI — KHÔNG ép đăng nhập (khớp bằng prefix).
- * Mọi path khác cần user thật, vì dữ liệu app scope theo `user_id` kiểu UUID
- * (FK auth.users). Guest 'local-default-user' (non-UUID) ghi gì cũng fail âm thầm
- * → phải chặn ở cửa. Xem plan merry-pondering-graham.md.
+ * Các path CÔNG KHAI KHỚP CHÍNH XÁC (Mục #6 — Fail-Closed `#G6`).
+ * Ví dụ: `/teacher` (landing/demo) công khai, nhưng mọi route quản trị con
+ * `/teacher/classes`, `/teacher/students` và `/api/teacher/*` BẮT BUỘC đăng nhập.
  */
-const PUBLIC_PREFIXES = [
+const PUBLIC_EXACT_PATHS = new Set<string>([
+  '/',
   '/login',
+  '/pricing',
+  '/upgrade',
+  '/teacher',
+  '/onboarding',
   '/diagnostic',
   '/leaderboard',
-  '/auth', // OAuth / email-confirm callback (đổi ?code= lấy session) — phải public để không bị chặn trước khi có session
-  '/parent', // trang phụ huynh đọc ?code= (no-auth) — /parent-share (học sinh) KHÔNG khớp vì cần đúng prefix + '/'
-  '/admin', // tự bảo vệ 2 lớp: UI cho phép nhập ADMIN_SECRET (tránh tự khóa khi chưa có session), API /api/admin tự bảo vệ bằng verifyAdminAccess
+  '/desmos',
+  '/mock-exams',
+  '/exam-mode',
+  '/practice',
+  '/math',
+  '/reading',
+  '/literature',
+  '/vocab',
+  '/vocabulary',
+  '/mistakes',
+  '/forge',
+  '/grind',
+  '/rescue',
+  '/quests',
+  '/missions',
+  '/collection',
+  '/achievements',
+  '/analytics',
+  '/scholarship',
+  '/journey',
+  '/study-plan',
+])
+
+/**
+ * Các path CÔNG KHAI KHỚP PREFIX — chỉ dành cho nhánh cần sub-path công khai thật sự.
+ */
+const PUBLIC_PREFIXES = [
+  '/auth', // OAuth / email-confirm callback
+  '/parent', // trang phụ huynh đọc ?code= (no-auth) — /parent-share không khớp vì cần đúng prefix + '/'
+  '/admin', // tự bảo vệ 2 lớp (ADMIN_SECRET + session admin)
+  '/exams', // phòng thi thử Guest Trial (/exams/[id])
+  // API xác thực, webhook & cron
   '/api/auth',
+  '/api/cron', // Vercel Cron tự xác thực bằng Authorization: Bearer CRON_SECRET (timing-safe)
   '/api/payment/momo-ipn',
   '/api/payment/vnpay-ipn',
-  '/api/payment/stripe-webhook', // Stripe gọi server-to-server, không có cookie session
-  '/api/payment/payos-webhook', // payOS gọi server-to-server, không có cookie session (chữ ký HMAC tự bảo vệ)
+  '/api/payment/stripe-webhook',
+  '/api/payment/payos-webhook',
   '/api/payment/return',
   '/api/parent/report',
-  '/api/admin', // tự bảo vệ bằng verifyAdminAccess (session-admin HOẶC shared-secret timing-safe)
+  '/api/admin', // tự bảo vệ bằng verifyAdmin
+  // API hỗ trợ Guest/Trial (có rate-limit theo IP)
+  '/api/exams',
+  '/api/exam-session',
+  '/api/generate-practice',
+  '/api/grade',
+  '/api/chat',
+  '/api/ai-tutor',
+  '/api/hint',
+  '/api/vocab',
+  '/api/cau-sai',
+  '/api/leaderboard',
+  '/api/mastery',
+  '/api/scholarship-match',
+  '/api/uni-predict',
 ]
 
 /**
@@ -40,22 +88,21 @@ export function isSafeRedirectPath(path: string | null | undefined): boolean {
 }
 
 /**
- * Gắn các security headers cơ bản vào response:
- * - X-Frame-Options: DENY (chống clickjacking)
- * - X-Content-Type-Options: nosniff (chống MIME sniffing)
- * - Referrer-Policy: strict-origin-when-cross-origin (bảo vệ thông tin referrer)
+ * Security headers chính (CSP, HSTS, X-Content-Type-Options, Referrer-Policy,
+ * Permissions-Policy, X-Frame-Options) được cấp tập trung 1 nơi tại `next.config.ts`
+ * (Mục #7) để tránh duplicate headers. Middleware chỉ đảm bảo X-Frame-Options trên
+ * redirect/401 response sinh trực tiếp tại Edge.
  */
 function applySecurityHeaders(res: NextResponse): NextResponse {
-  res.headers.set('X-Frame-Options', 'DENY')
-  res.headers.set('X-Content-Type-Options', 'nosniff')
-  res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  if (!res.headers.has('X-Frame-Options')) {
+    res.headers.set('X-Frame-Options', 'DENY')
+  }
   return res
 }
 
-/** true nếu path là public (khớp chính path hoặc prefix + '/'). */
-function isPublicPath(path: string): boolean {
-  // Cho phép khách vãng lai học thử trang chủ '/' không bị đá sang /login ngay giây đầu
-  if (path === '/') return true
+/** true nếu path là public (khớp exact trong PUBLIC_EXACT_PATHS hoặc prefix + '/'). */
+export function isPublicPath(path: string): boolean {
+  if (PUBLIC_EXACT_PATHS.has(path)) return true
   return PUBLIC_PREFIXES.some((p) => path === p || path.startsWith(p + '/'))
 }
 
@@ -71,31 +118,36 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({
-            request,
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
+  let user = null
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  // Refreshing the auth token (cũng dùng kết quả này để gate bên dưới).
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  if (supabaseUrl && supabaseAnonKey) {
+    const supabase = createServerClient(
+      supabaseUrl,
+      supabaseAnonKey,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+            supabaseResponse = NextResponse.next({
+              request,
+            })
+            cookiesToSet.forEach(({ name, value, options }) =>
+              supabaseResponse.cookies.set(name, value, options)
+            )
+          },
+        },
+      }
+    )
+
+    // Refreshing the auth token (cũng dùng kết quả này để gate bên dưới).
+    const { data } = await supabase.auth.getUser()
+    user = data.user
+  }
 
   const path = request.nextUrl.pathname
 
