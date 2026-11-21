@@ -1,5 +1,6 @@
 import mockExams from '@/data/mock_exams.json';
 import { matchesAnswer } from '@/lib/answer-match';
+import { calibrateQuestionIrt, type IRTCalibration } from '@/lib/irt';
 
 /**
  * ============================================================================
@@ -22,6 +23,7 @@ import { matchesAnswer } from '@/lib/answer-match';
 
 export interface ExamQuestion {
   id: string;
+  type?: 'mcq' | 'spr';
   full_passage?: string;
   practice_question: string;
   choices: string[];
@@ -29,11 +31,12 @@ export interface ExamQuestion {
   explanation: string;
   difficulty: string;
   trapRate?: number;
+  irt?: IRTCalibration;
   explanation_vi?: string;
   domain?: string;
   skillId?: string;
   section?: 'rw' | 'math';
-  choice_analysis?: any[];
+  choice_analysis?: unknown[];
 }
 
 export interface ExamModule {
@@ -269,4 +272,12 @@ export function getExamQuestionMap(exam: FullExam): Map<string, ExamQuestion> {
  *  so ký tự đầu, câu THÔ so toàn chuỗi (xem answer-match.ts — fix CRITICAL). */
 export function isChoiceCorrect(userAnswer: string, correctChoice: string): boolean {
   return matchesAnswer(userAnswer, correctChoice);
+}
+
+/** Trả tham số IRT 2PL (a, b) cho câu hỏi (ưu tiên tham số đã gắn sẵn, fallback hiệu chỉnh từ difficulty + trapRate). */
+export function getQuestionIrtParams(q: Pick<ExamQuestion, 'difficulty' | 'trapRate' | 'irt'>): IRTCalibration {
+  if (q.irt && typeof q.irt.a === 'number' && typeof q.irt.b === 'number') {
+    return q.irt;
+  }
+  return calibrateQuestionIrt(q.difficulty, q.trapRate);
 }

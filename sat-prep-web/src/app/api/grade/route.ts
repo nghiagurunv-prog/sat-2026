@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
+import { emitMetric, sendAlertIfConfigured } from '@/lib/telemetry';
 import { gradeAnswer } from '@/lib/issued-questions';
 import { checkRateLimit, getRateLimitKey } from '@/lib/rate-limit';
 import { matchesAnswer } from '@/lib/answer-match';
@@ -112,6 +113,8 @@ export async function POST(req: Request) {
         void recordDailySnapshot(user.id);
       } catch (e) {
         console.error('Grade: recordAnswer failed', e);
+        emitMetric('grade_persistence_failure', 1, { stage: 'mastery', skillId: result.skillId });
+        void sendAlertIfConfigured('grade_persistence_failure', { stage: 'mastery', skillId: result.skillId });
         persistenceError = 'Không thể lưu mastery. Đáp án vẫn đã được chấm; vui lòng thử câu khác sau khi kết nối ổn định.';
         granted = { coins: 0, xp: 0 };
         responseEconomy = economy;
@@ -123,6 +126,8 @@ export async function POST(req: Request) {
         await saveEconomy(user.id, nextEconomy);
       } catch (e) {
         console.error('Grade: saveEconomy failed', e);
+        emitMetric('grade_persistence_failure', 1, { stage: 'economy' });
+        void sendAlertIfConfigured('grade_persistence_failure', { stage: 'economy' });
         persistenceError = 'Không thể lưu phần thưởng. Đáp án vẫn đã được chấm; xu/XP chưa được cộng.';
         granted = { coins: 0, xp: 0 };
         responseEconomy = economy;

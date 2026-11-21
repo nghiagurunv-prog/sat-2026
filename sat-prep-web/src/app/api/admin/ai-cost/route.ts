@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCostReport } from '@/lib/ai-cost';
 import { verifyAdmin, logAdminAudit } from '@/lib/admin-auth';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
 /**
  * AI COST REPORT (implementation_plan.md §9.5, task #5)
@@ -18,16 +18,10 @@ import { rateLimit } from '@/lib/rate-limit';
  * lệ (secret/session) không chạm limit. Middleware allow /api/admin (public) nên
  * endpoint này tự bảo vệ.
  */
-function clientIp(req: Request): string {
-  const xff = req.headers.get('x-forwarded-for');
-  if (xff) return xff.split(',')[0].trim();
-  return req.headers.get('x-real-ip') || '127.0.0.1';
-}
-
 export async function GET(req: Request) {
   const auth = await verifyAdmin(req as NextRequest);
   if (!auth.ok) {
-    const rl = rateLimit(`admin-auth-fail:${clientIp(req)}`, 10, 60_000);
+    const rl = rateLimit(`admin-auth-fail:${getClientIp(req)}`, 10, 60_000);
     if (!rl.allowed) {
       return NextResponse.json(
         { success: false, error: 'Quá nhiều lần thử sai. Vui lòng thử lại sau.', retryAfterMs: rl.retryAfterMs },

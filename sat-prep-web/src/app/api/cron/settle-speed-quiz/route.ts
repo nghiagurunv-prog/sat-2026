@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { safeEqual } from '@/lib/admin-auth';
 import { cyclesEndingAt, rewardForRank, maxRewardedRank } from '@/lib/speed-quiz';
 import { rankUsersForCycleKey } from '@/lib/speed-quiz-leaderboard-store';
 import { settleReward } from '@/lib/speed-quiz-store';
@@ -25,7 +26,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
   const auth = request.headers.get('authorization');
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (!secret || !auth || !safeEqual(auth, `Bearer ${secret}`)) {
     console.error('settle-speed-quiz cron: thiếu env CRON_SECRET hoặc authorization không khớp → từ chối 401 (fail-closed).');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

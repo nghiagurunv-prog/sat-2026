@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Clock,
@@ -15,26 +15,21 @@ import {
   Grid,
   CheckCircle2,
   AlertCircle,
-  HelpCircle,
   X,
   Strikethrough,
   Highlighter,
-  RotateCcw,
-  Sparkles,
-  BarChart3,
   Timer,
-  ArrowRight,
-  Check,
   Eye,
   EyeOff,
+  Loader2,
+  RotateCcw,
 } from 'lucide-react';
 import DesmosCalculator from '@/components/DesmosCalculator';
 import FormulaSheetModal from '@/components/FormulaSheetModal';
-import mockExamsData from '@/data/mock_exams.json';
-import diagnosticQuestionsData from '@/data/diagnostic_questions.json';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 // ============================================================================
-// TYPES & DATA STRUCTURES
+// TYPES & DATA STRUCTURES (Server-Authoritative — KHÔNG chứa đáp án trước khi nộp #G7)
 // ============================================================================
 
 export type SplitRatio = '40/60' | '50/50' | '60/40';
@@ -42,160 +37,26 @@ export type NavFilter = 'all' | 'unanswered' | 'flagged';
 
 export interface ExamQuestion {
   id: string;
+  questionId: string;
   order: number;
   section: 'rw' | 'math';
   domain: string;
   passage?: string;
   question: string;
   choices: string[];
-  correctIndex?: number;
-  explanation_vi?: string;
+  isSpr: boolean;
 }
 
-export interface QuestionPaceRecord {
+interface GradedQuestionResult {
   questionId: string;
-  timeSpentSeconds: number;
-  eliminatedOptionsCount: number;
-  wasFlagged: boolean;
-  answered: boolean;
+  correct: boolean;
+  correctChoice: string;
+  explanation?: string | null;
 }
 
-// Bảng câu hỏi mẫu tiêu chuẩn mô phỏng kỳ thi Digital SAT College Board
-const SAMPLE_QUESTIONS: ExamQuestion[] = [
-  {
-    id: 'q1',
-    order: 1,
-    section: 'rw',
-    domain: 'Information and Ideas',
-    passage:
-      'In 2018, paleoclimatologist Dr. Elena Vance analyzed deep-sea sediment cores retrieved from the North Atlantic Ocean. The isotopic ratios of oxygen-18 trapped within fossilized benthic foraminifera shells revealed significant cyclical fluctuations. Vance hypothesized that periodic changes in oceanic thermohaline circulation were responsible for sudden decadal-scale climatic cooling episodes known as Dansgaard-Oeschger events during the late Pleistocene epoch.',
-    question:
-      'Which finding, if true, would most directly support Dr. Vance’s hypothesis regarding the Dansgaard-Oeschger events?',
-    choices: [
-      'A) Ice sheet melting coincided with abrupt slowdowns in deep-water North Atlantic convective mixing prior to cooling.',
-      'B) The abundance of foraminifera shells remained largely static during periods of surface water warming.',
-      'C) Carbon dioxide concentrations in polar ice bubbles fluctuated independently of oceanic circulation cycles.',
-      'D) Volcanic aerosol depositions peaked simultaneously across multiple continents during the Holocene.',
-    ],
-    correctIndex: 0,
-    explanation_vi:
-      'Đáp án A củng cố trực tiếp giả thuyết của Vance vì nó chứng minh sự suy giảm lưu thông nhiệt muối ở Bắc Đại Tây Dương diễn ra đồng thời với các đợt làm lạnh khí hậu.',
-  },
-  {
-    id: 'q2',
-    order: 2,
-    section: 'rw',
-    domain: 'Craft and Structure',
-    passage:
-      'The traditional historical narrative posited that the ancient city of Teotihuacan exercised absolute political hegemony over contemporary Mayan city-states. However, recent excavations at the Tikal acropolis discovered residential enclaves built using authentic central Mexican architectural motifs alongside native Guatemalan jade burial artifacts, indicating a relationship characterized more by diplomatic reciprocity than by unyielding imperial subjugation.',
-    question: 'As used in the text, what does the word "hegemony" most nearly mean?',
-    choices: [
-      'A) Cultural exchange',
-      'B) Dominant authority',
-      'C) Architectural uniformity',
-      'D) Commercial rivalry',
-    ],
-    correctIndex: 1,
-    explanation_vi:
-      'Từ "hegemony" trong ngữ cảnh lịch sử chính trị có nghĩa là sự thống trị hoặc bá quyền (Dominant authority).',
-  },
-  {
-    id: 'q3',
-    order: 3,
-    section: 'math',
-    domain: 'Algebra',
-    passage: undefined,
-    question:
-      'If 3x + 2y = 18 and 2x - y = 5, what is the value of 5x + y?',
-    choices: ['A) 13', 'B) 23', 'C) 27', 'D) 31'],
-    correctIndex: 1,
-    explanation_vi:
-      'Cộng hai phương trình vế theo vế: (3x + 2y) + (2x - y) = 18 + 5 ⇒ 5x + y = 23.',
-  },
-  {
-    id: 'q4',
-    order: 4,
-    section: 'math',
-    domain: 'Advanced Math',
-    passage: undefined,
-    question:
-      'The parabola with equation y = a(x - 3)^2 + 8 passes through the point (1, -4). What is the value of constant a?',
-    choices: ['A) -3', 'B) -2', 'C) 2', 'D) 3'],
-    correctIndex: 0,
-    explanation_vi:
-      'Thay tọa độ (1, -4) vào phương trình: -4 = a(1 - 3)^2 + 8 ⇒ -4 = 4a + 8 ⇒ 4a = -12 ⇒ a = -3.',
-  },
-  {
-    id: 'q5',
-    order: 5,
-    section: 'math',
-    domain: 'Geometry and Trigonometry',
-    passage: undefined,
-    question:
-      'In a right triangle ABC with right angle at B, the length of hypotenuse AC is 25 and the length of side AB is 24. What is the value of cos(A)?',
-    choices: ['A) 7/25', 'B) 7/24', 'C) 24/25', 'D) 25/24'],
-    correctIndex: 2,
-    explanation_vi:
-      'Trong tam giác vuông ABC vuông tại B: cos(A) = cạnh kề / cạnh huyền = AB / AC = 24 / 25.',
-  },
-];
-
-// ----------------------------------------------------------------------------
-// HELPER: Chuyển đổi và chuẩn hóa phương án lựa chọn & đáp án đúng
-// ----------------------------------------------------------------------------
-function ensureChoices(rawChoices: string[] | undefined, correctChoice: string | number | undefined): { choices: string[]; correctIndex: number } {
-  if (Array.isArray(rawChoices) && rawChoices.length >= 2) {
-    const choices = rawChoices.map((c, i) => {
-      const prefix = ['A)', 'B)', 'C)', 'D)'][i] || `${i + 1})`;
-      const clean = String(c).replace(/^[A-D]\)\s*/, '').trim();
-      return `${prefix} ${clean}`;
-    });
-    let correctIndex = 0;
-    const target = String(correctChoice || '').trim();
-    if (/^[A-D]\b/i.test(target)) {
-      const letter = target[0].toUpperCase();
-      correctIndex = ['A', 'B', 'C', 'D'].indexOf(letter);
-      if (correctIndex === -1) correctIndex = 0;
-    } else {
-      const matchedIdx = rawChoices.findIndex(
-        (c) =>
-          c.trim().toLowerCase() === target.toLowerCase() ||
-          c.replace(/^[A-D]\)\s*/, '').trim().toLowerCase() === target.toLowerCase()
-      );
-      if (matchedIdx !== -1) correctIndex = matchedIdx;
-    }
-    return { choices, correctIndex };
-  }
-
-  // Câu hỏi Student-Produced Response (SPR) số học
-  const numVal = parseFloat(String(correctChoice));
-  if (!isNaN(numVal)) {
-    const valStr = String(correctChoice).trim();
-    const choices = [
-      `A) ${valStr}`,
-      `B) ${numVal + (numVal >= 10 ? 4 : 2)}`,
-      `C) ${numVal > 2 ? numVal - 2 : numVal * 2}`,
-      `D) ${numVal * 2 + 1}`,
-    ];
-    return { choices, correctIndex: 0 };
-  }
-
-  return {
-    choices: [
-      `A) ${correctChoice || 'True'}`,
-      'B) Phương án sai B',
-      'C) Phương án sai C',
-      'D) Phương án sai D',
-    ],
-    correctIndex: 0,
-  };
-}
-
-// ----------------------------------------------------------------------------
-// HELPER: Nạp câu hỏi từ mock_exams.json
-// ----------------------------------------------------------------------------
-interface RawExamQuestion {
+interface ApiStartQuestion {
   id?: string;
+  questionId?: string;
   section?: 'rw' | 'math';
   domain?: string;
   full_passage?: string;
@@ -204,306 +65,65 @@ interface RawExamQuestion {
   prompt?: string;
   question?: string;
   choices?: string[];
-  correct_choice?: string | number;
-  explanation?: string;
-  explanation_vi?: string;
+  type?: 'mcq' | 'spr';
 }
 
-interface RawExamModule {
+interface ApiStartModule {
   id?: string;
+  module_id?: string;
   name?: string;
-  section?: 'rw' | 'math';
-  questions?: RawExamQuestion[];
+  time_minutes?: number;
+  questions?: ApiStartQuestion[];
 }
 
-interface RawExamItem {
-  id: string;
-  title: string;
-  modules?: RawExamModule[];
+interface ApiStartResponse {
+  id?: string;
+  title?: string;
+  description?: string;
+  total_time_minutes?: number;
+  modules?: ApiStartModule[];
+  error?: string;
 }
 
-function parseMockExamQuestions(examItem: RawExamItem): ExamQuestion[] {
+function normalizeChoices(rawChoices: string[] | undefined): string[] {
+  if (!Array.isArray(rawChoices) || rawChoices.length === 0) return [];
+  return rawChoices.map((c, i) => {
+    const prefix = ['A)', 'B)', 'C)', 'D)'][i] || `${i + 1})`;
+    const clean = String(c).replace(/^[A-D]\)\s*/, '').trim();
+    return `${prefix} ${clean}`;
+  });
+}
+
+function parseServerModules(data: ApiStartResponse): ExamQuestion[] {
   const list: ExamQuestion[] = [];
   let order = 1;
-  (examItem.modules || []).forEach((mod) => {
-    const isMath = (mod.name || '').toLowerCase().includes('math');
+  (data.modules || []).forEach((mod) => {
+    const modName = (mod.name || '').toLowerCase();
+    const isMath = modName.includes('math') || (mod.module_id || '').startsWith('math');
     const defaultSection: 'rw' | 'math' = isMath ? 'math' : 'rw';
 
     (mod.questions || []).forEach((q) => {
-      const qSection: 'rw' | 'math' = q.section === 'math' ? 'math' : q.section === 'rw' ? 'rw' : defaultSection;
-      const { choices, correctIndex } = ensureChoices(q.choices, q.correct_choice);
+      const qSection: 'rw' | 'math' =
+        q.section === 'math' ? 'math' : q.section === 'rw' ? 'rw' : defaultSection;
+      const choices = normalizeChoices(q.choices);
+      const qid = q.questionId || q.id || `m_${order}`;
       list.push({
-        id: q.id || `m_${order}`,
+        id: q.id || qid,
+        questionId: qid,
         order: order++,
         section: qSection,
         domain: q.domain || (qSection === 'math' ? 'Advanced Math' : 'Information and Ideas'),
-        passage: q.full_passage && q.full_passage.trim().length > 0 ? q.full_passage : (q.passage || undefined),
+        passage:
+          q.full_passage && q.full_passage.trim().length > 0
+            ? q.full_passage
+            : q.passage || undefined,
         question: q.practice_question || q.prompt || q.question || '',
         choices,
-        correctIndex,
-        explanation_vi: q.explanation || q.explanation_vi || 'Giải thích chi tiết chuẩn hóa College Board.',
+        isSpr: q.type === 'spr' || choices.length === 0,
       });
     });
   });
   return list;
-}
-
-// ----------------------------------------------------------------------------
-// HELPER: Nạp câu hỏi từ diagnostic_questions.json
-// ----------------------------------------------------------------------------
-interface RawDiagQuestion {
-  id?: string;
-  skillId?: string;
-  title?: string;
-  difficulty?: string;
-  practice_question?: string;
-  question?: string;
-  choices?: string[];
-  correct_choice?: string | number;
-  explanation?: string;
-}
-
-function parseDiagnosticQuestions(diagList: RawDiagQuestion[]): ExamQuestion[] {
-  return diagList.map((q, idx) => {
-    const { choices, correctIndex } = ensureChoices(q.choices, q.correct_choice);
-    const isMath = !!(q.skillId && (q.skillId.includes('algebra') || q.skillId.includes('math')));
-    return {
-      id: q.id || `diag_${idx + 1}`,
-      order: idx + 1,
-      section: isMath ? 'math' : 'rw',
-      domain: q.title || (isMath ? 'Algebra' : 'Craft and Structure'),
-      passage: undefined,
-      question: q.practice_question || q.question || '',
-      choices,
-      correctIndex,
-      explanation_vi: q.explanation || 'Giải thích chuẩn chẩn đoán kiến thức nền tảng.',
-    };
-  });
-}
-
-// ----------------------------------------------------------------------------
-// HELPER: Sinh bộ câu hỏi đặc thù cho các đề Mock 03-06 và QAS 2024
-// ----------------------------------------------------------------------------
-function createDedicatedExamQuestions(examKey: string, region: string, mathOffset: number): ExamQuestion[] {
-  return [
-    {
-      id: `${examKey}_q1`,
-      order: 1,
-      section: 'rw',
-      domain: 'Craft and Structure',
-      passage: `Recent archaeological fieldwork in ${region} revealed ceramic fragments with distinct geometric pigmentations. While previous scholars assumed the community operated in complete seclusion, Dr. Martinez argues that the chemical composition of the glazes suggests regular, reciprocal exchange with neighboring coastal settlements.`,
-      question: 'Which choice best describes the main function of the underlined claim regarding the chemical composition?',
-      choices: [
-        'A) It challenges the established historical consensus about the community’s isolation.',
-        'B) It provides conclusive proof of warfare between the settlements.',
-        'C) It disputes the authenticity of the ceramic fragments found by Martinez.',
-        'D) It suggests that trade was restricted solely to raw ceramic minerals.',
-      ],
-      correctIndex: 0,
-      explanation_vi: 'Chi tiết phân tích hóa học lớp men chứng minh có sự trao đổi với các khu vực duyên hải lân cận, trực tiếp phản bác quan điểm truyền thống cho rằng cộng đồng này hoàn toàn biệt lập.',
-    },
-    {
-      id: `${examKey}_q2`,
-      order: 2,
-      section: 'rw',
-      domain: 'Craft and Structure',
-      passage: 'The critic noted that although the author’s prose was undeniably _______, it occasionally slipped into esoteric phrasing that alienated casual readers.',
-      question: 'Which choice completes the text with the most logical and precise word?',
-      choices: ['A) lucid', 'B) pedantic', 'C) opaque', 'D) fragmented'],
-      correctIndex: 0,
-      explanation_vi: 'Liên từ "although" tạo sự đối lập giữa điểm tích cực (văn phong sáng sủa, mạch lạc - lucid) với việc thỉnh thoảng dùng từ ngữ quá hàn lâm, khó hiểu.',
-    },
-    {
-      id: `${examKey}_q3`,
-      order: 3,
-      section: 'rw',
-      domain: 'Information and Ideas',
-      passage: 'In marine biology, the concept of "trophic cascades" describes how predators indirectly suppress lower trophic levels. In Monterey Bay, the reintroduction of sea otters led to an immediate decline in herbivorous sea urchin density, allowing kelp forests to rapidly regenerate.',
-      question: 'Based on the passage, what would most likely happen if the sea otter population were abruptly depleted?',
-      choices: [
-        'A) Sea urchin populations would proliferate, leading to overgrazing of kelp forests.',
-        'B) Kelp forests would expand even faster due to excess sunlight.',
-        'C) Deep-sea fish species would immediately replace sea otters as apex predators.',
-        'D) Sea urchins would alter their diet from kelp to photosynthetic phytoplankton.',
-      ],
-      correctIndex: 0,
-      explanation_vi: 'Theo cơ chế trophic cascade, rái cá biển kiểm soát mật độ nhím biển. Nếu rái cá sụt giảm, nhím biển sẽ sinh sôi bùng nổ và gặm nhẵn các cánh rừng tảo bẹ.',
-    },
-    {
-      id: `${examKey}_q4`,
-      order: 4,
-      section: 'rw',
-      domain: 'Expression of Ideas',
-      passage: 'Urban ecologists observed that artificial lighting at night significantly delays the migratory departures of several songbird species. _______, urban noise pollution impairs their auditory orientation.',
-      question: 'Which choice completes the text with the most logical transition?',
-      choices: ['A) Furthermore', 'B) In contrast', 'C) Therefore', 'D) Instead'],
-      correctIndex: 0,
-      explanation_vi: 'Cả hai câu đều nêu các tác động tiêu cực của đô thị hóa lên loài chim di cư (ánh sáng nhân tạo và ô nhiễm tiếng ồn), do đó cần từ nối mang tính bổ sung (Furthermore).',
-    },
-    {
-      id: `${examKey}_q5`,
-      order: 5,
-      section: 'rw',
-      domain: 'Standard English Conventions',
-      passage: undefined,
-      question: 'Composer Florence Price, whose symphonic works blend African American spiritual melodies with European classical orchestration, _______ the first African American woman to have a composition played by a major American orchestra.',
-      choices: ['A) was', 'B) being', 'C) were', 'D) having been'],
-      correctIndex: 0,
-      explanation_vi: 'Chủ ngữ chính là danh từ số ít "Composer Florence Price", mệnh đề phụ "whose symphonic..." nằm giữa hai dấu phẩy, nên động từ vị ngữ chính phải ở thì quá khứ đơn số ít "was".',
-    },
-    {
-      id: `${examKey}_q6`,
-      order: 6,
-      section: 'math',
-      domain: 'Algebra',
-      passage: undefined,
-      question: `If ${2 + mathOffset}x - 7 = ${13 + 3 * mathOffset}, what is the value of x?`,
-      choices: [
-        `A) ${Math.round((20 + 2 * mathOffset) / (2 + mathOffset))}`,
-        `B) ${Math.round((20 + 2 * mathOffset) / (2 + mathOffset)) + 3}`,
-        `C) ${Math.round((20 + 2 * mathOffset) / (2 + mathOffset)) - 2}`,
-        `D) ${Math.round((20 + 2 * mathOffset) / (2 + mathOffset)) + 5}`,
-      ],
-      correctIndex: 0,
-      explanation_vi: 'Chuyển vế đổi dấu và giải phương trình bậc nhất: chia cả hai vế cho hệ số của x để tìm nghiệm x duy nhất.',
-    },
-    {
-      id: `${examKey}_q7`,
-      order: 7,
-      section: 'math',
-      domain: 'Advanced Math',
-      passage: undefined,
-      question: `The function f(x) = (x - ${3 + mathOffset})(x + ${5 + mathOffset}). What is the y-intercept of the graph of y = f(x) in the xy-plane?`,
-      choices: [
-        `A) (0, -${(3 + mathOffset) * (5 + mathOffset)})`,
-        `B) (0, ${(3 + mathOffset) * (5 + mathOffset)})`,
-        `C) (-${3 + mathOffset}, 0)`,
-        `D) (${5 + mathOffset}, 0)`,
-      ],
-      correctIndex: 0,
-      explanation_vi: 'Giao điểm với trục tung (y-intercept) đạt được khi thay x = 0 vào hàm số: f(0) = (0 - a)(0 + b) = -ab.',
-    },
-    {
-      id: `${examKey}_q8`,
-      order: 8,
-      section: 'math',
-      domain: 'Problem-Solving and Data Analysis',
-      passage: undefined,
-      question: `A retail store purchased an electronic item for $${100 + 10 * mathOffset}. The manager marked up the price by 20%. During a holiday sale, the item was discounted by 10%. What was the final selling price?`,
-      choices: [
-        `A) $${((100 + 10 * mathOffset) * 1.2 * 0.9).toFixed(2)}`,
-        `B) $${((100 + 10 * mathOffset) * 1.1).toFixed(2)}`,
-        `C) $${((100 + 10 * mathOffset) * 1.25).toFixed(2)}`,
-        `D) $${((100 + 10 * mathOffset) * 0.9).toFixed(2)}`,
-      ],
-      correctIndex: 0,
-      explanation_vi: 'Giá bán sau tăng 20%: P1 = P0 * 1.2. Giá bán cuối sau giảm 10%: P2 = P1 * 0.9 = P0 * 1.08.',
-    },
-    {
-      id: `${examKey}_q9`,
-      order: 9,
-      section: 'math',
-      domain: 'Geometry and Trigonometry',
-      passage: undefined,
-      question: `In a right triangle XYZ with right angle at Y, the length of side XY is ${8 + 2 * mathOffset} and YZ is ${6 + 2 * mathOffset}. What is the value of tan(X)?`,
-      choices: [
-        `A) ${(6 + 2 * mathOffset) / (8 + 2 * mathOffset) === 0.75 ? '3/4' : `${6 + 2 * mathOffset}/${8 + 2 * mathOffset}`}`,
-        `B) ${(8 + 2 * mathOffset) / (6 + 2 * mathOffset) === 1.33 ? '4/3' : `${8 + 2 * mathOffset}/${6 + 2 * mathOffset}`}`,
-        `C) 3/5`,
-        `D) 4/5`,
-      ],
-      correctIndex: 0,
-      explanation_vi: 'Trong tam giác vuông: tan(X) = cạnh đối / cạnh kề = YZ / XY.',
-    },
-    {
-      id: `${examKey}_q10`,
-      order: 10,
-      section: 'math',
-      domain: 'Advanced Math',
-      passage: undefined,
-      question: `For what value of k does the equation x^2 - ${4 + 2 * mathOffset}x + k = 0 have exactly one real solution?`,
-      choices: [
-        `A) ${Math.pow((4 + 2 * mathOffset) / 2, 2)}`,
-        `B) ${Math.pow((4 + 2 * mathOffset) / 2, 2) + 4}`,
-        `C) ${Math.pow((4 + 2 * mathOffset) / 2, 2) - 4}`,
-        `D) ${4 + 2 * mathOffset}`,
-      ],
-      correctIndex: 0,
-      explanation_vi: 'Phương trình bậc hai có nghiệm kép khi và chỉ khi biệt thức Delta = b^2 - 4ac = 0 => k = (b/2)^2.',
-    },
-  ];
-}
-
-const CUSTOM_EXAMS_METADATA: Record<string, { title: string; region: string; offset: number }> = {
-  'sat-mock-03': { title: 'Digital SAT Practice Test 3 (Official Bluebook Format)', region: 'Mesoamerica', offset: 1 },
-  'sat-mock-04': { title: 'Digital SAT Practice Test 4 (Advanced High-Score Drill)', region: 'the Aegean Archipelago', offset: 2 },
-  'sat-mock-05': { title: 'Digital SAT Practice Test 5 (Official Bluebook Full Module)', region: 'the Indus Valley', offset: 3 },
-  'sat-mock-06': { title: 'Digital SAT Practice Test 6 (Official Bluebook Full Module)', region: 'Sub-Saharan Africa', offset: 4 },
-  'sat-qas-2024-03': { title: 'Digital SAT QAS Tháng 03/2024 (US Official Test)', region: 'Central Anatolia', offset: 5 },
-  'sat-qas-2024-05': { title: 'Digital SAT QAS Tháng 05/2024 (International Official Test)', region: 'Polynesia', offset: 6 },
-  'sat-qas-2024-06': { title: 'Digital SAT QAS Tháng 06/2024 (US Official Test)', region: 'Ancient Mesopotamia', offset: 7 },
-  'sat-qas-2024-08': { title: 'Digital SAT QAS Tháng 08/2024 (International Official Test)', region: 'Scandinavia', offset: 8 },
-  'sat-qas-2024-10': { title: 'Digital SAT QAS Tháng 10/2024 (US Official Test)', region: 'the Mediterranean Basin', offset: 9 },
-  'sat-qas-2024-11': { title: 'Digital SAT QAS Tháng 11/2024 (International Official Test)', region: 'East Asia', offset: 10 },
-};
-
-// ----------------------------------------------------------------------------
-// NẠP ĐỀ THEO EXAM ID
-// ----------------------------------------------------------------------------
-function loadExamById(examId: string): { title: string; durationMinutes: number; questions: ExamQuestion[] } {
-  const normId = (examId || '').toLowerCase().trim();
-
-  // Test 1 aliases
-  if (normId === 'sat-mock-01' || normId === 'mock_sat_1' || normId === '1') {
-    const rawList = (mockExamsData as { exams?: RawExamItem[] })?.exams || [];
-    const rawExam = rawList.find((e) => e.id === 'mock_sat_1') || rawList[0];
-    if (rawExam) {
-      return {
-        title: rawExam.title || 'Digital SAT Practice Test 1 (Bản Chuẩn College Board)',
-        durationMinutes: 32,
-        questions: parseMockExamQuestions(rawExam),
-      };
-    }
-  }
-
-  // Test 2 aliases
-  if (normId === 'sat-mock-02' || normId === 'mock_sat_2' || normId === '2') {
-    const rawList = (mockExamsData as { exams?: RawExamItem[] })?.exams || [];
-    const rawExam = rawList.find((e) => e.id === 'mock_sat_2') || rawList[1];
-    if (rawExam) {
-      return {
-        title: rawExam.title || 'Digital SAT Practice Test 2 (Bản Nâng Cao Phân Hóa)',
-        durationMinutes: 32,
-        questions: parseMockExamQuestions(rawExam),
-      };
-    }
-  }
-
-  // Diagnostic
-  if (normId === 'sat-diagnostic-quick' || normId === 'diagnostic' || normId.includes('diagnostic')) {
-    return {
-      title: 'Đề Chẩn Đoán Nhanh 15 Phút (Diagnostic Quick Assessment)',
-      durationMinutes: 15,
-      questions: parseDiagnosticQuestions(diagnosticQuestionsData as RawDiagQuestion[]),
-    };
-  }
-
-  // Custom mock and QAS
-  if (CUSTOM_EXAMS_METADATA[normId]) {
-    const meta = CUSTOM_EXAMS_METADATA[normId];
-    return {
-      title: meta.title,
-      durationMinutes: 32,
-      questions: createDedicatedExamQuestions(normId, meta.region, meta.offset),
-    };
-  }
-
-  // Fallback: Nếu không tìm thấy, trả về bộ mẫu kết hợp đầy đủ
-  return {
-    title: `Digital SAT Practice Test (${examId.toUpperCase()})`,
-    durationMinutes: 32,
-    questions: createDedicatedExamQuestions(normId, 'Global', 1),
-  };
 }
 
 export default function ExamPage() {
@@ -511,15 +131,17 @@ export default function ExamPage() {
   const router = useRouter();
   const examId = (params?.id as string) || 'sat-mock-01';
 
-  // Tải ngân hàng câu hỏi động theo đúng examId
-  const examData = useMemo(() => loadExamById(examId), [examId]);
-  const questions = examData.questions;
-  const examTitle = examData.title;
-  const durationMinutes = examData.durationMinutes;
+  // Dữ liệu đề thi nạp từ server (/api/exams/start) — không nhúng mock_exams.json 1.1MB vào client bundle
+  const [questions, setQuestions] = useState<ExamQuestion[]>([]);
+  const [examTitle, setExamTitle] = useState<string>(`Digital SAT Practice Test (${examId.toUpperCase()})`);
+  const [isLoadingExam, setIsLoadingExam] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState<number>(0);
 
   // State câu hỏi & điều hướng
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [sprAnswers, setSprAnswers] = useState<Record<string, string>>({});
   const [flagged, setFlagged] = useState<Record<string, boolean>>({});
 
   // #C011: Tỷ lệ Split-Pane (40/60, 50/50, 60/40)
@@ -527,7 +149,6 @@ export default function ExamPage() {
 
   // #C012 & #C013: Topic Note & Gạch bỏ phương án (Eliminated Options)
   const [passageNotes, setPassageNotes] = useState<Record<string, string>>({});
-  const [passageHighlights, setPassageHighlights] = useState<Record<string, string[]>>({});
   const [eliminatedOptions, setEliminatedOptions] = useState<Record<string, number[]>>({});
   const [eliminationMode, setEliminationMode] = useState<boolean>(false);
 
@@ -546,32 +167,84 @@ export default function ExamPage() {
   // #C019: Fullscreen mode
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
-  // #C020: Nộp bài & Thống kê
+  // #C020: Nộp bài & Chấm điểm server-authoritative
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
-  const [totalRemainingSeconds, setTotalRemainingSeconds] = useState<number>(durationMinutes * 60);
+  const [gradedResults, setGradedResults] = useState<Record<string, GradedQuestionResult>>({});
+  const [serverCorrectCount, setServerCorrectCount] = useState<number>(0);
+  const [zaloCopied, setZaloCopied] = useState<boolean>(false);
+  const [totalRemainingSeconds, setTotalRemainingSeconds] = useState<number>(32 * 60);
   const [isTimerHidden, setIsTimerHidden] = useState<boolean>(false);
 
-  // Reset state khi đổi đề thi
+  // Nạp đề đã strip đáp án từ /api/exams/start
   useEffect(() => {
-    setCurrentIndex(0);
-    setAnswers({});
-    setFlagged({});
-    setTimeSpentPerQuestion({});
-    setIsPacingAlertDismissed({});
-    setEliminatedOptions({});
-    setPassageNotes({});
-    setPassageHighlights({});
-    setIsSubmitted(false);
-    setTotalRemainingSeconds(durationMinutes * 60);
-  }, [examId, durationMinutes]);
+    let cancelled = false;
+    async function fetchExam() {
+      setIsLoadingExam(true);
+      setLoadError(null);
+      setCurrentIndex(0);
+      setAnswers({});
+      setSprAnswers({});
+      setFlagged({});
+      setTimeSpentPerQuestion({});
+      setIsPacingAlertDismissed({});
+      setEliminatedOptions({});
+      setPassageNotes({});
+      setIsSubmitted(false);
+      setGradedResults({});
+      setServerCorrectCount(0);
+      setZaloCopied(false);
 
-  const currentQ = questions[currentIndex] || questions[0] || SAMPLE_QUESTIONS[0];
+      try {
+        const res = await fetch('/api/exams/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ examId, mode: 'mock' }),
+        });
+        const data: ApiStartResponse = await res.json();
+        if (!res.ok) {
+          throw new Error(data?.error || 'Không thể tải đề thi từ máy chủ.');
+        }
+        if (cancelled) return;
+
+        const parsed = parseServerModules(data);
+        if (parsed.length === 0) {
+          throw new Error('Đề thi chưa có câu hỏi. Vui lòng chọn đề khác.');
+        }
+        const mins =
+          typeof data.total_time_minutes === 'number' && data.total_time_minutes > 0
+            ? data.total_time_minutes
+            : examId.includes('diagnostic')
+            ? 15
+            : 32;
+
+        setQuestions(parsed);
+        setExamTitle(data.title || `Digital SAT Practice Test (${examId.toUpperCase()})`);
+        setTotalRemainingSeconds(mins * 60);
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : 'Lỗi kết nối máy chủ khi tải đề thi.');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingExam(false);
+        }
+      }
+    }
+
+    fetchExam();
+    return () => {
+      cancelled = true;
+    };
+  }, [examId, reloadNonce]);
+
+  const currentQ = questions[currentIndex] || questions[0];
 
   // --------------------------------------------------------------------------
   // TIMER & PACING MONITOR (#C016)
   // --------------------------------------------------------------------------
   useEffect(() => {
-    if (isSubmitted) return;
+    if (isSubmitted || isLoadingExam || !currentQ) return;
     const interval = setInterval(() => {
       setTotalRemainingSeconds((prev) => (prev > 0 ? prev - 1 : 0));
       setTimeSpentPerQuestion((prev) => {
@@ -584,46 +257,40 @@ export default function ExamPage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [currentQ.id, isSubmitted]);
+  }, [currentQ, isSubmitted, isLoadingExam]);
 
-  const currentQuestionTime = timeSpentPerQuestion[currentQ.id] || 0;
-  const isStuckWarning = currentQuestionTime >= 90 && !isPacingAlertDismissed[currentQ.id];
+  const currentQuestionTime = currentQ ? timeSpentPerQuestion[currentQ.id] || 0 : 0;
+  const isStuckWarning = !!currentQ && currentQuestionTime >= 90 && !isPacingAlertDismissed[currentQ.id];
 
   // --------------------------------------------------------------------------
   // HOTKEYS (#C017)
   // --------------------------------------------------------------------------
   useEffect(() => {
+    if (!currentQ) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Bỏ qua khi đang gõ vào input hoặc textarea
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
 
       if (e.altKey) {
         if (e.key.toLowerCase() === 'f') {
           e.preventDefault();
-          // Alt+F: Toggle Flag
           setFlagged((prev) => ({ ...prev, [currentQ.id]: !prev[currentQ.id] }));
         } else if (e.key.toLowerCase() === 'c') {
           e.preventDefault();
-          // Alt+C: Toggle Desmos
           setIsDesmosOpen((prev) => !prev);
         } else if (e.key.toLowerCase() === 'r') {
           e.preventDefault();
-          // Alt+R: Toggle Reference Formula Sheet
           setIsFormulaOpen((prev) => !prev);
         } else if (e.key.toLowerCase() === 'x') {
           e.preventDefault();
-          // Alt+X: Toggle Elimination Mode
           setEliminationMode((prev) => !prev);
         } else if (e.key === 'ArrowRight') {
           e.preventDefault();
-          // Alt+Right: Next Question
           if (currentIndex < questions.length - 1) {
             setCurrentIndex((prev) => prev + 1);
           }
         } else if (e.key === 'ArrowLeft') {
           e.preventDefault();
-          // Alt+Left: Prev Question
           if (currentIndex > 0) {
             setCurrentIndex((prev) => prev - 1);
           }
@@ -633,7 +300,7 @@ export default function ExamPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentQ.id, currentIndex, questions.length]);
+  }, [currentQ, currentIndex, questions.length]);
 
   // --------------------------------------------------------------------------
   // FULLSCREEN TOGGLE (#C019)
@@ -651,6 +318,7 @@ export default function ExamPage() {
   // --------------------------------------------------------------------------
   const handleToggleEliminate = (choiceIdx: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!currentQ) return;
     const qid = currentQ.id;
     const currentList = eliminatedOptions[qid] || [];
     if (currentList.includes(choiceIdx)) {
@@ -663,7 +331,6 @@ export default function ExamPage() {
         ...eliminatedOptions,
         [qid]: [...currentList, choiceIdx],
       });
-      // Nếu đáp án bị gạch mà đang được chọn thì hủy chọn
       if (answers[qid] === choiceIdx) {
         const nextAnswers = { ...answers };
         delete nextAnswers[qid];
@@ -673,10 +340,10 @@ export default function ExamPage() {
   };
 
   const handleSelectAnswer = (choiceIdx: number) => {
+    if (!currentQ) return;
     const qid = currentQ.id;
     const eliminated = eliminatedOptions[qid] || [];
     if (eliminated.includes(choiceIdx)) {
-      // Bỏ gạch trước khi chọn
       setEliminatedOptions({
         ...eliminatedOptions,
         [qid]: eliminated.filter((idx) => idx !== choiceIdx),
@@ -684,6 +351,23 @@ export default function ExamPage() {
     }
     setAnswers({ ...answers, [qid]: choiceIdx });
   };
+
+  const isQuestionAnswered = useCallback(
+    (q: ExamQuestion): boolean => {
+      if (q.isSpr) return Boolean((sprAnswers[q.id] || '').trim());
+      return answers[q.id] !== undefined;
+    },
+    [answers, sprAnswers]
+  );
+
+  const getUserAnswerText = useCallback(
+    (q: ExamQuestion): string => {
+      if (q.isSpr) return (sprAnswers[q.id] || '').trim();
+      const idx = answers[q.id];
+      return idx !== undefined ? q.choices[idx] || '' : '';
+    },
+    [answers, sprAnswers]
+  );
 
   // --------------------------------------------------------------------------
   // SPLIT RATIO STYLES (#C011)
@@ -701,37 +385,125 @@ export default function ExamPage() {
   }, [splitRatio]);
 
   // --------------------------------------------------------------------------
-  // FILTERED QUESTIONS FOR NAV DRAWER (#C018)
+  // SUBMISSION & SERVER-AUTHORITATIVE GRADING (#G7, #C020)
   // --------------------------------------------------------------------------
-  const filteredQuestions = useMemo(() => {
-    return questions.filter((q) => {
-      const isAnswered = answers[q.id] !== undefined;
-      const isFlag = !!flagged[q.id];
-      if (navFilter === 'unanswered') return !isAnswered;
-      if (navFilter === 'flagged') return isFlag;
-      return true;
-    });
-  }, [questions, answers, flagged, navFilter]);
+  const handleSubmitExam = async () => {
+    if (isSubmitting || isSubmitted || questions.length === 0) return;
+    setIsSubmitting(true);
+    try {
+      const payloadAnswers = questions.map((q) => ({
+        questionId: q.questionId,
+        answer: getUserAnswerText(q),
+      }));
 
-  // --------------------------------------------------------------------------
-  // SUBMISSION & PACE BREAKDOWN (#C020)
-  // --------------------------------------------------------------------------
+      const res = await fetch('/api/exams/grade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ examId, answers: payloadAnswers }),
+      });
+
+      const data = await res.json();
+      const resultMap: Record<string, GradedQuestionResult> = {};
+      if (Array.isArray(data?.results)) {
+        for (const r of data.results as GradedQuestionResult[]) {
+          resultMap[r.questionId] = r;
+        }
+      }
+      const correctCount = typeof data?.correct === 'number' ? data.correct : 0;
+      setGradedResults(resultMap);
+      setServerCorrectCount(correctCount);
+      setIsSubmitted(true);
+
+      // Đồng bộ lịch sử bài thi & Sổ tay câu sai SAU KHI server chấm
+      if (typeof window !== 'undefined') {
+        try {
+          let totalSec = 0;
+          questions.forEach((q) => {
+            totalSec += timeSpentPerQuestion[q.id] || 0;
+          });
+          const ratio = questions.length > 0 ? correctCount / questions.length : 0;
+          const estimatedTotal = Math.round((400 + ratio * 1200) / 10) * 10;
+          const rwScore = Math.round(estimatedTotal / 2 / 10) * 10;
+          const mathScore = estimatedTotal - rwScore;
+
+          const rawHist = window.localStorage.getItem('sat_exam_history_v1');
+          const histList = rawHist ? JSON.parse(rawHist) : [];
+          const attemptRecord = {
+            id: `${examId}_${Date.now()}`,
+            examId,
+            examTitle,
+            totalScore: estimatedTotal,
+            rwScore,
+            mathScore,
+            correctCount,
+            totalCount: questions.length,
+            totalTimeSec: totalSec,
+            completedAt: new Date().toISOString(),
+          };
+          if (Array.isArray(histList)) {
+            const deduped = histList.filter((item: { examId?: string }) => item?.examId !== examId);
+            window.localStorage.setItem(
+              'sat_exam_history_v1',
+              JSON.stringify([attemptRecord, ...deduped].slice(0, 30))
+            );
+          }
+
+          const rawMistakes = window.localStorage.getItem('sat_mistake_bank_v1');
+          const mistakeList = rawMistakes ? JSON.parse(rawMistakes) : [];
+          const existingMistakes = Array.isArray(mistakeList) ? mistakeList : [];
+          const existingIds = new Set(
+            existingMistakes.map((m: { id?: string; questionId?: string }) => m.id || m.questionId)
+          );
+          const newMistakes = questions
+            .filter((q) => !resultMap[q.questionId]?.correct && !existingIds.has(q.id))
+            .map((q) => {
+              const graded = resultMap[q.questionId];
+              return {
+                id: q.id,
+                questionId: q.id,
+                subject: q.section === 'math' ? 'Math' : 'Reading & Writing',
+                domain: q.domain,
+                skill: q.domain,
+                stem: q.question,
+                passage: q.passage,
+                options: q.choices,
+                selectedAnswer: getUserAnswerText(q) || 'Chưa chọn',
+                correctAnswer: graded?.correctChoice || '',
+                explanationVi:
+                  graded?.explanation ||
+                  `Câu hỏi thuộc đề ${examTitle} (${q.domain}). Đáp án chuẩn: ${graded?.correctChoice || ''}.`,
+                rootCause: (timeSpentPerQuestion[q.id] || 0) > 90 ? 'Time Pressure' : 'Concept Gap',
+                mastered: false,
+                createdAt: new Date().toISOString(),
+              };
+            });
+          if (newMistakes.length > 0) {
+            window.localStorage.setItem(
+              'sat_mistake_bank_v1',
+              JSON.stringify([...newMistakes, ...existingMistakes].slice(0, 200))
+            );
+          }
+        } catch {
+          // Safe localStorage fallback
+        }
+      }
+    } catch (err) {
+      console.error('Submit exam error:', err);
+      setIsSubmitted(true);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const paceSummary = useMemo(() => {
     let totalSec = 0;
     let totalEliminated = 0;
     let answeredCount = 0;
-    let correctCount = 0;
 
     questions.forEach((q) => {
-      const sec = timeSpentPerQuestion[q.id] || 0;
-      totalSec += sec;
+      totalSec += timeSpentPerQuestion[q.id] || 0;
       totalEliminated += (eliminatedOptions[q.id] || []).length;
-      if (answers[q.id] !== undefined) {
-        answeredCount++;
-        if (answers[q.id] === q.correctIndex) {
-          correctCount++;
-        }
-      }
+      if (isQuestionAnswered(q)) answeredCount++;
     });
 
     const avgSecPerQuestion = questions.length > 0 ? Math.round(totalSec / questions.length) : 0;
@@ -741,11 +513,11 @@ export default function ExamPage() {
       avgSecPerQuestion,
       answeredCount,
       totalCount: questions.length,
-      correctCount,
+      correctCount: serverCorrectCount,
       totalEliminated,
       flaggedCount: Object.values(flagged).filter(Boolean).length,
     };
-  }, [questions, answers, timeSpentPerQuestion, eliminatedOptions, flagged]);
+  }, [questions, timeSpentPerQuestion, eliminatedOptions, flagged, isQuestionAnswered, serverCorrectCount]);
 
   // Format mm:ss
   const formatTime = (totalSeconds: number) => {
@@ -753,6 +525,61 @@ export default function ExamPage() {
     const secs = totalSeconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+  const handleCopyZaloReport = () => {
+    const ratio = paceSummary.totalCount > 0 ? paceSummary.correctCount / paceSummary.totalCount : 0;
+    const estimatedTotal = Math.round((400 + ratio * 1200) / 10) * 10;
+    const msg = [
+      `📊 BÁO CÁO KẾT QUẢ THI THỬ DIGITAL SAT — SAT.GURU`,
+      `• Đề thi: ${examTitle}`,
+      `• Điểm quy đổi dự kiến: ${estimatedTotal} / 1600 (${paceSummary.correctCount}/${paceSummary.totalCount} câu đúng)`,
+      `• Tốc độ trung bình: ${paceSummary.avgSecPerQuestion}s/câu | Tổng thời gian: ${formatTime(paceSummary.totalTimeSec)}`,
+      `• Cố vấn học thuật Thầy Nghĩa Guru (SAT.Guru) — Hotline/Zalo: 0986.722.324`,
+    ].join('\n');
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(msg).catch(() => {});
+    }
+    setZaloCopied(true);
+    setTimeout(() => setZaloCopied(false), 3000);
+  };
+
+  if (isLoadingExam) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen w-screen bg-slate-950 text-slate-200 gap-3">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+        <p className="text-sm font-medium">Đang tải đề thi chuẩn Bluebook từ máy chủ bảo mật...</p>
+      </div>
+    );
+  }
+
+  if (loadError || !currentQ) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen w-screen bg-slate-950 text-slate-200 gap-4 p-6 text-center">
+        <AlertCircle className="w-10 h-10 text-amber-400" />
+        <div className="space-y-1 max-w-md">
+          <h2 className="text-base font-bold text-white">Không thể khởi tạo phòng thi</h2>
+          <p className="text-xs text-slate-400">{loadError || 'Vui lòng thử lại hoặc chọn đề khác trong kho đề.'}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setReloadNonce((n) => n + 1)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Thử tải lại</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push('/exams')}
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+          >
+            Về kho đề thi
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 select-none overflow-hidden font-sans">
@@ -871,7 +698,6 @@ export default function ExamPage() {
       {/* ==================================================================== */}
       <div className="h-10 px-4 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 text-xs">
         <div className="flex items-center gap-3">
-          {/* Flag for review */}
           <button
             type="button"
             onClick={() => setFlagged({ ...flagged, [currentQ.id]: !flagged[currentQ.id] })}
@@ -886,20 +712,21 @@ export default function ExamPage() {
             <span>{flagged[currentQ.id] ? 'Đã đánh dấu xem lại' : 'Đánh dấu xem lại (Alt+F)'}</span>
           </button>
 
-          {/* #C013: Option elimination mode toggle */}
-          <button
-            type="button"
-            onClick={() => setEliminationMode(!eliminationMode)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold transition-all ${
-              eliminationMode
-                ? 'bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-700'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
-            }`}
-            title="Chế độ gạch bỏ phương án sai (Alt+X)"
-          >
-            <Strikethrough className="w-3.5 h-3.5" />
-            <span>Gạch bỏ đáp án (Alt+X)</span>
-          </button>
+          {!currentQ.isSpr && (
+            <button
+              type="button"
+              onClick={() => setEliminationMode(!eliminationMode)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-semibold transition-all ${
+                eliminationMode
+                  ? 'bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-700'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+              }`}
+              title="Chế độ gạch bỏ phương án sai (Alt+X)"
+            >
+              <Strikethrough className="w-3.5 h-3.5" />
+              <span>Gạch bỏ đáp án (Alt+X)</span>
+            </button>
+          )}
         </div>
 
         {/* #C016: Smart Pacing Alert Pill */}
@@ -927,7 +754,7 @@ export default function ExamPage() {
       </div>
 
       {/* ==================================================================== */}
-      {/* 3. SPLIT-PANE MAIN STAGE (#C011)                                     */}
+      {/* 3. SPLIT-PANE MAIN STAGE (#C011, #G2)                                */}
       {/* ==================================================================== */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         {/* LEFT PANE: Passage & Notes (#C012) */}
@@ -943,12 +770,10 @@ export default function ExamPage() {
                 <span className="text-[11px] text-slate-400">SAT Standard Text</span>
               </div>
 
-              {/* Nội dung đoạn văn */}
               <div className="text-sm sm:text-base leading-relaxed text-slate-800 dark:text-slate-200 font-serif selection:bg-yellow-200 dark:selection:bg-yellow-900">
                 {currentQ.passage}
               </div>
 
-              {/* #C012: Thanh ghi chú câu chủ đề / Highlight nhanh */}
               <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
                   <Highlighter className="w-3.5 h-3.5 text-indigo-500" />
@@ -985,13 +810,12 @@ export default function ExamPage() {
           className={`${rightPaneClass} flex flex-col h-full overflow-y-auto p-6 custom-scrollbar bg-slate-50 dark:bg-slate-950`}
         >
           <div className="space-y-6 max-w-2xl mx-auto w-full">
-            {/* Question Text */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-xs px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
                   Câu hỏi {currentIndex + 1}
                 </span>
-                {eliminationMode && (
+                {!currentQ.isSpr && eliminationMode && (
                   <span className="text-[11px] text-red-600 font-semibold bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded border border-red-200">
                     Bấm vào dấu gạch (/) để loại phương án
                   </span>
@@ -1002,61 +826,80 @@ export default function ExamPage() {
               </h2>
             </div>
 
-            {/* Choices list with Elimination Support (#C013) */}
-            <div className="space-y-3">
-              {currentQ.choices.map((choice, cIdx) => {
-                const isSelected = answers[currentQ.id] === cIdx;
-                const isEliminated = (eliminatedOptions[currentQ.id] || []).includes(cIdx);
+            {currentQ.isSpr ? (
+              <div className="space-y-3 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <label
+                  htmlFor="spr-input"
+                  className="block text-xs font-semibold text-slate-600 dark:text-slate-300"
+                >
+                  Câu hỏi tự điền số (Student-Produced Response — tối đa 5 ký tự dương / 6 ký tự âm, hỗ trợ phân số a/b hoặc số thập phân):
+                </label>
+                <input
+                  id="spr-input"
+                  type="text"
+                  maxLength={6}
+                  value={sprAnswers[currentQ.id] || ''}
+                  onChange={(e) => {
+                    const cleaned = e.target.value.replace(/[^0-9./-]/g, '');
+                    setSprAnswers({ ...sprAnswers, [currentQ.id]: cleaned });
+                  }}
+                  placeholder="Nhập đáp án (vd: 12, 3/4, -2.5)"
+                  className="w-full max-w-xs px-3.5 py-2.5 rounded-lg border-2 border-indigo-300 dark:border-indigo-700 bg-slate-50 dark:bg-slate-800 font-mono text-base font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {currentQ.choices.map((choice, cIdx) => {
+                  const isSelected = answers[currentQ.id] === cIdx;
+                  const isEliminated = (eliminatedOptions[currentQ.id] || []).includes(cIdx);
 
-                return (
-                  <div
-                    key={cIdx}
-                    onClick={() => !isEliminated && handleSelectAnswer(cIdx)}
-                    className={`group relative flex items-start gap-3 p-3.5 rounded-xl border-2 transition-all cursor-pointer select-none ${
-                      isEliminated
-                        ? 'opacity-40 bg-slate-100 dark:bg-slate-900 border-dashed border-slate-300 dark:border-slate-800'
-                        : isSelected
-                        ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-600 shadow-sm'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    {/* Radio indicator */}
+                  return (
                     <div
-                      className={`w-5 h-5 rounded-full border-2 mt-0.5 flex items-center justify-center shrink-0 transition-colors ${
-                        isSelected
-                          ? 'border-indigo-600 bg-indigo-600 text-white'
-                          : 'border-slate-300 dark:border-slate-600'
-                      }`}
-                    >
-                      {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
-                    </div>
-
-                    {/* Choice text */}
-                    <div
-                      className={`text-sm sm:text-base flex-1 leading-relaxed ${
-                        isEliminated ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-200'
-                      }`}
-                    >
-                      {choice}
-                    </div>
-
-                    {/* Elimination button (#C013) */}
-                    <button
-                      type="button"
-                      onClick={(e) => handleToggleEliminate(cIdx, e)}
-                      title={isEliminated ? 'Khôi phục phương án này' : 'Gạch bỏ phương án sai này'}
-                      className={`p-1.5 rounded-lg transition-colors ${
+                      key={cIdx}
+                      onClick={() => !isEliminated && handleSelectAnswer(cIdx)}
+                      className={`group relative flex items-start gap-3 p-3.5 rounded-xl border-2 transition-all cursor-pointer select-none ${
                         isEliminated
-                          ? 'text-red-600 bg-red-50 dark:bg-red-950/60'
-                          : 'text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-60 group-hover:opacity-100'
+                          ? 'opacity-40 bg-slate-100 dark:bg-slate-900 border-dashed border-slate-300 dark:border-slate-800'
+                          : isSelected
+                          ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-600 shadow-sm'
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                       }`}
                     >
-                      <Strikethrough className="w-4 h-4" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 mt-0.5 flex items-center justify-center shrink-0 transition-colors ${
+                          isSelected
+                            ? 'border-indigo-600 bg-indigo-600 text-white'
+                            : 'border-slate-300 dark:border-slate-600'
+                        }`}
+                      >
+                        {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                      </div>
+
+                      <div
+                        className={`text-sm sm:text-base flex-1 leading-relaxed ${
+                          isEliminated ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-800 dark:text-slate-200'
+                        }`}
+                      >
+                        {choice}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={(e) => handleToggleEliminate(cIdx, e)}
+                        title={isEliminated ? 'Khôi phục phương án này' : 'Gạch bỏ phương án sai này'}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          isEliminated
+                            ? 'text-red-600 bg-red-50 dark:bg-red-950/60'
+                            : 'text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-60 group-hover:opacity-100'
+                        }`}
+                      >
+                        <Strikethrough className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1066,7 +909,6 @@ export default function ExamPage() {
       {/* ==================================================================== */}
       <footer className="h-16 px-4 bg-slate-900 text-white flex items-center justify-between border-t border-slate-800 shrink-0 z-30">
         <div className="flex items-center gap-2">
-          {/* #C018: Question Navigator trigger */}
           <button
             type="button"
             onClick={() => setIsNavOpen(true)}
@@ -1079,7 +921,6 @@ export default function ExamPage() {
           </button>
         </div>
 
-        {/* Prev / Next controls */}
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -1103,11 +944,12 @@ export default function ExamPage() {
           ) : (
             <button
               type="button"
-              onClick={() => setIsSubmitted(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition-colors animate-pulse"
+              onClick={handleSubmitExam}
+              disabled={isSubmitting}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-semibold shadow transition-colors"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Nộp bài thi</span>
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              <span>{isSubmitting ? 'Đang chấm điểm...' : 'Nộp bài thi'}</span>
             </button>
           )}
         </div>
@@ -1141,7 +983,6 @@ export default function ExamPage() {
               </button>
             </div>
 
-            {/* #C018: 3 Filter Tabs */}
             <div className="flex items-center border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-4 py-2 gap-2 text-xs">
               {(
                 [
@@ -1165,15 +1006,13 @@ export default function ExamPage() {
               ))}
             </div>
 
-            {/* Question Badges Grid */}
             <div className="p-5 max-h-72 overflow-y-auto custom-scrollbar">
               <div className="grid grid-cols-5 gap-3">
                 {questions.map((q, idx) => {
                   const isCurrent = idx === currentIndex;
-                  const isAnswered = answers[q.id] !== undefined;
+                  const isAnswered = isQuestionAnswered(q);
                   const isFlag = !!flagged[q.id];
 
-                  // Filter visibility
                   if (navFilter === 'unanswered' && isAnswered) return null;
                   if (navFilter === 'flagged' && !isFlag) return null;
 
@@ -1206,8 +1045,8 @@ export default function ExamPage() {
             </div>
 
             <div className="p-3 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-[11px] text-slate-500">
-              <span>Đã làm: {Object.keys(answers).length}/{questions.length}</span>
-              <span>Gắn cờ: {Object.values(flagged).filter(Boolean).length}</span>
+              <span>Đã làm: {paceSummary.answeredCount}/{questions.length}</span>
+              <span>Gắn cờ: {paceSummary.flaggedCount}</span>
             </div>
           </div>
         </div>
@@ -1227,11 +1066,10 @@ export default function ExamPage() {
                 Hoàn thành bài thi: {examTitle}
               </h2>
               <p className="text-xs text-slate-500">
-                Mã đề: {examId.toUpperCase()} • Thống kê nhịp độ làm bài & phân tích hiệu suất chuẩn College Board
+                Mã đề: {examId.toUpperCase()} • Kết quả chấm bảo mật từ máy chủ chuẩn College Board
               </p>
             </div>
 
-            {/* Grid 4 chỉ số Pacing */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                 <div className="text-[11px] text-slate-500">Tổng thời gian</div>
@@ -1255,22 +1093,22 @@ export default function ExamPage() {
               </div>
 
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                <div className="text-[11px] text-slate-500">Điểm đúng sơ bộ</div>
+                <div className="text-[11px] text-slate-500">Kết quả chấm</div>
                 <div className="text-base font-bold text-emerald-600 dark:text-emerald-400">
                   {paceSummary.correctCount} / {paceSummary.totalCount}
                 </div>
               </div>
             </div>
 
-            {/* Chi tiết từng câu */}
             <div className="space-y-2">
               <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                Phân bổ thời gian từng câu:
+                Phân bổ thời gian &amp; đáp án từng câu:
               </div>
               <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar text-xs">
                 {questions.map((q, idx) => {
                   const sec = timeSpentPerQuestion[q.id] || 0;
-                  const isRight = answers[q.id] === q.correctIndex;
+                  const graded = gradedResults[q.questionId];
+                  const isRight = !!graded?.correct;
                   return (
                     <div
                       key={q.id}
@@ -1287,7 +1125,9 @@ export default function ExamPage() {
                         {isRight ? (
                           <span className="text-emerald-600 font-semibold">Đúng (+1)</span>
                         ) : (
-                          <span className="text-red-500 font-semibold">Chưa đúng</span>
+                          <span className="text-red-500 font-semibold">
+                            Chưa đúng{graded?.correctChoice ? ` (ĐA: ${graded.correctChoice})` : ''}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -1296,8 +1136,21 @@ export default function ExamPage() {
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+            <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={handleCopyZaloReport}
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm"
+              >
+                {zaloCopied ? '✅ Đã sao chép báo cáo Zalo!' : '📲 Sao Chép Báo Cáo Gửi Phụ Huynh (Zalo)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/mistakes')}
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25"
+              >
+                📓 Ôn Câu Sai Vừa Làm
+              </button>
               <button
                 type="button"
                 onClick={() => setIsSubmitted(false)}
@@ -1318,10 +1171,14 @@ export default function ExamPage() {
       )}
 
       {/* ==================================================================== */}
-      {/* 7. INTEGRATED POPUPS: DESMOS & FORMULA SHEET                         */}
+      {/* 7. INTEGRATED POPUPS: DESMOS & FORMULA SHEET (ErrorBoundary #G2)     */}
       {/* ==================================================================== */}
-      <DesmosCalculator isOpen={isDesmosOpen} onClose={() => setIsDesmosOpen(false)} />
-      <FormulaSheetModal isOpen={isFormulaOpen} onClose={() => setIsFormulaOpen(false)} />
+      <ErrorBoundary label="Máy tính Desmos">
+        <DesmosCalculator isOpen={isDesmosOpen} onClose={() => setIsDesmosOpen(false)} />
+      </ErrorBoundary>
+      <ErrorBoundary label="Bảng công thức">
+        <FormulaSheetModal isOpen={isFormulaOpen} onClose={() => setIsFormulaOpen(false)} />
+      </ErrorBoundary>
     </div>
   );
 }

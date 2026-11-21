@@ -87,9 +87,19 @@ const SAMPLE_4_WEEK_CURRICULUM = [
 const MODULE_ROUTE: Record<string, string> = {
   math: '/math',
   literature: '/literature',
-  vocab: '/vocabulary',
+  vocab: '/vocab',
   desmos: '/desmos',
 };
+
+interface DiagnosticResult {
+  math: number;
+  reading: number;
+  total: number;
+  confidence: string;
+  totalAttempts?: number;
+  focusSkills?: Array<{ id: string; label: string; score: number; subject: string }>;
+  completedAt?: string;
+}
 
 function practiceHref(skill: PlanFocusSkill): string {
   return `/grind?skillId=${encodeURIComponent(skill.skillId)}`;
@@ -102,6 +112,37 @@ export default function JourneyPage() {
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null);
+  const [unmasteredMistakeCount, setUnmasteredMistakeCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const diagRaw = localStorage.getItem('sat_diagnostic_result');
+        if (diagRaw) {
+          const parsed = JSON.parse(diagRaw);
+          if (parsed && typeof parsed.total === 'number') {
+            setDiagnosticResult(parsed);
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      try {
+        const mistakeRaw = localStorage.getItem('sat_mistake_bank_v1');
+        if (mistakeRaw) {
+          const parsedM = JSON.parse(mistakeRaw);
+          if (Array.isArray(parsedM)) {
+            const count = parsedM.filter((item: any) => !item.isMastered).length;
+            setUnmasteredMistakeCount(count);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -151,6 +192,167 @@ export default function JourneyPage() {
           </div>
         </div>
       </div>
+
+      {/* =========================================================================
+          ADDITIVE-ONLY: 🎯 CHẨN ĐOÁN ĐẦU VÀO & LỖ HỔNG CẦN LẤP ĐẦY
+          Hiển thị điểm chẩn đoán baseline, các kỹ năng yếu và số lỗi sai chưa phục thù
+          ========================================================================= */}
+      <section className="bg-gradient-to-r from-[#111927] via-[#1a2333] to-[#111927] border border-emerald-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-800">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">🎯</span>
+            <div>
+              <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1 border border-emerald-500/20">
+                Chẩn Đoán &amp; Lỗ Hổng Kiến Thức
+              </div>
+              <h2 className="text-xl md:text-2xl font-black text-white">
+                CHẨN ĐOÁN ĐẦU VÀO &amp; LỖ HỔNG CẦN LẤP ĐẦY
+              </h2>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/diagnostic"
+              className="text-xs font-bold px-3.5 py-2 rounded-lg bg-[#1f2937] hover:bg-[#374151] border border-gray-700 text-gray-200 transition-colors whitespace-nowrap"
+            >
+              {diagnosticResult ? '🔄 Làm lại Diagnostic' : '🚀 Làm Diagnostic ngay'}
+            </Link>
+            <Link
+              href="/mistakes"
+              className="text-xs font-bold px-3.5 py-2 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-300 transition-colors whitespace-nowrap"
+            >
+              📕 Sổ tay lỗi sai
+            </Link>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-5">
+          {/* Cột 1: Điểm Diagnostic Baseline & Kỹ năng yếu */}
+          <div className="bg-[#0b1017] rounded-xl p-5 border border-gray-800 flex flex-col justify-between">
+            <div>
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                <span>Điểm Chuẩn Đầu Vào (Diagnostic)</span>
+                {diagnosticResult?.completedAt && (
+                  <span className="text-[11px] text-gray-500 font-normal">
+                    {new Date(diagnosticResult.completedAt).toLocaleDateString('vi-VN')}
+                  </span>
+                )}
+              </div>
+
+              {diagnosticResult ? (
+                <div>
+                  <div className="flex items-baseline gap-3 mb-3">
+                    <span className="text-3xl md:text-4xl font-black text-emerald-400">
+                      {diagnosticResult.total}
+                    </span>
+                    <span className="text-gray-400 text-sm font-medium">/ 1600 điểm</span>
+                    <span className="text-xs px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800">
+                      Đã xác thực
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mb-4 text-center">
+                    <div className="bg-[#151d29] p-2.5 rounded-lg border border-gray-800">
+                      <div className="text-xs text-gray-400">Math</div>
+                      <div className="text-lg font-bold text-blue-300">{diagnosticResult.math}</div>
+                    </div>
+                    <div className="bg-[#151d29] p-2.5 rounded-lg border border-gray-800">
+                      <div className="text-xs text-gray-400">Reading &amp; Writing</div>
+                      <div className="text-lg font-bold text-purple-300">{diagnosticResult.reading}</div>
+                    </div>
+                  </div>
+
+                  {diagnosticResult.focusSkills && diagnosticResult.focusSkills.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold text-amber-400 mb-2">⚡ Kỹ năng cần tập trung gấp:</p>
+                      <div className="space-y-1.5">
+                        {diagnosticResult.focusSkills.slice(0, 3).map((s) => (
+                          <div
+                            key={s.id}
+                            className="text-xs flex items-center justify-between bg-[#151d29] px-3 py-1.5 rounded border border-gray-800 text-gray-300"
+                          >
+                            <span className="truncate pr-2 font-medium">• {s.label}</span>
+                            <span className="text-amber-400 font-bold shrink-0">{s.score}/100</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3 py-2">
+                  <p className="text-sm text-gray-300">
+                    Bạn chưa hoàn thành bài test xếp lớp đầu vào. Làm bài test 5–10 phút để nhận điểm SAT ước lượng và gợi ý điểm yếu chính xác.
+                  </p>
+                  <Link
+                    href="/diagnostic"
+                    className="inline-flex items-center gap-2 text-xs font-bold text-emerald-400 hover:text-emerald-300 underline"
+                  >
+                    🚀 Bắt đầu làm bài test Diagnostic miễn phí →
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-4 mt-3 border-t border-gray-800/80 flex items-center justify-between text-xs">
+              <span className="text-gray-400">Lộ trình dựa trên chẩn đoán:</span>
+              <Link href="/diagnostic" className="text-emerald-400 hover:text-emerald-300 font-semibold">
+                {diagnosticResult ? 'Xem chi tiết test →' : 'Làm test ngay →'}
+              </Link>
+            </div>
+          </div>
+
+          {/* Cột 2: Sổ Tay Lỗi Sai (Mistake Bank Gaps) */}
+          <div className="bg-[#0b1017] rounded-xl p-5 border border-gray-800 flex flex-col justify-between">
+            <div>
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                <span>Lỗ Hổng Lỗi Sai (Error Log &amp; Retries)</span>
+                <span className="text-[11px] text-rose-400 font-bold">
+                  {unmasteredMistakeCount > 0 ? `${unmasteredMistakeCount} câu chưa phục thù` : 'Đã sạch lỗi'}
+                </span>
+              </div>
+
+              <div className="flex items-baseline gap-3 mb-3">
+                <span className={`text-3xl md:text-4xl font-black ${unmasteredMistakeCount > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  {unmasteredMistakeCount}
+                </span>
+                <span className="text-gray-400 text-sm font-medium">câu hỏi cần phục thù</span>
+                {unmasteredMistakeCount > 0 && (
+                  <span className="text-xs px-2 py-0.5 rounded bg-rose-950/60 text-rose-300 border border-rose-800">
+                    Cần giải quyết
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs text-gray-300 leading-relaxed mb-4">
+                {unmasteredMistakeCount > 0
+                  ? `Bạn đang có ${unmasteredMistakeCount} câu hỏi bị làm sai hoặc sập bẫy College Board chưa được làm lại thành công. Lấp các lỗ hổng này mang lại ROI điểm số nhanh nhất (+30~50đ).`
+                  : 'Xuất sắc! Bạn không có lỗi sai nào tồn đọng chưa phục thù. Tiếp tục luyện tập đề mới để phát hiện thêm các bẫy tư duy tiềm ẩn.'}
+              </p>
+
+              <div className="bg-[#151d29] p-3 rounded-lg border border-gray-800 space-y-2">
+                <div className="flex items-center justify-between text-xs text-gray-300">
+                  <span>Trạng thái Sổ Tay:</span>
+                  <span className={unmasteredMistakeCount > 0 ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}>
+                    {unmasteredMistakeCount > 0 ? 'Cần ôn tập lại' : 'Tối ưu 100%'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-gray-300">
+                  <span>Chế độ:</span>
+                  <span className="text-rose-300 font-medium">Làm Lại Phục Thù (Retry Mode)</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 mt-3 border-t border-gray-800/80 flex items-center justify-between text-xs">
+              <span className="text-gray-400">Vào Sổ Tay Lỗi Sai:</span>
+              <Link href="/mistakes" className="text-rose-400 hover:text-rose-300 font-semibold">
+                Mở Sổ Tay Lỗi Sai →
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {loading && <LoadingState message="Đang dựng lộ trình cá nhân của bạn..." />}
 

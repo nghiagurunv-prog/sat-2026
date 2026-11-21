@@ -19,10 +19,10 @@ create table if not exists public.ai_chat_cache (
 
 alter table public.ai_chat_cache enable row level security;
 
--- Mọi user đã đăng nhập đều đọc/ghi cache chung (KHÔNG ràng theo user_id).
-create policy "auth_read_chat_cache"   on public.ai_chat_cache
+-- Chỉ cho phép authenticated ĐỌC cache chung; ghi/cập nhật độc quyền cho service_role (chống Cache Poisoning).
+drop policy if exists "auth_read_chat_cache" on public.ai_chat_cache;
+create policy "auth_read_chat_cache" on public.ai_chat_cache
   for select to authenticated using (true);
-create policy "auth_insert_chat_cache" on public.ai_chat_cache
-  for insert to authenticated with check (true);
-create policy "auth_update_chat_cache" on public.ai_chat_cache
-  for update to authenticated using (true) with check (true);
+drop policy if exists "auth_insert_chat_cache" on public.ai_chat_cache;
+drop policy if exists "auth_update_chat_cache" on public.ai_chat_cache;
+revoke insert, update, delete on public.ai_chat_cache from authenticated;

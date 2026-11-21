@@ -475,6 +475,59 @@ Gia đình cùng đồng hành giúp con tự tin bứt phá điểm số! ❤�
         )}
       </div>
 
+      {/* Mục #21: Bài toán Kinh tế Đầu tư SAT — Net Cost & ROI Học bổng quy đổi VNĐ cho Phụ huynh */}
+      {(() => {
+        const currentScore = safeTotal || 1150;
+        const nextMilestone = Math.min(1600, currentScore + 50);
+        const estimateSavingsVnd = (score: number): { tierLabel: string; savingsMillions: number; uniExample: string } => {
+          if (score >= 1520) return { tierLabel: 'Học bổng Toàn phần / Merit 75–100%', savingsMillions: 2200, uniExample: 'VinUni 90–100%, Fulbright, US Top 30–50' };
+          if (score >= 1450) return { tierLabel: 'Học bổng Tài năng 50–75%', savingsMillions: 1200, uniExample: 'VinUni 50–75%, FTU/HUST CLC, US Top 60' };
+          if (score >= 1380) return { tierLabel: 'Học bổng Khuyến khích 35–50%', savingsMillions: 650, uniExample: 'FTU Kinh tế đối ngoại, NEU, VinUni 35%' };
+          if (score >= 1250) return { tierLabel: 'Đủ chuẩn Xét tuyển kết hợp Top ĐH VN', savingsMillions: 280, uniExample: 'NEU, VNU ĐHQG, DAV, tiết kiệm luyện thi lại' };
+          return { tierLabel: 'Đang xây nền tảng đạt ngưỡng 1250+', savingsMillions: 0, uniExample: 'Mục tiêu đầu tiên: chạm ngưỡng 1250+ để mở khóa xét tuyển thẳng' };
+        };
+        const curRoi = estimateSavingsVnd(currentScore);
+        const nextRoi = estimateSavingsVnd(nextMilestone);
+        const deltaMillions = Math.max(0, nextRoi.savingsMillions - curRoi.savingsMillions);
+
+        return (
+          <div className="bg-gradient-to-br from-emerald-950/50 via-[#132032] to-[#1b2533] p-6 rounded-xl border border-emerald-500/40 space-y-3 shadow-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-500/20 pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span>💎 Bài Toán Kinh Tế Đầu Tư SAT (Net Cost & ROI Học Bổng)</span>
+                </h3>
+                <p className="text-xs text-emerald-200/80 mt-0.5">
+                  Quy đổi mức điểm dự đoán hiện tại ({hasData ? `${currentScore}/1600` : 'mốc tham chiếu 1150'}) thành giá trị học phí tiết kiệm cho gia đình
+                </p>
+              </div>
+              <span className="text-xs font-extrabold px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 self-start sm:self-center">
+                {curRoi.savingsMillions > 0 ? `~${curRoi.savingsMillions.toLocaleString('vi-VN')} triệu VNĐ` : 'Đang tích lũy ROI'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <div className="bg-[#0f172a]/80 p-4 rounded-xl border border-slate-700/60 space-y-1">
+                <div className="text-slate-400 font-semibold">Mức học bổng chạm tới hiện tại</div>
+                <div className="text-sm font-black text-emerald-300">{curRoi.tierLabel}</div>
+                <div className="text-slate-300 leading-relaxed">Phù hợp: {curRoi.uniExample}</div>
+              </div>
+              <div className="bg-[#0f172a]/80 p-4 rounded-xl border border-amber-500/30 space-y-1">
+                <div className="text-amber-300/90 font-semibold">Đòn bẩy khi tăng thêm +50 điểm ({nextMilestone}đ)</div>
+                <div className="text-sm font-black text-amber-300">
+                  {deltaMillions > 0
+                    ? `Mở khóa thêm +${deltaMillions.toLocaleString('vi-VN')} triệu VNĐ học bổng`
+                    : `Củng cố vững chắc mức ${nextRoi.tierLabel}`}
+                </div>
+                <div className="text-slate-300 leading-relaxed">
+                  Mục tiêu kế tiếp: {nextRoi.uniExample}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Point 77: Bảng Đối chiếu Ngưỡng Điểm Xét tuyển Đại học Top đầu Việt Nam cho Phụ huynh */}
       <div className="bg-[#1b2533] p-6 rounded-xl border border-[#262730] space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#334155] pb-3">

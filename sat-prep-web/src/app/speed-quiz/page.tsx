@@ -1,9 +1,22 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useTransition } from 'react';
+import dynamic from 'next/dynamic';
 import { useToast } from '@/context/ToastContext';
 import { CorePracticeUI, type PracticeQuestion } from '@/components/CorePracticeUI';
-import { SpeedQuizLeaderboard } from './SpeedQuizLeaderboard';
+
+// Mục #30: Code-Splitting bảng xếp hạng bằng next/dynamic giảm First Load JS trên 4G
+const SpeedQuizLeaderboard = dynamic(
+  () => import('./SpeedQuizLeaderboard').then((m) => m.SpeedQuizLeaderboard),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="p-8 text-center text-xs text-slate-400 animate-pulse">
+        Đang tải bảng xếp hạng Speed Quiz...
+      </div>
+    ),
+  }
+);
 
 /** Mốc thưởng trong lượt (số câu đúng → xu). Đồng bộ SPEED_QUIZ_MILESTONES server. */
 const MILESTONES: { correct: number; coins: number }[] = [
@@ -30,7 +43,10 @@ interface QuizAnswerReview {
 
 export default function SpeedQuizPage() {
   const { showToast } = useToast();
+  const [, startTabTransition] = useTransition();
   const [tab, setTab] = useState<Tab>('play');
+  const switchTab = (nextTab: Tab) => startTabTransition(() => setTab(nextTab));
+  void switchTab;
   const [isPlaying, setIsPlaying] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import goldenHourQuestions from '@/data/golden_hour_questions.json';
 import { getCurrentUser } from '@/lib/auth';
 import { issueQuestion } from '@/lib/issued-questions';
+import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
 
 interface GoldenQuestion {
   id?: number;
@@ -45,6 +46,13 @@ export async function GET(request: NextRequest) {
   }
 
   const user = await getCurrentUser();
+  const rl = rateLimit(getRateLimitKey(request, 'questions-get', user.id), 30, 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Quá nhiều yêu cầu lấy câu hỏi. Vui lòng thử lại sau ít phút.', retryAfterMs: rl.retryAfterMs },
+      { status: 429 }
+    );
+  }
 
   // Lấy ngẫu nhiên 1 câu (route handler, KHÔNG phải render → Math.random an toàn).
   const q = questions[Math.floor(Math.random() * questions.length)];

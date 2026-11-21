@@ -11,6 +11,12 @@ export function isMistakeAnswerCorrect(userAns: string | undefined | null, corre
 
 export type Mistake = {
   id?: string;
+  question_id?: string;
+  user_answer?: string;
+  correct_answer?: string;
+  skill_tag?: string;
+  question_text?: string;
+  options?: string[];
   question: string;
   choices: string[];
   correct_choice: string;
@@ -26,7 +32,71 @@ export type Mistake = {
   domain?: string;
   skill?: string;
   createdAt?: string;
+  created_at?: string;
 };
+
+export type MistakeEntry = Mistake;
+
+// Helper chuyển đổi 1 item bất kỳ từ localStorage ('sat_mistake_bank_v1') thành MistakeEntry chuẩn
+function parseLocalMistakeItem(item: any, index: number): Mistake | null {
+  if (!item || typeof item !== 'object') return null;
+  // Bỏ qua câu đã master nếu isMastered === true
+  if (item.isMastered === true) return null;
+
+  const qId = String(item.question_id || item.questionId || item.id || `local-mistake-${index}`);
+  const qText = item.question_text || item.question || '';
+  if (!qText && !item.passage) return null;
+
+  const options = Array.isArray(item.options) ? item.options : (Array.isArray(item.choices) ? item.choices : ['A', 'B', 'C', 'D']);
+  const userAns = item.user_answer || item.userChoice || item.user_choice || '';
+  const correctAns = item.correct_answer || item.correctChoice || item.correct_choice || '';
+  const explanation = item.explanation || item.explanationVi || item.explanationEn || '';
+  const skillTag = item.skill_tag || item.skill || item.topic || item.trapType || '';
+  const createdAt = item.created_at || item.createdAt || new Date().toISOString();
+
+  return {
+    id: String(item.id || qId),
+    question_id: qId,
+    question: qText,
+    question_text: qText,
+    choices: options,
+    options: options,
+    correct_choice: correctAns,
+    correct_answer: correctAns,
+    user_choice: userAns,
+    user_answer: userAns,
+    explanation: explanation,
+    skill_tag: skillTag,
+    skill: skillTag,
+    created_at: createdAt,
+    createdAt: createdAt,
+    source: item.source || 'Sổ Tay Lỗi Sai (Local)',
+    passage: item.passage,
+    box: typeof item.box === 'number' ? item.box : 1,
+    next_review: item.next_review || item.lastReviewedAt,
+    subject: item.subject,
+  };
+}
+
+// Đọc danh sách câu sai chưa phục thù từ localStorage ('sat_mistake_bank_v1')
+function getLocalUnmasteredMistakes(): Mistake[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem('sat_mistake_bank_v1');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const list: Mistake[] = [];
+    parsed.forEach((it, idx) => {
+      const converted = parseLocalMistakeItem(it, idx);
+      if (converted) list.push(converted);
+    });
+    return list;
+  } catch (err) {
+    console.error('Lỗi đọc sat_mistake_bank_v1 từ localStorage', err);
+    return [];
+  }
+}
 
 export type Mode = 'browse' | 'review' | 'sprint' | 'cram';
 
@@ -590,15 +660,116 @@ export function MistakeNotebook() {
     });
   };
 
-  const load = useCallback((m: Mode) => {
+  // Xóa câu sai khỏi cả State & localStorage ['sat_mistake_bank_v1']
+  const handleDelete = useCallback((idToDelete?: string) => {
+    if (!idToDelete) return;
+    setMistakes(prev => prev.filter(m => m.id !== idToDelete && m.question_id !== idToDelete));
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('sat_mistake_bank_v1');
+        if (raw) {
+          const list: any[] = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const updated = list.filter((it: any) =>
+              String(it.id) !== idToDelete &&
+              String(it.question_id) !== idToDelete &&
+              String(it.questionId) !== idToDelete
+            );
+            localStorage.setItem('sat_mistake_bank_v1', JSON.stringify(updated));
+            window.dispatchEvent(new CustomEvent('sat_mistake_bank_updated', { detail: { deletedId: idToDelete } }));
+          }
+        }
+      } catch (err) {
+        console.error('Lỗi khi xóa câu sai trong localStorage', err);
+      }
+    }
+  }, []);
+
+  // Đánh dấu phục thù thành công hoặc cập nhật tiến độ ôn tập trong localStorage ['sat_mistake_bank_v1']
+  const submitRevenge = useCallback((mistakeId: string, isCorrect: boolean) => {
+    if (!mistakeId) return;
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('sat_mistake_bank_v1');
+        if (raw) {
+          const list: any[] = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const updated = list.map((it: any) => {
+              if (
+                String(it.id) === mistakeId ||
+                String(it.question_id) === mistakeId ||
+                String(it.questionId) === mistakeId
+              ) {
+                return {
+                  ...it,
+                  isMastered: isCorrect ? true : it.isMastered,
+                  retryCount: (it.retryCount || 0) + 1,
+                  lastReviewedAt: new Date().toISOString(),
+                };
+              }
+              return it;
+            });
+            localStorage.setItem('sat_mistake_bank_v1', JSON.stringify(updated));
+            window.dispatchEvent(new CustomEvent('sat_mistake_bank_updated', { detail: { mistakeId, isCorrect } }));
+          }
+        }
+      } catch (err) {
+        console.error('Lỗi đồng bộ phục thù vào localStorage', err);
+      }
+    }
+  }, []);
+
+  const fetchMistakes = useCallback((m: Mode) => {
     setIsLoading(true);
+    const localList = getLocalUnmasteredMistakes();
     const url = m === 'review' ? '/api/cau-sai?due=true' : '/api/cau-sai';
+
     fetch(url)
-      .then(res => res.json())
+      .then(res => (res.ok ? res.json() : []))
       .then(data => {
         if (!isMountedRef.current) return;
-        const loaded: Mistake[] = Array.isArray(data) ? data : [];
-        setMistakes(loaded);
+        const serverList: Mistake[] = Array.isArray(data) ? data.map((item, idx) => ({
+          ...item,
+          question_id: item.question_id || item.id || `server-${idx}`,
+          question_text: item.question_text || item.question || '',
+          options: item.options || item.choices || [],
+          user_answer: item.user_answer || item.user_choice || '',
+          correct_answer: item.correct_answer || item.correct_choice || '',
+          skill_tag: item.skill_tag || item.skill_id || item.skill || '',
+          created_at: item.created_at || item.createdAt || new Date().toISOString(),
+        })) : [];
+
+        // Deduplicate: Giữ serverList, hợp nhất local unmastered items chưa có trên server
+        const seenIds = new Set<string>();
+        const seenQuestions = new Set<string>();
+
+        serverList.forEach(item => {
+          if (item.id) seenIds.add(String(item.id));
+          if (item.question_id) seenIds.add(String(item.question_id));
+          const qKey = (item.question || item.question_text || '').trim().toLowerCase();
+          if (qKey) seenQuestions.add(qKey);
+        });
+
+        const merged: Mistake[] = [...serverList];
+        localList.forEach(loc => {
+          const locId = loc.id ? String(loc.id) : '';
+          const locQId = loc.question_id ? String(loc.question_id) : '';
+          const locQ = (loc.question || loc.question_text || '').trim().toLowerCase();
+
+          const isDuplicate =
+            (locId && seenIds.has(locId)) ||
+            (locQId && seenIds.has(locQId)) ||
+            (locQ && seenQuestions.has(locQ));
+
+          if (!isDuplicate) {
+            merged.push(loc);
+            if (locId) seenIds.add(locId);
+            if (locQId) seenIds.add(locQId);
+            if (locQ) seenQuestions.add(locQ);
+          }
+        });
+
+        setMistakes(merged);
         setCurrentIndex(0);
         setRevealed(false);
         setBrowseRevealed(false);
@@ -614,10 +785,25 @@ export function MistakeNotebook() {
       })
       .catch(err => {
         if (!isMountedRef.current) return;
-        console.error(err);
+        console.warn('Lỗi tải /api/cau-sai, chuyển sang fallback dữ liệu ngoại tuyến local:', err);
+        // Fallback sang local unmastered mistakes để /forge không bao giờ trống với Guest/offline!
+        setMistakes(localList);
+        setCurrentIndex(0);
+        setRevealed(false);
+        setBrowseRevealed(false);
+        setBrowseGuess(null);
+        setHintStep(0);
+        setVariantQ(null);
+        setVariantError('');
+        setReviewError('');
+        setVariantScored(false);
+        setAiTutorOpen(false);
+        setAiExplanation('');
         setIsLoading(false);
       });
   }, []);
+
+  const load = fetchMistakes;
 
   useEffect(() => {
     load(mode);
@@ -626,27 +812,28 @@ export function MistakeNotebook() {
   // Ghi kết quả ôn tập 1 câu (Leitner) rồi chuyển sang câu kế tiếp
   const handleReview = async (isRemembered: boolean) => {
     const m = mistakes[currentIndex];
-    if (!m?.id) return;
+    if (!m) return;
+    const targetId = m.id || m.question_id;
+    if (!targetId) return;
+
+    // Luôn đồng bộ vào localStorage ['sat_mistake_bank_v1']
+    submitRevenge(targetId, isRemembered);
+
     setReviewError('');
     try {
       const res = await fetch('/api/cau-sai', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mistakeId: m.id, isRemembered }),
+        body: JSON.stringify({ mistakeId: targetId, isRemembered }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         if (isMountedRef.current) {
-          setReviewError(data?.error || 'Không lưu được kết quả ôn tập. Vui lòng thử lại.');
+          setReviewError(data?.error || 'Không lưu được kết quả ôn tập lên máy chủ.');
         }
-        return;
       }
     } catch (e) {
-      console.error('Lỗi ghi kết quả ôn tập', e);
-      if (isMountedRef.current) {
-        setReviewError('Lỗi kết nối khi lưu kết quả ôn tập. Vui lòng thử lại.');
-      }
-      return;
+      console.warn('Lỗi kết nối khi lưu kết quả ôn tập lên server, đã lưu local:', e);
     }
     if (!isMountedRef.current) return;
     if (isRemembered) {
@@ -2079,6 +2266,20 @@ export function MistakeNotebook() {
               title="Ẩn những câu bạn đã hiểu triệt để hoặc do bấm nhầm"
             >
               {isCurrentArchived ? '↩️ Bỏ ẩn câu này' : '🗄️ Đã hiểu triệt để / Ẩn câu này'}
+            </button>
+
+            {/* Nút Xóa câu sai khỏi sổ tay & đồng bộ local storage */}
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.confirm('Bạn có chắc muốn xóa câu này khỏi Sổ Tay Phục Thù?')) {
+                  void handleDelete(currentMistakeId);
+                }
+              }}
+              className="text-xs px-2.5 py-1 rounded border border-rose-900/50 bg-rose-950/30 text-rose-300 hover:bg-rose-900/40 hover:text-rose-200 transition-colors"
+              title="Xóa câu này khỏi Sổ Tay Phục Thù và đồng bộ bộ nhớ máy"
+            >
+              🗑️ Xóa câu này
             </button>
           </div>
 

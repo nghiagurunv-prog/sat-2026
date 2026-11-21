@@ -30,6 +30,42 @@ export interface IRTItemResponse {
   correct: boolean;
 }
 
+export interface IRTCalibration {
+  a: number;
+  b: number;
+}
+
+/**
+ * Cầu nối Heuristic → Tham số IRT 2PL (a, b) cho câu hỏi chỉ có nhãn độ khó Easy/Medium/Hard
+ * (và tùy chọn trapRate 0..100 hoặc 0..1). Kích hoạt mô hình 2PL EAP trên toàn bộ kho đề.
+ */
+export function calibrateQuestionIrt(
+  difficulty?: string | null,
+  trapRate?: number | null
+): IRTCalibration {
+  const norm = String(difficulty ?? 'medium').trim().toLowerCase();
+  let a = 1.25;
+  let b = 0.0;
+
+  if (norm === 'easy') {
+    a = 1.0;
+    b = -1.2;
+  } else if (norm === 'hard') {
+    a = 1.55;
+    b = 1.35;
+  }
+
+  if (typeof trapRate === 'number' && Number.isFinite(trapRate)) {
+    const rate = trapRate > 1 ? trapRate / 100 : trapRate;
+    const clampedRate = Math.max(0, Math.min(1, rate));
+    // trapRate > 0.5 tăng nhẹ độ khó b (tối đa ±0.4) và tăng độ phân biệt a
+    b = Number(Math.max(-2.5, Math.min(2.5, b + (clampedRate - 0.5) * 0.8)).toFixed(2));
+    a = Number(Math.max(0.7, Math.min(2.2, a + (clampedRate - 0.5) * 0.3)).toFixed(2));
+  }
+
+  return { a, b };
+}
+
 export interface EAPResult {
   /** Năng lực tiềm ẩn ước lượng θ kẹp trong [-3, 3] */
   theta: number;

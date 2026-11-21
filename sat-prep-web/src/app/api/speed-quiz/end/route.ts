@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { rateLimit } from '@/lib/rate-limit';
 import { finalizeSession, claimMilestones } from '@/lib/speed-quiz-store';
-import { matchesAnswer } from '@/lib/answer-match';
 
 /**
  * SPEED QUIZ END API — chốt lượt + trao thưởng theo mốc (idempotent).
@@ -23,7 +22,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Quá nhiều request.', retryAfterMs: rl.retryAfterMs }, { status: 429 });
   }
 
-  const { sessionId, answers } = await req.json().catch(() => ({}));
+  const { sessionId } = await req.json().catch(() => ({}));
   if (typeof sessionId !== 'string' || !sessionId) {
     return NextResponse.json({ error: 'sessionId bắt buộc' }, { status: 400 });
   }
@@ -52,19 +51,9 @@ export async function POST(req: Request) {
     });
   }
 
-  // Dùng matchesAnswer từ @/lib/answer-match khi kiểm tra câu trả lời (khắc phục #072)
-  let verifiedCount = finalized.correctCount;
-  if (Array.isArray(answers) && answers.length > 0) {
-    const verifiedAnswersCount = answers.filter((item: any) => {
-      const userAns = String(item?.userAnswer ?? item?.answer ?? item?.selected ?? '');
-      const correctAns = String(item?.correctAnswer ?? item?.correct ?? '');
-      return matchesAnswer(userAns, correctAns);
-    }).length;
-
-    if (verifiedCount === 0 && verifiedAnswersCount > 0) {
-      verifiedCount = verifiedAnswersCount;
-    }
-  }
+  // Server-authoritative 100%: TUYỆT ĐỐI không tin payload answers/correctAnswer từ client.
+  // Chỉ dùng finalized.correctCount do DB/RPC xác thực từ các câu đã chấm thật.
+  const verifiedCount = Math.max(0, Number(finalized.correctCount) || 0);
 
   // Claim mốc theo số câu đúng THẬT (server đếm). claimMilestones idempotent nên
   // dù finalize alreadyEnded (client gọi lại) cũng không cộng trùng.

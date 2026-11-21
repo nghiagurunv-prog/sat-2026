@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
+import { emitMetric, sendAlertIfConfigured } from '@/lib/telemetry';
 import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
 import { getPlan, applyCouponPrice, validateCoupon } from '@/lib/subscription';
 import {
@@ -143,6 +144,8 @@ export async function POST(req: Request) {
         cancelUrl: `${base}/upgrade?status=unknown&order=${orderId}`,
       });
       if (!payosRes.ok || !payosRes.payUrl) {
+        emitMetric('payment_gateway_error', 1, { gateway: 'payos', orderId });
+        void sendAlertIfConfigured('payment_gateway_error', { gateway: 'payos', orderId, message: payosRes.message });
         return NextResponse.json(
           { success: false, error: payosRes.message ?? 'Không tạo được phiên thanh toán payOS.', code: 'GATEWAY_UNCONFIGURED' },
           { status: 503 }
@@ -207,6 +210,8 @@ export async function POST(req: Request) {
         cancelUrl: `${base}/upgrade?status=unknown&order=${orderId}`,
       });
       if (!stripeRes.ok || !stripeRes.payUrl) {
+        emitMetric('payment_gateway_error', 1, { gateway: 'stripe', orderId });
+        void sendAlertIfConfigured('payment_gateway_error', { gateway: 'stripe', orderId, message: stripeRes.message });
         return NextResponse.json(
           { success: false, error: stripeRes.message ?? 'Không tạo được phiên thanh toán Stripe.', code: 'GATEWAY_UNCONFIGURED' },
           { status: 503 }
@@ -246,6 +251,8 @@ export async function POST(req: Request) {
       requestId: orderId,
     });
     if (!momo.ok || !momo.payUrl) {
+      emitMetric('payment_gateway_error', 1, { gateway: 'momo', orderId });
+      void sendAlertIfConfigured('payment_gateway_error', { gateway: 'momo', orderId, message: momo.message });
       return NextResponse.json(
         { success: false, error: momo.message ?? 'Cổng MoMo đang được cấu hình. Vui lòng thử lại sau!', code: 'GATEWAY_UNCONFIGURED' },
         { status: 503 }

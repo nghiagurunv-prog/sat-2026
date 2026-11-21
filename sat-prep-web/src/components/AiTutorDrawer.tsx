@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
+import { dispatchDesmosExpression } from './DesmosCalculator';
 
 /**
  * ============================================================================
@@ -273,8 +274,12 @@ export function AiTutorDrawer({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Gửi prompt tới AI Tutor API
-  const sendPromptToAI = async (userPrompt: string, stepBadge?: string) => {
+  // Gửi prompt tới AI Tutor API — Hỗ trợ SSE Streaming (#18) & Socratic Micro-Check (#19)
+  const sendPromptToAI = async (
+    userPrompt: string,
+    stepBadge?: string,
+    interactionMode: 'full' | 'micro_check' = 'full'
+  ) => {
     if (!userPrompt.trim() || isLoading) return;
 
     const userMsg: ChatMessage = {
@@ -303,6 +308,8 @@ export function AiTutorDrawer({
           skillId,
           questionType,
           userMessage: userPrompt,
+          stream: interactionMode === 'full',
+          interaction_mode: interactionMode,
           history: messages.map((m) => ({
             role: m.role,
             content: m.content,
@@ -314,7 +321,78 @@ export function AiTutorDrawer({
         throw new Error(`HTTP ${response.status}`);
       }
 
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('text/event-stream') && response.body) {
+        const aiMsgId = `ai-${Date.now()}`;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: aiMsgId,
+            role: 'assistant',
+            content: '',
+            badge: stepBadge || 'Socratic Stream',
+            timestamp: new Date(),
+          },
+        ]);
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let accumulated = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line.startsWith('data:')) continue;
+            try {
+              const evt = JSON.parse(line.slice(5).trim()) as { delta?: string };
+              if (evt.delta) {
+                accumulated += evt.delta;
+                const snapshot = accumulated;
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === aiMsgId ? { ...m, content: snapshot } : m))
+                );
+              }
+            } catch {
+              // Bỏ qua chunk chưa đủ JSON
+            }
+          }
+        }
+        return;
+      }
+
       const data = await response.json();
+      if (data.interactionMode === 'micro_check' && data.microCheck) {
+        const mc = data.microCheck as {
+          question: string;
+          optionA: string;
+          optionB: string;
+          correctOption: 'A' | 'B';
+          hintIfWrong: string;
+        };
+        const formattedMc =
+          `🧠 **Câu hỏi kiểm tra nhanh Socratic (Micro-Check):**\n\n${mc.question}\n\n` +
+          `- **A.** ${mc.optionA}\n` +
+          `- **B.** ${mc.optionB}\n\n` +
+          `*(Nhắn **"A"** hoặc **"B"** để thầy kiểm tra tư duy rồi mở khóa bí kíp giải nhanh 15s nhé!)*`;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `ai-mc-${Date.now()}`,
+            role: 'assistant',
+            content: formattedMc,
+            badge: 'Socratic Micro-Check',
+            timestamp: new Date(),
+          },
+        ]);
+        return;
+      }
+
       const aiReply =
         data.reply ||
         data.text ||
@@ -384,6 +462,13 @@ export function AiTutorDrawer({
     const prompt =
       'Thầy ơi, hãy giải thích câu này bằng một ví dụ đời thường thật gần gũi, dí dỏm cho học sinh 15 tuổi (ELI15) để em hiểu thấu bản chất bản vẽ/quy tắc này nhé!';
     sendPromptToAI(prompt, 'Ví dụ Đời Thường ELI15');
+  };
+
+  // Mục #19: Socratic Micro-Check 2 lựa chọn A/B trước khi mở khóa lời giải đầy đủ
+  const triggerMicroCheck = () => {
+    const prompt =
+      'Đặt giúp em 1 câu hỏi Socratic Micro-Check 2 lựa chọn A/B để tự kiểm tra tư duy trước khi mở lời giải.';
+    sendPromptToAI(prompt, 'Socratic Micro-Check', 'micro_check');
   };
 
   // Đánh dấu nắm vững (#C040)
@@ -475,7 +560,14 @@ export function AiTutorDrawer({
           <div className="px-4 pt-3 pb-2">
             <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
               <span>Thang Gợi Ý 3 Bước</span>
-              <span className="text-amber-400 text-[10px] lowercase font-normal">bấm để dẫn dắt</span>
+              <button
+                type="button"
+                onClick={triggerMicroCheck}
+                disabled={isLoading}
+                className="text-[10px] font-bold normal-case px-2 py-0.5 rounded-full bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-400/40 transition-colors disabled:opacity-50"
+              >
+                🧠 Hỏi ngược A/B (Micro-Check)
+              </button>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <button
@@ -567,6 +659,27 @@ export function AiTutorDrawer({
                   }`}
                 >
                   <div className="whitespace-pre-wrap">{renderMathMarkdown(msg.content)}</div>
+                  {/* Mục #11: AI-to-Desmos 1-Click Injection khi tin nhắn chứa khối ```desmos */}
+                  {msg.role === 'assistant' && /```desmos\s*([\s\S]*?)```/i.test(msg.content) && (() => {
+                    const match = msg.content.match(/```desmos\s*([\s\S]*?)```/i);
+                    const latex = match?.[1]?.trim();
+                    if (!latex) return null;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          dispatchDesmosExpression(latex, 'Công thức từ AI Tutor');
+                          if (navigator?.clipboard) {
+                            navigator.clipboard.writeText(latex).catch(() => {});
+                          }
+                        }}
+                        className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-200 font-bold text-xs transition-colors"
+                      >
+                        <span>🧮</span>
+                        <span>Nạp thẳng vào Desmos (1-Click)</span>
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
             ))}

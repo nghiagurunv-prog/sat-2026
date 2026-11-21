@@ -19,7 +19,16 @@ export interface UsageRecord {
   tokensOut: number;
 }
 
+const GUEST_SENTINEL = 'local-default-user';
+
+function isGuestSentinel(userId: string): boolean {
+  return !userId || userId === GUEST_SENTINEL;
+}
+
 export async function loadUsage(userId: string): Promise<UsageRecord> {
+  if (isGuestSentinel(userId)) {
+    return { date: '', count: 0, genCount: 0, chatCount: 0, tokensIn: 0, tokensOut: 0 };
+  }
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('user_ai_usage')
@@ -49,6 +58,7 @@ export async function loadUsage(userId: string): Promise<UsageRecord> {
  * cũ = 0 regression. Hàm SQL commit atomic nên lỗi = KHÔNG ghi gì → không double.
  */
 export async function incrementUsageAtomic(userId: string, kind: 'gen' | 'chat', date: string, tokensIn: number, tokensOut: number): Promise<boolean> {
+  if (isGuestSentinel(userId)) return true;
   const admin = createAdminClient();
   const { error } = await admin.rpc('increment_ai_usage', {
     p_user_id: userId,
@@ -68,6 +78,7 @@ export async function incrementUsageAtomic(userId: string, kind: 'gen' | 'chat',
 }
 
 export async function saveUsage(userId: string, rec: UsageRecord): Promise<void> {
+  if (isGuestSentinel(userId)) return;
   const admin = createAdminClient();
   const { error } = await admin
     .from('user_ai_usage')
@@ -119,6 +130,10 @@ export async function reserveUsageAtomic(
   date: string,
   limit: number
 ): Promise<ReserveResult | null> {
+  if (isGuestSentinel(userId)) {
+    // Khách vãng lai không có UUID trên Postgres — trả fail-closed để route dùng bucket quota theo IP
+    return { allowed: false, used: limit > 0 ? limit : 0, limit };
+  }
   const admin = createAdminClient();
   const { data, error } = await admin.rpc('reserve_ai_usage', {
     p_user_id: userId,

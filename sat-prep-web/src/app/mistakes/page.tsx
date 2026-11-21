@@ -27,7 +27,8 @@ import {
   RefreshCw,
   Check,
   X,
-  Compass
+  Compass,
+  Download
 } from 'lucide-react';
 
 /**
@@ -307,7 +308,7 @@ const STARTER_MISTAKES_DECK: MistakeItem[] = [
 ];
 
 /**
- * Component render Math an toàn KaTeX
+ * Component render Math an toàn KaTeX (chống XSS: trust=false, lỗi parse → render text React thuần)
  */
 function KaTeXInline({ math }: { math: string }) {
   const html = useMemo(() => {
@@ -315,12 +316,16 @@ function KaTeXInline({ math }: { math: string }) {
       return katex.renderToString(math, {
         throwOnError: false,
         displayMode: false,
+        trust: false,
       });
     } catch {
-      return math;
+      return null;
     }
   }, [math]);
 
+  if (html === null) {
+    return <span>{math}</span>;
+  }
   return <span dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
@@ -330,12 +335,16 @@ function KaTeXBlock({ math }: { math: string }) {
       return katex.renderToString(math, {
         throwOnError: false,
         displayMode: true,
+        trust: false,
       });
     } catch {
-      return math;
+      return null;
     }
   }, [math]);
 
+  if (html === null) {
+    return <div className="my-2 overflow-x-auto">{math}</div>;
+  }
   return <div className="my-2 overflow-x-auto" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
@@ -343,10 +352,9 @@ function KaTeXBlock({ math }: { math: string }) {
  * Parser phân tích văn bản có chứa KaTeX $...$ hoặc $$...$$
  */
 function FormattedText({ text, className = '' }: { text: string; className?: string }) {
-  if (!text) return null;
-
-  // Split by $$ or $
+  // Split by $$ or $ (gọi hook vô điều kiện trước early-return để đúng rules-of-hooks)
   const parts = useMemo(() => {
+    if (!text) return [];
     const segments: { type: 'text' | 'inline-math' | 'block-math'; content: string }[] = [];
     const lines = text.split('\n');
 
@@ -440,6 +448,13 @@ export default function MistakesPage() {
   // Expanded explanations State
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
 
+  // Batch Revenge Queue State
+  const [batchQueue, setBatchQueue] = useState<MistakeItem[]>([]);
+  const [batchIndex, setBatchIndex] = useState<number>(-1);
+  const [batchSelectedChoice, setBatchSelectedChoice] = useState<string | null>(null);
+  const [batchIsSubmitted, setBatchIsSubmitted] = useState<boolean>(false);
+  const [batchIsCorrect, setBatchIsCorrect] = useState<boolean>(false);
+
   // Load and Sync Mistakes
   useEffect(() => {
     async function loadData() {
@@ -459,77 +474,59 @@ export default function MistakesPage() {
         console.error('Lỗi đọc localStorage sat_mistake_bank_v1:', e);
       }
 
-      // 2. Thử fetch từ API /api/error-logs (hoặc /api/cau-sai)
+      // 2. Fetch trực tiếp từ API /api/cau-sai
       try {
-        const res = await fetch('/api/error-logs');
+        const res = await fetch('/api/cau-sai');
         if (res.ok) {
           const apiData = await res.json();
           if (Array.isArray(apiData) && apiData.length > 0) {
             // Chuẩn hóa và gộp dữ liệu
             const formattedApi: MistakeItem[] = apiData.map((item: any, idx: number) => ({
-              id: item.id || `api-err-${idx}`,
-              subject: item.subject === 'math' ? 'Math' : 'Reading & Writing',
-              topic: item.topic || item.skill || 'Digital SAT Skill',
+              id: item.id || `cau-sai-${idx}`,
+              subject:
+                item.subject?.toLowerCase().includes('math') ||
+                item.source?.toLowerCase().includes('math') ||
+                item.question?.includes('\\frac')
+                  ? 'Math'
+                  : 'Reading & Writing',
+              topic: item.topic || item.skill || item.skill_id || 'Luyện tập kỹ năng',
               question: item.question || '',
               passage: item.passage,
               choices: item.choices || [],
               correctChoice: item.correct_choice || item.correctChoice || '',
               userChoice: item.user_choice || item.userChoice || '',
               rootCause: (item.rootCause as RootCauseType) || 'Conceptual Gap',
-              trapType: item.trapType || 'Bẫy Điểm Digital SAT',
+              trapType: item.trapType || 'Bẫy đề thi',
               explanationEn: item.explanation || item.explanationEn || '',
-              explanationVi: item.explanationVi || item.explanation_vi || 'Đang cập nhật lời giải tiếng Việt...',
+              explanationVi:
+                item.explanation_vi ||
+                item.explanationVi ||
+                item.explanation ||
+                'Xem phân tích chi tiết bên dưới để nắm vững phương pháp giải.',
               ruleSummary: item.ruleSummary,
               isMastered: Boolean(item.isMastered || (item.box && item.box >= 4)),
               retryCount: item.retryCount || 0,
               createdAt: item.createdAt || item.created_at || new Date().toISOString(),
-              source: item.source || 'Lịch sử luyện tập',
+              source: item.source || 'Ngân hàng câu hỏi',
             }));
 
-            // Merge tránh duplicate id
+            // Merge tránh duplicate id và question
             const existingIds = new Set(loadedItems.map((m) => m.id));
+            const existingQuestions = new Set(
+              loadedItems.map((m) => m.question.trim()).filter(Boolean)
+            );
             for (const item of formattedApi) {
-              if (!existingIds.has(item.id)) {
+              const qTrim = item.question ? item.question.trim() : '';
+              if (!existingIds.has(item.id) && (!qTrim || !existingQuestions.has(qTrim))) {
                 loadedItems.push(item);
-              }
-            }
-          }
-        } else {
-          // Thử endpoint dự phòng /api/cau-sai
-          const fallbackRes = await fetch('/api/cau-sai');
-          if (fallbackRes.ok) {
-            const fallbackData = await fallbackRes.json();
-            if (Array.isArray(fallbackData) && fallbackData.length > 0) {
-              const formattedFallback: MistakeItem[] = fallbackData.map((item: any, idx: number) => ({
-                id: item.id || `cau-sai-${idx}`,
-                subject: item.subject?.toLowerCase().includes('math') ? 'Math' : 'Reading & Writing',
-                topic: item.skill || 'Luyện tập kỹ năng',
-                question: item.question || '',
-                passage: item.passage,
-                choices: item.choices || [],
-                correctChoice: item.correct_choice || '',
-                userChoice: item.user_choice || '',
-                rootCause: 'Conceptual Gap',
-                trapType: 'Bẫy đề thi',
-                explanationEn: item.explanation || '',
-                explanationVi: 'Xem phân tích chi tiết bên dưới để nắm vững phương pháp giải.',
-                isMastered: item.box && item.box >= 4,
-                retryCount: 0,
-                createdAt: item.created_at || new Date().toISOString(),
-                source: item.source || 'Ngân hàng câu hỏi',
-              }));
-
-              const existingIds = new Set(loadedItems.map((m) => m.id));
-              for (const item of formattedFallback) {
-                if (!existingIds.has(item.id)) {
-                  loadedItems.push(item);
-                }
+                existingIds.add(item.id);
+                if (qTrim) existingQuestions.add(qTrim);
               }
             }
           }
         }
       } catch (err) {
-        console.warn('API error-logs / cau-sai không sẵn sàng, sử dụng dữ liệu cục bộ:', err);
+        console.warn('API /api/cau-sai không sẵn sàng, sử dụng dữ liệu cục bộ:', err);
       }
 
       // 3. Nếu chưa có dữ liệu nào, nạp Bộ 8 Starter Diagnostic Deck
@@ -701,6 +698,140 @@ export default function MistakesPage() {
     });
   }, [mistakes, selectedSubject, selectedCause, statusFilter, searchQuery]);
 
+  // 1-Click Xuất Sổ Lỗi (CSV UTF-8 BOM)
+  const exportMistakesCSV = useCallback(() => {
+    const itemsToExport = filteredMistakes.length > 0 ? filteredMistakes : mistakes;
+    if (itemsToExport.length === 0) {
+      alert('Không có lỗi sai nào để xuất!');
+      return;
+    }
+    const headers = [
+      'Mã Câu',
+      'Môn',
+      'Chủ Đề',
+      'Nguyên Nhân Gốc Rễ',
+      'Đáp Án Đã Chọn',
+      'Đáp Án Đúng',
+      'Trạng Thái',
+    ];
+    const escapeCsv = (str: string) => {
+      const escaped = (str || '').replace(/"/g, '""');
+      return `"${escaped}"`;
+    };
+
+    const rows = itemsToExport.map((m) =>
+      [
+        escapeCsv(m.id),
+        escapeCsv(m.subject),
+        escapeCsv(m.topic),
+        escapeCsv(m.rootCause),
+        escapeCsv(m.userChoice || 'Chưa chọn'),
+        escapeCsv(m.correctChoice),
+        escapeCsv(m.isMastered ? 'Đã Khắc Phục' : 'Cần Ôn Lại'),
+      ].join(',')
+    );
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'sat-mistake-notebook.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [filteredMistakes, mistakes]);
+
+  // Khởi động chuỗi Luyện Cấp Tốc Câu Chưa Thuộc (Batch Revenge Queue)
+  const startBatchRevenge = useCallback(() => {
+    const unmastered = mistakes.filter((m) => !m.isMastered);
+    if (unmastered.length === 0) {
+      alert('Tuyệt vời! Bạn đã làm chủ 100% tất cả các câu sai trong Sổ Tay Lỗi!');
+      return;
+    }
+    setBatchQueue(unmastered);
+    setBatchIndex(0);
+    setBatchSelectedChoice(null);
+    setBatchIsSubmitted(false);
+    setBatchIsCorrect(false);
+  }, [mistakes]);
+
+  // Đóng chuỗi Phục Thù
+  const closeBatchRevenge = useCallback(() => {
+    setBatchIndex(-1);
+    setBatchQueue([]);
+    setBatchSelectedChoice(null);
+    setBatchIsSubmitted(false);
+    setBatchIsCorrect(false);
+  }, []);
+
+  // Nộp đáp án cho câu hiện tại trong chuỗi Phục Thù
+  const submitBatchAnswer = useCallback(() => {
+    if (batchIndex < 0 || batchIndex >= batchQueue.length) return;
+    const current = batchQueue[batchIndex];
+    if (!current || !batchSelectedChoice) return;
+
+    const isCorrect =
+      batchSelectedChoice.trim().toLowerCase() === current.correctChoice.trim().toLowerCase();
+    setBatchIsSubmitted(true);
+    setBatchIsCorrect(isCorrect);
+
+    // Cập nhật trạng thái câu sai
+    const updated = mistakes.map((m) => {
+      if (m.id === current.id) {
+        return {
+          ...m,
+          retryCount: m.retryCount + 1,
+          isMastered: isCorrect ? true : m.isMastered,
+          lastReviewedAt: new Date().toISOString(),
+        };
+      }
+      return m;
+    });
+    saveMistakesToLocal(updated);
+
+    // Cập nhật hàng đợi
+    setBatchQueue((prev) =>
+      prev.map((item, idx) =>
+        idx === batchIndex
+          ? {
+              ...item,
+              retryCount: item.retryCount + 1,
+              isMastered: isCorrect ? true : item.isMastered,
+            }
+          : item
+      )
+    );
+
+    // Đồng bộ ngầm API
+    try {
+      fetch('/api/cau-sai', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mistakeId: current.id,
+          isRemembered: isCorrect,
+        }),
+      }).catch(() => {});
+    } catch {
+      // Bỏ qua lỗi ngầm
+    }
+  }, [batchIndex, batchQueue, batchSelectedChoice, mistakes, saveMistakesToLocal]);
+
+  // Chuyển sang câu sai tiếp theo trong chuỗi Phục Thù
+  const nextBatchQuestion = useCallback(() => {
+    if (batchIndex < batchQueue.length - 1) {
+      setBatchIndex((prev) => prev + 1);
+      setBatchSelectedChoice(null);
+      setBatchIsSubmitted(false);
+      setBatchIsCorrect(false);
+    } else {
+      alert('🎉 Chúc mừng! Bạn đã hoàn thành toàn bộ chuỗi Luyện Cấp Tốc Phục Thù!');
+      closeBatchRevenge();
+    }
+  }, [batchIndex, batchQueue.length, closeBatchRevenge]);
+
   // Thống kê nhanh
   const stats = useMemo(() => {
     const total = mistakes.length;
@@ -750,7 +881,23 @@ export default function MistakesPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={exportMistakesCSV}
+              className="px-3 py-2 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 transition-all flex items-center gap-1.5 shadow-sm hover:border-slate-600"
+              title="Xuất sổ lỗi đang lọc ra file CSV UTF-8"
+            >
+              <Download className="w-3.5 h-3.5 text-indigo-400" />
+              📥 Xuất Sổ Lỗi (CSV)
+            </button>
+            <button
+              onClick={startBatchRevenge}
+              className="px-3.5 py-2 rounded-lg text-xs font-bold bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white transition-all shadow-md shadow-rose-900/20 flex items-center gap-1.5"
+              title="Bắt đầu chuỗi luyện cấp tốc tất cả các câu chưa khắc phục"
+            >
+              <Flame className="w-3.5 h-3.5 text-amber-200 animate-pulse" />
+              ⚡ Luyện Cấp Tốc Câu Chưa Thuộc
+            </button>
             <button
               onClick={resetToStarterDeck}
               className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700/80 transition-all flex items-center gap-1.5 shadow-sm"
@@ -1312,6 +1459,233 @@ export default function MistakesPage() {
             </Link>
           </div>
         </div>
+
+        {/* MODAL LUYỆN CẤP TỐC CÂU CHƯA THUỘC (BATCH REVENGE QUEUE) */}
+        {batchIndex >= 0 && batchIndex < batchQueue.length && (() => {
+          const current = batchQueue[batchIndex];
+          const causeMeta = ROOT_CAUSE_META[current.rootCause];
+          const progressPercent = Math.round(((batchIndex + 1) / batchQueue.length) * 100);
+
+          return (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+              <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                {/* Modal Header */}
+                <div className="p-4 md:p-5 border-b border-slate-800 bg-slate-950/80 space-y-3 shrink-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5">
+                        <Flame className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+                        Chuỗi Phục Thù Cấp Tốc
+                      </span>
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        Câu {batchIndex + 1} / {batchQueue.length} trong chuỗi Phục Thù
+                      </span>
+                    </div>
+                    <button
+                      onClick={closeBatchRevenge}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                      title="Đóng chuỗi phục thù"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-rose-500 to-indigo-500 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Modal Body */}
+                <div className="p-4 md:p-6 space-y-4 overflow-y-auto flex-1">
+                  {/* Meta Tags */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`px-2.5 py-0.5 rounded text-xs font-semibold ${
+                        current.subject === 'Math'
+                          ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                          : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                      }`}
+                    >
+                      {current.subject}
+                    </span>
+
+                    <span
+                      className={`px-2.5 py-0.5 rounded text-xs font-semibold flex items-center gap-1 ${causeMeta.bg} ${causeMeta.color} border ${causeMeta.border}`}
+                    >
+                      <span>{causeMeta.icon}</span>
+                      <span>{causeMeta.label}</span>
+                    </span>
+
+                    <span className="text-xs font-medium text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                      {current.topic}
+                    </span>
+                  </div>
+
+                  {/* Trap Title */}
+                  <div className="flex items-center gap-2 text-xs font-medium text-amber-300/90 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20">
+                    <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>
+                      <strong className="text-amber-200">Đặc Điểm Bẫy:</strong> {current.trapType}
+                    </span>
+                  </div>
+
+                  {/* Passage */}
+                  {current.passage && (
+                    <div className="p-3.5 bg-slate-950/90 border border-slate-800 rounded-lg text-sm text-slate-300 italic border-l-4 border-l-indigo-500">
+                      <FormattedText text={current.passage} />
+                    </div>
+                  )}
+
+                  {/* Question */}
+                  <div className="text-sm md:text-base font-medium text-slate-100">
+                    <FormattedText text={current.question} />
+                  </div>
+
+                  {/* Choices */}
+                  <div className="grid grid-cols-1 gap-2.5 pt-2">
+                    {current.choices.map((choice, cIdx) => {
+                      const letter = String.fromCharCode(65 + cIdx);
+                      const isSelected = batchSelectedChoice === choice;
+                      const isCorrectChoice =
+                        choice.trim().toLowerCase() === current.correctChoice.trim().toLowerCase();
+
+                      let choiceStyle =
+                        'bg-slate-950/80 border-slate-800 text-slate-200 hover:border-slate-700';
+                      if (isSelected) {
+                        choiceStyle =
+                          'bg-indigo-950/60 border-indigo-500 text-indigo-100 ring-1 ring-indigo-500';
+                      }
+                      if (batchIsSubmitted) {
+                        if (isCorrectChoice) {
+                          choiceStyle =
+                            'bg-emerald-950/60 border-emerald-500 text-emerald-200 ring-1 ring-emerald-500 font-semibold';
+                        } else if (isSelected && !isCorrectChoice) {
+                          choiceStyle =
+                            'bg-rose-950/60 border-rose-500 text-rose-200 ring-1 ring-rose-500';
+                        } else {
+                          choiceStyle = 'opacity-40 bg-slate-950/60 border-slate-800 text-slate-400';
+                        }
+                      }
+
+                      return (
+                        <button
+                          key={cIdx}
+                          disabled={batchIsSubmitted}
+                          onClick={() => setBatchSelectedChoice(choice)}
+                          className={`w-full text-left p-3 rounded-lg border text-sm transition-all flex items-start gap-3 ${choiceStyle}`}
+                        >
+                          <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                            {letter}
+                          </span>
+                          <div className="flex-1">
+                            <FormattedText text={choice} />
+                          </div>
+                          {batchIsSubmitted && isCorrectChoice && (
+                            <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          )}
+                          {batchIsSubmitted && isSelected && !isCorrectChoice && (
+                            <X className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Submitted Result & Explanations */}
+                  {batchIsSubmitted && (
+                    <div className="space-y-4 pt-2 animate-in fade-in duration-200">
+                      <div
+                        className={`p-3.5 rounded-xl border text-sm font-semibold flex items-center gap-2 ${
+                          batchIsCorrect
+                            ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-200'
+                            : 'bg-rose-950/60 border-rose-500/40 text-rose-200'
+                        }`}
+                      >
+                        {batchIsCorrect ? (
+                          <>
+                            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                            <span>🎉 Xuất sắc! Bạn đã vượt qua bẫy câu này thành công và đánh dấu làm chủ!</span>
+                          </>
+                        ) : (
+                          <>
+                            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+                            <span>⚠️ Chưa chính xác. Đọc kỹ phân tích bản chất bẫy dưới đây để ghi nhớ!</span>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Rule Summary */}
+                      {current.ruleSummary && (
+                        <div className="p-3 bg-indigo-950/40 border border-indigo-500/30 rounded-lg text-xs text-indigo-300 flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
+                          <span>
+                            <strong>Quy Tắc Vàng Cần Nhớ:</strong> {current.ruleSummary}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Phân Tích Tiếng Việt */}
+                      <div className="space-y-1">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                          <Compass className="w-3.5 h-3.5 text-emerald-400" />
+                          Giải Phẫu Bản Chất & Bẫy Điểm (Tiếng Việt)
+                        </h4>
+                        <div className="text-xs md:text-sm text-slate-300 bg-slate-950/80 p-3 rounded-lg border border-slate-800">
+                          <FormattedText text={current.explanationVi} />
+                        </div>
+                      </div>
+
+                      {/* Phân Tích Tiếng Anh */}
+                      <div className="space-y-1">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
+                          <BookOpen className="w-3.5 h-3.5 text-blue-400" />
+                          Official Standard Explanation (College Board Style)
+                        </h4>
+                        <div className="text-xs md:text-sm text-slate-300 bg-slate-950/80 p-3 rounded-lg border border-slate-800">
+                          <FormattedText text={current.explanationEn} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Modal Footer */}
+                <div className="p-4 md:p-5 border-t border-slate-800 bg-slate-950/90 shrink-0 flex items-center justify-between gap-3">
+                  <div className="text-xs text-slate-400 font-medium">
+                    {batchIsSubmitted
+                      ? batchIndex < batchQueue.length - 1
+                        ? `Còn ${batchQueue.length - batchIndex - 1} câu sai trong chuỗi`
+                        : 'Đây là câu sai cuối cùng trong chuỗi'
+                      : 'Chọn 1 phương án và nhấn kiểm tra kết quả'}
+                  </div>
+
+                  {!batchIsSubmitted ? (
+                    <button
+                      disabled={!batchSelectedChoice}
+                      onClick={submitBatchAnswer}
+                      className="px-5 py-2.5 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-500 disabled:opacity-50 disabled:pointer-events-none text-white transition-all shadow-md flex items-center gap-2"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      Kiểm Tra Kết Quả Phục Thù
+                    </button>
+                  ) : (
+                    <button
+                      onClick={nextBatchQuestion}
+                      className="px-5 py-2.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-md flex items-center gap-2"
+                    >
+                      <span>Tiếp tục câu sai tiếp theo →</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

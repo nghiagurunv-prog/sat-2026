@@ -10,7 +10,7 @@ import { AITutoring } from '@/components/AITutoring';
 import { MistakeNotebook } from '@/components/MistakeNotebook';
 import { DiagnosticBanner } from '@/components/DiagnosticBanner';
 
-export type TargetSchoolKey = 'FTU' | 'NEU' | 'HUST' | 'VINUNI' | 'US_TOP50';
+export type TargetSchoolKey = 'FTU' | 'NEU' | 'HUST' | 'VNU' | 'VINUNI' | 'FULBRIGHT' | 'US_TOP50';
 
 export interface CollegeTargetState {
   targetSchool: TargetSchoolKey;
@@ -47,6 +47,14 @@ const SCHOOL_DATA: Record<
     desc: 'Xét tuyển tài năng & kết hợp SAT (yêu cầu Toán SAT ≥ 750 điểm cho IT/CS).',
     defaultScore: 1450,
   },
+  VNU: {
+    name: 'Đại Học Quốc Gia (VNU)',
+    full: 'ĐHQG Hà Nội & ĐHQG TP.HCM',
+    safeScore: '1350 – 1450+',
+    icon: '🏛️',
+    desc: 'Phương thức xét tuyển kết hợp chứng chỉ SAT quốc tế quy đổi điểm ưu tiên vào các trường thành viên.',
+    defaultScore: 1400,
+  },
   VINUNI: {
     name: 'VinUni / RMIT',
     full: 'VinUniversity & RMIT Vietnam',
@@ -54,6 +62,14 @@ const SCHOOL_DATA: Record<
     icon: '🦅',
     desc: 'Cơ hội săn học bổng danh giá 50% – 100% học phí toàn khóa.',
     defaultScore: 1500,
+  },
+  FULBRIGHT: {
+    name: 'Fulbright Việt Nam',
+    full: 'Đại học Fulbright Việt Nam',
+    safeScore: '1420 – 1500+',
+    icon: '🎓',
+    desc: 'Môi trường khai phóng chuẩn Hoa Kỳ, ưu tiên ứng viên có chứng chỉ SAT xuất sắc & học bổng.',
+    defaultScore: 1450,
   },
   US_TOP50: {
     name: 'Du học Mỹ (Top 50 / Ivy)',
@@ -210,6 +226,10 @@ export default function Home() {
   const [draftMonth, setDraftMonth] = useState<string>('2026-06');
   const [isClient, setIsClient] = useState(false);
 
+  // --- LIVE STUDENT STATS FROM LOCALSTORAGE ---
+  const [liveScore, setLiveScore] = useState<{ latest: number | null; best: number | null }>({ latest: null, best: null });
+  const [unmasteredMistakesCount, setUnmasteredMistakesCount] = useState<number>(0);
+
   // Đọc localStorage khi client mount
   useEffect(() => {
     setIsClient(true);
@@ -223,13 +243,68 @@ export default function Home() {
           setDraftScore(parsed.targetScore || 1450);
           setDraftMonth(parsed.examMonth || '2026-06');
           setShowWizard(false);
-          return;
+        } else {
+          setShowWizard(true);
         }
+      } else {
+        setShowWizard(true);
       }
-      // Nếu chưa có mục tiêu, mở wizard chào đón
-      setShowWizard(true);
     } catch {
       setShowWizard(true);
+    }
+
+    // Đọc điểm thi thực tế & đề thi chẩn đoán từ localStorage
+    try {
+      let bestScore: number | null = null;
+      let latestScore: number | null = null;
+
+      // 1. Lịch sử bài thi đầy đủ
+      const examRaw = localStorage.getItem('sat_exam_history_v1');
+      if (examRaw) {
+        const exams = JSON.parse(examRaw);
+        if (Array.isArray(exams) && exams.length > 0) {
+          for (const item of exams) {
+            const sc = typeof item.totalScore === 'number' ? item.totalScore : typeof item.score === 'number' ? item.score : null;
+            if (sc !== null && sc > 0) {
+              latestScore = sc;
+              if (bestScore === null || sc > bestScore) {
+                bestScore = sc;
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Fallback sang kết quả bài chẩn đoán nếu chưa có bài thi đầy đủ
+      if (latestScore === null) {
+        const diagRaw = localStorage.getItem('sat_diagnostic_result');
+        if (diagRaw) {
+          const diag = JSON.parse(diagRaw);
+          const sc = typeof diag.total === 'number' ? diag.total : typeof diag.totalScore === 'number' ? diag.totalScore : null;
+          if (sc !== null && sc > 0) {
+            latestScore = sc;
+            bestScore = sc;
+          }
+        }
+      }
+
+      setLiveScore({ latest: latestScore, best: bestScore });
+    } catch (e) {
+      console.error('Lỗi đọc điểm thi thực tế từ localStorage', e);
+    }
+
+    // Đọc ngân hàng câu sai cần phục thù
+    try {
+      const mistakeRaw = localStorage.getItem('sat_mistake_bank_v1');
+      if (mistakeRaw) {
+        const mistakes = JSON.parse(mistakeRaw);
+        if (Array.isArray(mistakes)) {
+          const activeCount = mistakes.filter((m: any) => !m.isMastered).length;
+          setUnmasteredMistakesCount(activeCount);
+        }
+      }
+    } catch (e) {
+      console.error('Lỗi đọc ngân hàng câu sai từ localStorage', e);
     }
   }, []);
 
@@ -649,6 +724,56 @@ export default function Home() {
                       <span>🎯 Target: <strong className="text-amber-300 font-black">{collegeGoal.targetScore}+</strong></span>
                       <span>📅 Kỳ thi: <strong className="text-white">{EXAM_MONTH_OPTIONS.find((m) => m.value === collegeGoal.examMonth)?.label || collegeGoal.examMonth}</strong></span>
                       <span>⏳ Còn <strong className="text-emerald-400">{getDaysUntilMonth(collegeGoal.examMonth)}</strong> ngày ôn luyện</span>
+                    </div>
+
+                    {/* LIVE SAT SCORE & POINT GAP & MISTAKES BADGE */}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {liveScore.best || liveScore.latest ? (
+                        <div className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-950/40 px-3 py-1 text-xs text-cyan-200">
+                          <span>📊 Điểm thực tế:</span>
+                          <strong className="text-white font-black">{liveScore.best ?? liveScore.latest}</strong>
+                          {liveScore.best && liveScore.latest && liveScore.best !== liveScore.latest && (
+                            <span className="text-[10px] text-cyan-300">(Gần nhất: {liveScore.latest})</span>
+                          )}
+                          <span className="text-slate-500">•</span>
+                          {collegeGoal.targetScore - (liveScore.best ?? liveScore.latest!) > 0 ? (
+                            <span className="font-bold text-amber-300">
+                              Cách Target: -{collegeGoal.targetScore - (liveScore.best ?? liveScore.latest!)} điểm
+                            </span>
+                          ) : (
+                            <span className="font-bold text-emerald-300">
+                              ✅ Đã chạm Target (+{Math.abs(collegeGoal.targetScore - (liveScore.best ?? liveScore.latest!))} điểm)
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/60 px-2.5 py-1 text-xs text-slate-300">
+                          <span>📊 Điểm thực tế: Chưa làm bài test</span>
+                          <span className="text-slate-500">•</span>
+                          <span className="text-amber-300/90 font-medium">Làm bài test 15p để đo khoảng cách tới {SCHOOL_DATA[collegeGoal.targetSchool]?.name || collegeGoal.targetSchool}</span>
+                        </div>
+                      )}
+
+                      {/* 1-Click Badge Ngân hàng câu sai */}
+                      {unmasteredMistakesCount > 0 ? (
+                        <Link
+                          href="/mistakes"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-950/50 hover:bg-rose-900/70 px-3 py-1 text-xs font-bold text-rose-200 transition shadow-sm hover:scale-[1.02]"
+                          title="Vào Ngân hàng câu sai để phục thù ngay"
+                        >
+                          <span className="animate-pulse">🔥</span>
+                          <span>{unmasteredMistakesCount} câu sai cần phục thù</span>
+                          <span className="text-rose-400">➜</span>
+                        </Link>
+                      ) : (
+                        <Link
+                          href="/mistakes"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-950/30 hover:bg-emerald-900/50 px-2.5 py-1 text-xs font-medium text-emerald-300 transition"
+                        >
+                          <span>🎯 Sổ tay câu sai (0 tồn đọng)</span>
+                          <span className="text-emerald-400">➜</span>
+                        </Link>
+                      )}
                     </div>
                   </div>
                 </div>

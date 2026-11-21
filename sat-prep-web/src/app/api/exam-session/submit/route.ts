@@ -13,16 +13,6 @@ import { determineAdaptivePath } from '@/lib/exam-scoring';
 import { isE2E, e2eModule, e2eGrade, E2E_ECONOMY } from '@/lib/e2e';
 import { bumpDailyActivity } from '@/lib/daily-activity-store';
 import { matchesAnswer } from '@/lib/answer-match';
-import { createClient } from '@supabase/supabase-js';
-
-function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 /**
  * NỘP 1 MODULE THI ADAPTIVE — server chấm + thưởng, và (nếu Module 1) sinh Module 2.

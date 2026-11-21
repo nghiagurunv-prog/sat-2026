@@ -365,7 +365,7 @@ export function AITutoring() {
         } else {
           setChatMessages(prev => [...prev, {
             role: 'ai',
-            text: data?.error || "Lỗi: Không thể kết nối với server. Có thể bạn chưa thiết lập OPENAI_API_KEY trong file .env.local."
+            text: data?.error || "Hệ thống Gia sư AI tạm thời bận hoặc mạng gián đoạn. Bạn vui lòng thử lại sau giây lát nhé!"
           }]);
         }
         return;
@@ -382,7 +382,7 @@ export function AITutoring() {
         return;
       }
       setIsTyping(false);
-      setChatMessages(prev => [...prev, { role: 'ai', text: "Lỗi: Không thể kết nối với server. Có thể bạn chưa thiết lập OPENAI_API_KEY trong file .env.local." }]);
+      setChatMessages(prev => [...prev, { role: 'ai', text: "Hệ thống Gia sư AI tạm thời bận hoặc mạng gián đoạn. Bạn vui lòng thử lại sau giây lát nhé!" }]);
     } finally {
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;

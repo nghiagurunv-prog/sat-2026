@@ -14,6 +14,7 @@ import {
   type SprintExamPack,
 } from '@/lib/subscription';
 import { useToast } from '@/context/ToastContext';
+import { B2bCenterPricingSection } from '@/components/pricing/B2bCenterPricingSection';
 
 // ============================================================================
 // CỔNG THANH TOÁN & METADATA
@@ -892,19 +893,19 @@ function PricingContent() {
       </div>
 
       {/* ==================================================================== */}
-      {/* 7. KHỐI THÔNG TIN PHÁP LÝ & HỖ TRỢ KÍCH HOẠT CHUẨN PHÚ GIA (#C070) */}
+      {/* 7. KHỐI THÔNG TIN NỀN TẢNG & HỖ TRỢ KÍCH HOẠT SAT.GURU (#C070)       */}
       {/* ==================================================================== */}
       <div className="rounded-3xl bg-slate-950 border border-slate-800 p-8 sm:p-10 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-800">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
-              <span>🏛️ THÔNG TIN PHÁP LÝ & ĐƠN VỊ VẬN HÀNH</span>
+              <span>🎓 NỀN TẢNG LUYỆN THI DIGITAL SAT ĐỘC LẬP</span>
             </div>
             <h3 className="text-lg sm:text-xl font-bold text-white">
-              Hộ Kinh Doanh Phú Gia - Nội Thất & Xây Dựng
+              SAT.Guru — Hệ Thống Luyện Thi Digital SAT AI
             </h3>
             <p className="text-xs text-slate-400">
-              Thương hiệu phát triển: <strong className="text-slate-200">CÔNG TY CP PHÚ GIA VIỆT NAM / PG HOME LUXURY</strong>
+              Phụ trách học thuật &amp; Cố vấn chiến lược: <strong className="text-slate-200">Thầy Nghĩa Guru (Nguyễn Trọng Nghĩa)</strong>
             </p>
           </div>
 
@@ -913,40 +914,40 @@ function PricingContent() {
               📞
             </div>
             <div>
-              <div className="text-[11px] text-slate-400 font-medium">Hotline Hỗ Trợ 24/7 (Zalo):</div>
+              <div className="text-[11px] text-slate-400 font-medium">Hotline / Zalo Tư Vấn 24/7:</div>
               <a
                 href="tel:0986722324"
                 className="text-lg font-black text-emerald-400 hover:text-emerald-300 transition tracking-wide font-mono"
               >
                 0986.722.324
               </a>
-              <div className="text-[10px] text-slate-500">Kích hoạt tài khoản trong 3 phút</div>
+              <div className="text-[10px] text-slate-500">Kích hoạt tài khoản tự động trong 30 giây</div>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-slate-300">
           <div className="space-y-1.5">
-            <span className="font-bold text-slate-400 block">Mã số ĐKKD / Mã số thuế (MST):</span>
-            <span className="font-mono font-bold text-amber-300 text-sm">042203002931</span>
-            <p className="text-[11px] text-slate-500">Đăng ký lần đầu: 13/01/2025 • Đại diện: Nguyễn Trọng Nghĩa</p>
+            <span className="font-bold text-slate-400 block">Đối Tượng Phục Vụ:</span>
+            <span className="text-amber-300 font-bold text-sm block">Học sinh THPT Việt Nam (Lớp 10–12)</span>
+            <p className="text-[11px] text-slate-500">Mục tiêu 1300–1550+ xét tuyển FTU, NEU, HUST, VNU, VinUni, Fulbright &amp; Du học Mỹ</p>
           </div>
 
           <div className="space-y-1.5">
-            <span className="font-bold text-slate-400 block">Địa chỉ Giao dịch & Tổ hợp Nghiên cứu:</span>
+            <span className="font-bold text-slate-400 block">Chuẩn Khảo Thí &amp; Công Nghệ:</span>
             <span className="text-slate-200 font-medium leading-relaxed block">
-              Ngõ 49 Trương Quốc Dụng, P. Thành Sen, TP. Hà Tĩnh
+              Mô phỏng Bluebook Adaptive • Máy tính Desmos • Gia sư AI Socratic song ngữ
             </span>
             <p className="text-[11px] text-slate-500">
-              ĐKKD: Số 01, Ngõ 53, Đường Trương Quốc Dụng, Phường Thành Sen, Tỉnh Hà Tĩnh
+              Cổng báo cáo tiến độ minh bạch riêng dành cho Phụ huynh &amp; Giáo viên
             </p>
           </div>
 
           <div className="space-y-1.5">
-            <span className="font-bold text-slate-400 block">Cam Kết Minh Bạch & An Toàn:</span>
+            <span className="font-bold text-slate-400 block">Cam Kết Minh Bạch &amp; An Toàn:</span>
             <ul className="space-y-1 text-[11px] text-slate-400">
-              <li>✓ Hóa đơn & chứng từ thanh toán hợp lệ</li>
-              <li>✓ Kích hoạt gói học tự động qua VietQR trong 10-30s</li>
+              <li>✓ Minh bạch học phí, không phí ẩn tự động gia hạn</li>
+              <li>✓ Kích hoạt gói học tự động qua VietQR trong 10–30s</li>
               <li>✓ Hoàn tiền 100% nếu hệ thống phát sinh lỗi kỹ thuật</li>
             </ul>
           </div>
@@ -1185,6 +1186,9 @@ function PricingContent() {
           </div>
         </div>
       )}
+
+      {/* Mục #25 & #27: B2B Center License + Score Guarantee dùng chung 1 nguồn duy nhất */}
+      <B2bCenterPricingSection />
     </div>
   );
 }

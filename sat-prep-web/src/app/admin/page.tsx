@@ -2430,19 +2430,19 @@ export default function AdminPage() {
         })()}
 
         {/* =========================================================================
-            FOOTER THƯƠNG HIỆU & PHÁP LÝ CHUẨN PHÚ GIA (HIẾN PHÁP KỶ LUẬT THÉP)
+            FOOTER QUẢN TRỊ NỀN TẢNG SAT.GURU
            ========================================================================= */}
         <footer className="mt-12 rounded-2xl border border-white/10 bg-slate-900/80 p-6 text-xs text-slate-400 backdrop-blur-sm">
           <div className="flex flex-col items-center justify-between gap-4 text-left md:flex-row">
             <div>
               <p className="text-sm font-bold text-slate-200">
-                Hộ Kinh Doanh Phú Gia - Nội Thất &amp; Xây Dựng (CÔNG TY CP PHÚ GIA VIỆT NAM / PG HOME LUXURY)
+                SAT.Guru — Hệ Thống Luyện Thi Digital SAT AI (Admin Cockpit)
               </p>
               <p className="mt-1 text-slate-400">
-                Đại diện: <span className="font-semibold text-slate-300">Nguyễn Trọng Nghĩa</span> | Mã số ĐKKD/MST: <span className="font-semibold text-slate-300">042203002931</span>
+                Phụ trách học thuật: <span className="font-semibold text-slate-300">Thầy Nghĩa Guru (Nguyễn Trọng Nghĩa)</span>
               </p>
               <p className="mt-1 text-slate-400">
-                Địa chỉ: <span className="font-semibold text-slate-300">Ngõ 49 Trương Quốc Dụng, P. Thành Sen, TP. Hà Tĩnh</span>
+                Nền tảng EdTech độc lập — Luyện thi Digital SAT 1300–1550+ chuẩn College Board Bluebook
               </p>
             </div>
             <div className="text-left md:text-right">

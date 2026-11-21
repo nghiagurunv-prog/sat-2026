@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { verifyPayosWebhook, isPayosSuccess } from '@/lib/payment-payos';
 import { confirmPaymentAtomic } from '@/lib/payment-store';
+import {
+  checkWebhookTimestampAnomaly,
+  emitMetric,
+  isWebhookRecentlyConfirmed,
+  markWebhookConfirmed,
+} from '@/lib/telemetry';
 
 /**
  * ============================================================================
@@ -44,6 +50,7 @@ export async function POST(req: Request) {
 
     // 1) Verify chữ ký — sai → từ chối, KHÔNG xử lý (chống giả mạo webhook).
     if (!payload?.data || !verifyPayosWebhook(payload.data as Record<string, unknown>, String(payload.signature ?? ''), checksumKey)) {
+      emitMetric('webhook_invalid_signature', 1, { gateway: 'payos' });
       return NextResponse.json({ success: false, message: 'Invalid signature' }, { status: 400 });
     }
 
@@ -57,6 +64,21 @@ export async function POST(req: Request) {
     const orderId = String(payload.data?.orderCode ?? '');
     const gatewayTxnId = String(payload.data?.reference ?? '');
     const amountVnd = Number(payload.data?.amount ?? 0);
+
+    // Mục #8: Giám sát lệch mốc thời gian (>24h chỉ cảnh báo, KHÔNG reject retry thật #G8)
+    checkWebhookTimestampAnomaly(
+      'payos',
+      orderId,
+      (payload.data?.transactionDateTime as string | undefined) ?? null
+    );
+
+    // Edge Dedup Lock (60s): chặn replay flood khi đơn vừa được xác nhận thành công
+    const dedupKey = `payos:${orderId}:${gatewayTxnId || amountVnd}`;
+    if (isWebhookRecentlyConfirmed(dedupKey)) {
+      emitMetric('webhook_edge_dedup_hit', 1, { gateway: 'payos' });
+      return NextResponse.json({ success: true, received: true, alreadyPaid: true });
+    }
+
     const outcome = await confirmPaymentAtomic(orderId, gatewayTxnId, amountVnd);
 
     // 4) GÓI ĐÃ ĐƯỢC CẤP NGUYÊN TỬ trong confirm_payment RPC (cùng transaction với
@@ -65,24 +87,30 @@ export async function POST(req: Request) {
 
     // 4.1) Đơn đã thanh toán trước đó (order.status === 'paid') → idempotent ack, không cộng dồn trùng
     if (outcome.alreadyConfirmed) {
+      markWebhookConfirmed(dedupKey);
       return NextResponse.json({ success: true, received: true, alreadyPaid: true });
     }
 
     // 4.2) Kiểm tra lỗi xác nhận
     if (!outcome.ok) {
       if (outcome.reason === 'amount_mismatch') {
+        emitMetric('webhook_amount_mismatch', 1, { gateway: 'payos', orderId });
         console.warn(`[payos-webhook] Số tiền chuyển không đủ hoặc không khớp: orderId=${orderId}, nhận ${amountVnd} VND`);
         return NextResponse.json({ success: true, received: true, reason: 'amount_mismatch' }, { status: 200 });
       }
       if (outcome.reason === 'not_found') {
+        emitMetric('webhook_order_not_found', 1, { gateway: 'payos', orderId });
         console.warn(`[payos-webhook] Không tìm thấy đơn hàng: orderId=${orderId}`);
         return NextResponse.json({ success: true, received: true, reason: 'not_found' }, { status: 200 });
       }
       // Lỗi hệ thống / cập nhật DB thất bại → trả 500 để payOS tự động retry
+      emitMetric('webhook_confirm_error', 1, { gateway: 'payos', reason: outcome.reason });
       console.error(`[payos-webhook] Lỗi hệ thống khi xác nhận thanh toán orderId=${orderId}:`, outcome.reason);
       return NextResponse.json({ success: false, message: 'Confirm failed, retry' }, { status: 500 });
     }
 
+    markWebhookConfirmed(dedupKey);
+    emitMetric('webhook_payment_confirmed', 1, { gateway: 'payos', amountVnd });
     return NextResponse.json({ success: true, received: true });
   } catch (error) {
     console.error('Lỗi payos-webhook:', error);

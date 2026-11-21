@@ -1,6 +1,18 @@
 'use client';
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+
+interface DesmosApiInstance {
+  setExpression: (expr: { id: string; latex: string }) => void;
+  setBlank?: () => void;
+  destroy?: () => void;
+}
+
+/** Helper phát sự kiện toàn cục đẩy công thức từ AI Tutor / Câu hỏi thẳng vào Desmos (Mục #11) */
+export function dispatchDesmosExpression(latex: string, label?: string): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('sat:desmos-inject', { detail: { latex, label } }));
+}
 import {
   Calculator,
   X,
@@ -91,7 +103,10 @@ export function DesmosCalculator({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showSnippets, setShowSnippets] = useState<boolean>(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [apiReady, setApiReady] = useState<boolean>(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const apiContainerRef = useRef<HTMLDivElement>(null);
+  const calculatorRef = useRef<DesmosApiInstance | null>(null);
   // #039: Keep Desmos mounted once opened so graphs/sliders/regression tables persist
   const hasOpenedRef = useRef<boolean>(false);
   if (isOpen) {
@@ -100,14 +115,100 @@ export function DesmosCalculator({
 
   const activeSizeMode = controlledSizeMode || internalSizeMode;
 
+  // Mục #11: Nạp Desmos JS API v1.9 để bơm trực tiếp biểu thức qua setExpression() (fallback iframe nếu blocked)
+  useEffect(() => {
+    if (!isOpen || !apiContainerRef.current || calculatorRef.current) return;
+    let cancelled = false;
+
+    const mountCalculator = () => {
+      if (cancelled || !apiContainerRef.current || !window.Desmos?.GraphingCalculator || calculatorRef.current) {
+        return;
+      }
+      try {
+        calculatorRef.current = window.Desmos.GraphingCalculator(apiContainerRef.current, {
+          expressions: true,
+          keypad: true,
+          settingsMenu: true,
+          zoomButtons: true,
+        });
+        setApiReady(true);
+      } catch {
+        setApiReady(false);
+      }
+    };
+
+    if (window.Desmos?.GraphingCalculator) {
+      mountCalculator();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const existing = document.getElementById('sat-desmos-api-script') as HTMLScriptElement | null;
+    if (existing) {
+      existing.addEventListener('load', mountCalculator, { once: true });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const script = document.createElement('script');
+    script.id = 'sat-desmos-api-script';
+    script.src = 'https://www.desmos.com/api/v1.9/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6';
+    script.async = true;
+    script.onload = mountCalculator;
+    script.onerror = () => setApiReady(false);
+    document.head.appendChild(script);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  const injectLatexExpressions = useCallback((rawCode: string, label?: string): boolean => {
+    const calc = calculatorRef.current;
+    if (!calc) return false;
+    const lines = rawCode
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (lines.length === 0) return false;
+    lines.forEach((latex, idx) => {
+      calc.setExpression({ id: `sat_expr_${Date.now()}_${idx}`, latex });
+    });
+    setToastMessage(`⚡ Đã nạp trực tiếp vào Desmos${label ? `: ${label}` : ''}`);
+    setTimeout(() => setToastMessage(null), 2200);
+    return true;
+  }, []);
+
+  // Lắng nghe lệnh bơm công thức 1-chạm từ AI Tutor Drawer (`sat:desmos-inject`)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ latex?: string; label?: string }>).detail;
+      if (!detail?.latex) return;
+      const injected = injectLatexExpressions(detail.latex, detail.label);
+      if (!injected && navigator.clipboard) {
+        navigator.clipboard.writeText(detail.latex).catch(() => {});
+        setToastMessage('Đã chép công thức AI — bấm Ctrl+V vào Desmos');
+        setTimeout(() => setToastMessage(null), 2200);
+      }
+    };
+    window.addEventListener('sat:desmos-inject', handler);
+    return () => window.removeEventListener('sat:desmos-inject', handler);
+  }, [injectLatexExpressions]);
+
   const handleCopy = useCallback(
     async (snippet: DesmosSnippet) => {
       try {
+        const injected = injectLatexExpressions(snippet.code, snippet.name.split(':')[0]);
         if (typeof navigator !== 'undefined' && navigator.clipboard) {
-          await navigator.clipboard.writeText(snippet.code);
+          await navigator.clipboard.writeText(snippet.code).catch(() => {});
         }
         setCopiedId(snippet.id);
-        setToastMessage(`Đã chép: ${snippet.name.split(':')[0]}`);
+        if (!injected) {
+          setToastMessage(`Đã chép: ${snippet.name.split(':')[0]}`);
+        }
         if (onCopySnippet) {
           onCopySnippet(snippet.code);
         }
@@ -116,10 +217,10 @@ export function DesmosCalculator({
           setToastMessage(null);
         }, 2200);
       } catch (err) {
-        console.error('Lỗi sao chép công thức:', err);
+        console.error('Lỗi sao chép/nạp công thức:', err);
       }
     },
-    [onCopySnippet]
+    [injectLatexExpressions, onCopySnippet]
   );
 
   const handleCycleSize = useCallback(() => {
@@ -135,6 +236,10 @@ export function DesmosCalculator({
   }, [onToggleSize]);
 
   const handleReloadIframe = useCallback(() => {
+    if (calculatorRef.current?.setBlank) {
+      calculatorRef.current.setBlank();
+      return;
+    }
     if (iframeRef.current) {
       iframeRef.current.src = 'https://www.desmos.com/calculator?embed';
     }
@@ -282,16 +387,22 @@ export function DesmosCalculator({
         )}
       </div>
 
-      {/* Frame nhúng Desmos Calculator */}
+      {/* Desmos JS API Bridge (1-Click setExpression) + Fallback iframe an toàn */}
       <div className="flex-1 w-full h-full relative bg-slate-100 dark:bg-slate-950">
-        <iframe
-          ref={iframeRef}
-          src="https://www.desmos.com/calculator?embed"
-          title="Desmos Graphing Calculator"
-          className="w-full h-full border-none"
-          loading="lazy"
-          allow="clipboard-write; clipboard-read"
+        <div
+          ref={apiContainerRef}
+          className={`w-full h-full ${apiReady ? 'block' : 'hidden'}`}
         />
+        {!apiReady && (
+          <iframe
+            ref={iframeRef}
+            src="https://www.desmos.com/calculator?embed"
+            title="Desmos Graphing Calculator"
+            className="w-full h-full border-none"
+            loading="lazy"
+            allow="clipboard-write; clipboard-read"
+          />
+        )}
       </div>
 
       {/* Footer bar */}

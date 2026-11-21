@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { isSafeRedirectPath } from '@/lib/supabase/middleware'
 
-/** Chỉ nhận path nội bộ (bắt đầu '/' nhưng không '//') — chống open-redirect. */
+/** Chỉ nhận path nội bộ an toàn (tái dùng chuẩn isSafeRedirectPath: chặn //, \, %5c, \0, ://). */
 function safeNext(raw: string | null): string {
-  if (raw && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\') && !raw.includes('://')) return raw
+  if (raw && isSafeRedirectPath(raw) && !raw.includes('://')) return raw
   return '/'
 }
 

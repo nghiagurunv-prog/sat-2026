@@ -109,21 +109,20 @@ export async function verifyAdmin(req: Request): Promise<AdminAuthResult> {
     // Fail-safe: lỗi phiên đăng nhập coi như không có quyền
   }
 
-  // 3. Nếu gửi sai x-admin-secret: áp dụng rate limit chống brute-force (10 lần sai / phút / IP)
-  if (secretHeader !== null && secretHeader !== undefined && secretHeader.length > 0) {
-    const rl = rateLimit(`admin-secret:${getClientIp(req)}`, 10, 60_000);
-    const isAllowed = 'allowed' in rl ? rl.allowed : (rl as { ok?: boolean }).ok !== false;
-    if (!isAllowed) {
-      return {
-        ok: false,
-        error: 'Too many admin authentication attempts. Please try again later.',
-        status: 429,
-        response: NextResponse.json(
-          { success: false, error: 'Too many admin authentication attempts. Please try again later.' },
-          { status: 429 }
-        ),
-      };
-    }
+  // 3. Mọi lần xác thực admin THẤT BẠI (sai secret hoặc thiếu quyền) đều bị rate-limit theo IP (10 lần/phút)
+  //    Chỉ chạy SAU khi xác thực hợp lệ ở bước 1 & 2 thất bại (đúng chuẩn #G6 Fail-Closed).
+  const rl = rateLimit(`admin-secret:${getClientIp(req)}`, 10, 60_000);
+  const isAllowed = 'allowed' in rl ? rl.allowed : (rl as { ok?: boolean }).ok !== false;
+  if (!isAllowed) {
+    return {
+      ok: false,
+      error: 'Too many admin authentication attempts. Please try again later.',
+      status: 429,
+      response: NextResponse.json(
+        { success: false, error: 'Too many admin authentication attempts. Please try again later.' },
+        { status: 429 }
+      ),
+    };
   }
 
   return {

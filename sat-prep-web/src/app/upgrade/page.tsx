@@ -13,6 +13,7 @@ import {
   type SprintExamPack,
 } from '@/lib/subscription';
 import { useToast } from '@/context/ToastContext';
+import { B2bCenterPricingSection } from '@/components/pricing/B2bCenterPricingSection';
 
 // Cổng thanh toán: payOS (chuyển khoản QR, khuyên dùng VN cá nhân) + Stripe
 // (thẻ quốc tế) + VNPay/MoMo (khi có creds doanh nghiệp).
@@ -1036,6 +1037,9 @@ function UpgradeContent() {
           </div>
         </div>
       )}
+
+      {/* Mục #25 & #27: B2B Center License + Score Guarantee dùng chung 1 nguồn duy nhất */}
+      <B2bCenterPricingSection />
     </div>
   );
 }

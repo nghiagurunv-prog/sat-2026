@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
+import { getUserTier } from '@/lib/subscription-store';
 import { listExamsPublic, getExamById, getExamQuestionMap } from '@/lib/exams';
 import { issueQuestion } from '@/lib/issued-questions';
 
@@ -31,11 +32,18 @@ function preview(text: string, max = 90): string {
   return t.length > max ? t.slice(0, max) + '…' : t;
 }
 
-export async function GET() {
+function isFreeAccessibleExam(examId: string): boolean {
+  return examId === 'mock_sat_1' || examId.startsWith('diagnostic');
+}
+
+export async function GET(req: Request) {
   const user = await getCurrentUser();
   if (!user.isAuthenticated) {
     return NextResponse.json({ error: 'Bạn cần đăng nhập để mở thư viện đề.' }, { status: 401 });
   }
+
+  const tier = await getUserTier(user.id);
+  const isPaid = tier !== 'free';
 
   const cards: Array<{
     id: string;
@@ -44,9 +52,11 @@ export async function GET() {
     source: string;
     subject: 'Reading & Writing' | 'Math';
     difficulty: string;
+    isLocked: boolean;
   }> = [];
 
   for (const exam of listExamsPublic()) {
+    const isLocked = !isPaid && !isFreeAccessibleExam(exam.id);
     for (const mod of exam.modules) {
       const subject = subjectFromModule(mod.name);
       for (const q of mod.questions) {
@@ -57,18 +67,45 @@ export async function GET() {
           source: exam.title,
           subject,
           difficulty: q.difficulty,
+          isLocked,
         });
       }
     }
   }
 
-  return NextResponse.json({ questions: cards });
+  // Hỗ trợ phân trang optional (?page=&limit=), mặc định trả toàn bộ để tương thích ngược
+  let pagedCards = cards;
+  let total = cards.length;
+  let page = 1;
+  let limit = cards.length;
+  if (req?.url) {
+    try {
+      const { searchParams } = new URL(req.url);
+      const limitParam = searchParams.get('limit');
+      const pageParam = searchParams.get('page');
+      if (limitParam) {
+        const parsedLimit = Math.min(200, Math.max(1, parseInt(limitParam, 10) || 50));
+        const parsedPage = Math.max(1, parseInt(pageParam || '1', 10) || 1);
+        limit = parsedLimit;
+        page = parsedPage;
+        const start = (page - 1) * limit;
+        pagedCards = cards.slice(start, start + limit);
+      }
+    } catch {
+      // Bỏ qua nếu URL không hợp lệ trong unit test
+    }
+  }
+
+  return NextResponse.json({ questions: pagedCards, total, page, limit, tier });
 }
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();
+  if (!user.isAuthenticated) {
+    return NextResponse.json({ error: 'Bạn cần đăng nhập để luyện đề trong thư viện.' }, { status: 401 });
+  }
 
-  const rl = rateLimit(`library:${user.id}`, 20, 60_000);
+  const rl = rateLimit(getRateLimitKey(req, 'library', user.id), 20, 60_000);
   if (!rl.allowed) {
     return NextResponse.json({ error: 'Quá nhiều request. Thử lại sau.', retryAfterMs: rl.retryAfterMs }, { status: 429 });
   }
@@ -83,6 +120,20 @@ export async function POST(req: Request) {
   const exam = getExamById(examId);
   if (!exam) {
     return NextResponse.json({ error: 'Không tìm thấy đề' }, { status: 404 });
+  }
+
+  // Tier Gating: Free chỉ mở được đề thử nghiệm miễn phí (mock_sat_1 / diagnostic)
+  if (!isFreeAccessibleExam(examId)) {
+    const tier = await getUserTier(user.id);
+    if (tier === 'free') {
+      return NextResponse.json(
+        {
+          error: 'Đề thi thực chiến nâng cao dành cho thành viên Pro/Premium/Ultimate. Vui lòng nâng cấp để mở khóa trọn bộ.',
+          code: 'PRO_EXAM_REQUIRED',
+        },
+        { status: 403 }
+      );
+    }
   }
 
   // Tìm câu + module chứa nó (để suy timeLimit theo thời gian module / số câu).

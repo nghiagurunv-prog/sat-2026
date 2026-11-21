@@ -48,7 +48,17 @@ const MATH_LEVELS = [
   { id: 'specialist', label: 'Chuyên Toán / Xuất sắc (> 9.2)', bonusMath: 750 },
 ];
 
-const SAT_EXAM_MONTHS = ['Tháng 8', 'Tháng 10', 'Tháng 12', 'Tháng 3', 'Tháng 5', 'Tháng 6'];
+// Mục #24: Ngày thi SAT chính thức của College Board (Dynamic Countdown & Sprint Plan)
+const OFFICIAL_SAT_EXAM_OPTIONS = [
+  { id: '2026-08-29', label: 'Tháng 8 (29/08/2026)', iso: '2026-08-29' },
+  { id: '2026-10-03', label: 'Tháng 10 (03/10/2026)', iso: '2026-10-03' },
+  { id: '2026-12-05', label: 'Tháng 12 (05/12/2026)', iso: '2026-12-05' },
+  { id: '2027-03-13', label: 'Tháng 3 (13/03/2027)', iso: '2027-03-13' },
+  { id: '2027-05-01', label: 'Tháng 5 (01/05/2027)', iso: '2027-05-01' },
+  { id: '2027-06-05', label: 'Tháng 6 (05/06/2027)', iso: '2027-06-05' },
+] as const;
+
+const SAT_EXAM_MONTHS = OFFICIAL_SAT_EXAM_OPTIONS.map((o) => o.label);
 
 const STUDY_TIME_SLOTS = [
   { id: 'slot_evening_1', label: '20:00 – 21:30', desc: 'Khung giờ vàng buổi tối' },
@@ -148,9 +158,15 @@ export default function OnboardingPage() {
   const [targetUniCode, setTargetUniCode] = useState<string>('FTU');
   const [targetScore, setTargetScore] = useState<number>(1450);
 
-  // #C003 & #C009: Kỳ thi SAT & Khung giờ học
-  const [examMonth, setExamMonth] = useState<string>('Tháng 10');
+  // #C003 & #C009 + Mục #24: Kỳ thi SAT chính thức & Khung giờ học
+  const [examMonth, setExamMonth] = useState<string>(OFFICIAL_SAT_EXAM_OPTIONS[2].label);
   const [studySlot, setStudySlot] = useState<string>('20:00 – 21:30');
+
+  const countdownDays = useMemo(() => {
+    const matched = OFFICIAL_SAT_EXAM_OPTIONS.find((o) => o.label === examMonth) ?? OFFICIAL_SAT_EXAM_OPTIONS[2];
+    const diffMs = Date.parse(matched.iso) - Date.now();
+    return Math.max(7, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
+  }, [examMonth]);
 
   // #C004: Chế độ chẩn đoán
   const [diagnosticMode, setDiagnosticMode] = useState<'quick' | 'standard'>('quick');
@@ -426,7 +442,7 @@ export default function OnboardingPage() {
 • Khuyến nghị: Chu kỳ tái chẩn đoán định kỳ 14 ngày/lần.
 • Hành động ưu tiên: Bổ sung ngay các dạng bài bẫy trong phần Đại số nâng cao & Từ vựng theo ngữ cảnh.
 --------------------------------------------------
-Hệ sinh thái luyện thi SAT Thích ứng Thông minh — Phú Gia SAT Prep`;
+Hệ sinh thái luyện thi Digital SAT Thích ứng Thông minh — SAT.Guru`;
 
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText(reportText).then(() => {
@@ -627,6 +643,26 @@ Hệ sinh thái luyện thi SAT Thích ứng Thông minh — Phú Gia SAT Prep`;
                   <p className="text-xs text-slate-400">
                     Xác định kỳ thi mục tiêu và khung giờ học tập cam kết mỗi ngày
                   </p>
+                </div>
+              </div>
+              {/* Mục #24: Dynamic Countdown & 3-Phase Sprint Preview */}
+              <div className="rounded-xl bg-gradient-to-r from-amber-500/15 via-indigo-500/10 to-emerald-500/15 border border-amber-400/30 p-3.5 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-300">⏳ Đếm ngược tới kỳ thi {examMonth}:</span>
+                  <span className="font-black text-white bg-amber-500/30 px-2.5 py-0.5 rounded-full border border-amber-400/50">
+                    Còn {countdownDays} ngày (~{Math.max(1, Math.round(countdownDays / 7))} tuần)
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-200">
+                  <div className="bg-[#0c1421]/80 rounded-lg p-2 border border-slate-700/60">
+                    <span className="font-bold text-cyan-300">Chặng 1:</span> Trám rỗng Ngữ pháp & Đại số nền
+                  </div>
+                  <div className="bg-[#0c1421]/80 rounded-lg p-2 border border-slate-700/60">
+                    <span className="font-bold text-emerald-300">Chặng 2:</span> Làm chủ Desmos 15s & Bẫy đọc hiểu
+                  </div>
+                  <div className="bg-[#0c1421]/80 rounded-lg p-2 border border-slate-700/60">
+                    <span className="font-bold text-amber-300">Chặng 3:</span> Nước rút Full-length Bluebook QAS
+                  </div>
                 </div>
               </div>
 

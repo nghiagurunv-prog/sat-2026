@@ -1,0 +1,19 @@
+{
+  "name": "SAT.Guru — Luyện thi Digital SAT AI Chuẩn Bluebook",
+  "short_name": "SAT.Guru",
+  "description": "Nền tảng luyện thi Digital SAT thích ứng chuẩn Bluebook cùng Gia sư AI Socratic cho học sinh THPT Việt Nam.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0e1117",
+  "theme_color": "#0e1117",
+  "lang": "vi",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

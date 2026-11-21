@@ -17,6 +17,9 @@ REVOKE INSERT, UPDATE, DELETE ON user_ai_usage FROM authenticated;
 REVOKE INSERT, UPDATE, DELETE ON ai_cost_ledger FROM authenticated;
 REVOKE INSERT, UPDATE, DELETE ON user_progress FROM authenticated;
 REVOKE INSERT, UPDATE, DELETE ON user_goals FROM authenticated;
+-- Khóa ghi trực tiếp trên 2 bảng dùng chung (chống AI Cache Poisoning & Question Bank Pollution)
+REVOKE INSERT, UPDATE, DELETE ON ai_chat_cache FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE ON questions FROM authenticated;
 
 -- Khóa RPC nhạy cảm (client không được gọi trực tiếp)
 -- ⚠️ PHẢI revoke CẢ authenticated LẪN public: Postgres mặc định grant EXECUTE

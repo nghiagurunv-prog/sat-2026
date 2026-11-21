@@ -543,7 +543,7 @@ export default function ExamsCatalogPage() {
 
                     {/* Secondary Full Adaptive Session */}
                     <Link
-                      href={`/mock-exams/session?examId=${exam.id}`}
+                      href={`/mock-exams?examId=${exam.id}`}
                       className="inline-flex items-center justify-center gap-1 py-2.5 px-3 rounded-xl bg-slate-700/70 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold transition-colors border border-slate-600/60"
                       title="Chế độ làm bài phiên thích ứng tuần tự"
                     >

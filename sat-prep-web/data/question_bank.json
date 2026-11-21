@@ -62,7 +62,8 @@
             "is_correct": false,
             "analysis": "Bẫy giao điểm trục tung: Điểm (0, 2) thỏa mãn 2(0)+3(2)=6 nhưng 4(0)-2(2) = -4 ≠ 8."
           }
-        ]
+        ],
+        "type": "mcq"
       },
       "createdAt": "2026-06-29T02:28:47.031Z",
       "usageCount": 0
@@ -112,7 +113,8 @@
             "is_correct": false,
             "analysis": "Bẫy giao điểm trục hoành: (5, 0) cho 2(5) = 10 ≠ 20."
           }
-        ]
+        ],
+        "type": "mcq"
       },
       "createdAt": "2026-06-29T03:35:18.901Z",
       "usageCount": 0
@@ -162,7 +164,8 @@
             "is_correct": false,
             "analysis": "Bẫy tính toán: Nhầm lẫn trong bước rút gọn 12x - 10x."
           }
-        ]
+        ],
+        "type": "mcq"
       },
       "createdAt": "2026-06-29T03:36:26.444Z",
       "usageCount": 0
@@ -247,7 +250,8 @@
             "is_correct": false,
             "analysis": "Bẫy chi tiết bề mặt: Hình ảnh cây bút và giấy da chỉ là ẩn dụ, không bàn về kỹ thuật viết thơ."
           }
-        ]
+        ],
+        "type": "mcq"
       },
       "createdAt": "2026-06-29T04:14:06.881Z",
       "usageCount": 0
@@ -336,7 +340,8 @@
             "is_correct": false,
             "analysis": "Bẫy ngược sắc thái: Nhà thơ tha thiết cầu xin các vì sao, không hề có thái độ thờ ơ, lạnh nhạt."
           }
-        ]
+        ],
+        "type": "mcq"
       },
       "createdAt": "2026-06-29T04:14:25.810Z",
       "usageCount": 0
@@ -386,7 +391,8 @@
             "is_correct": false,
             "analysis": "Bẫy nghịch đảo hoặc cộng dồn toạ độ."
           }
-        ]
+        ],
+        "type": "mcq"
       },
       "createdAt": "2026-06-30T11:53:02.381Z",
       "usageCount": 0
@@ -436,7 +442,8 @@
             "is_correct": false,
             "analysis": "Bẫy nhầm chu vi hoặc 4r: 4 * 7 = 28."
           }
-        ]
+        ],
+        "type": "mcq"
       },
       "createdAt": "2026-06-30T11:53:27.029Z",
       "usageCount": 0
@@ -486,7 +493,8 @@
             "is_correct": false,
             "analysis": "Bẫy dấu: Nhầm (x - 1)² với (x + 1)² nên chọn nhầm x = -1."
           }
-        ]
+        ],
+        "type": "mcq"
       },
       "createdAt": "2026-06-30T11:53:33.864Z",
       "usageCount": 0
@@ -539,7 +547,8 @@
             "is_correct": false,
             "analysis": "Bẫy từ tiêu cực: 'distraction' (sự xao nhãng) không phù hợp với cảm giác dễ chịu được mô tả."
           }
-        ]
+        ],
+        "type": "mcq"
       },
       "createdAt": "2026-06-30T11:53:36.561Z",
       "usageCount": 0
@@ -592,7 +601,8 @@
         "theory": "The vertex of a parabola y = ax^2 + bx + c can be found at x = -b/(2a). On Desmos, enter the equation and click the maximum/minimum point.",
         "sample_example": "y = -2x^2 + 8x - 5 has vertex at x = -8/(2*-2) = 2, y = 3.",
         "desmos_expression": "y = -2x^2 + 8x - 5",
-        "target_equation": "y = -2x^2 + 8x - 5"
+        "target_equation": "y = -2x^2 + 8x - 5",
+        "type": "mcq"
       },
       "createdAt": "2026-06-30T11:54:37.416Z",
       "usageCount": 0
@@ -642,7 +652,8 @@
             "is_correct": false,
             "analysis": "Bẫy phép trừ trực tiếp: 1 - 3/5 = 2/5 hoặc 1/5 do tính toán sai."
           }
-        ]
+        ],
+        "type": "mcq"
       },
       "createdAt": "2026-06-30T11:54:47.202Z",
       "usageCount": 0
@@ -695,7 +706,8 @@
         "theory": "The intersection point of two linear equations corresponds to their algebraic solution. In Desmos, type both lines to locate the intersection.",
         "sample_example": "2x + 3y = 6 and 4x - y = 5 intersect at (1.5, 1).",
         "desmos_expression": "2x + 3y = 6; 4x - y = 5",
-        "target_equation": "2x + 3y = 6"
+        "target_equation": "2x + 3y = 6",
+        "type": "mcq"
       },
       "createdAt": "2026-06-30T11:57:24.177Z",
       "usageCount": 0
@@ -745,7 +757,8 @@
             "is_correct": false,
             "analysis": "Bẫy tính toán rút gọn hằng số."
           }
-        ]
+        ],
+        "type": "mcq"
       },
       "createdAt": "2026-06-30T17:07:57.767Z",
       "usageCount": 0
@@ -795,7 +808,8 @@
             "is_correct": false,
             "analysis": "Bẫy nghiệm trục tọa độ."
           }
-        ]
+        ],
+        "type": "mcq"
       },
       "createdAt": "2026-06-30T18:14:08.551Z",
       "usageCount": 0
@@ -845,7 +859,8 @@
             "is_correct": false,
             "analysis": "Bẫy nhầm dấu khi chuyển -2 sang vế phải."
           }
-        ]
+        ],
+        "type": "mcq"
       },
       "createdAt": "2026-06-30T18:14:55.415Z",
       "usageCount": 0
@@ -895,7 +910,8 @@
             "is_correct": false,
             "analysis": "Bẫy nghịch đảo độ dốc."
           }
-        ]
+        ],
+        "type": "mcq"
       },
       "createdAt": "2026-06-30T18:15:05.211Z",
       "usageCount": 0
@@ -945,7 +961,8 @@
         "full_passage": "",
         "passage": "",
         "question": "Solve for x: 5x + 7 = 2x + 19",
-        "explanation_vi": "Khai triển hai vế phương trình:\n4(x - 1) = 4x - 4.\n2(x + 3) - 2 = 2x + 6 - 2 = 2x + 4.\nPhương trình trở thành: 4x - 4 = 2x + 4.\nChuyển vế: 4x - 2x = 4 + 4 => 2x = 8 => x = 4."
+        "explanation_vi": "Khai triển hai vế phương trình:\n4(x - 1) = 4x - 4.\n2(x + 3) - 2 = 2x + 6 - 2 = 2x + 4.\nPhương trình trở thành: 4x - 4 = 2x + 4.\nChuyển vế: 4x - 2x = 4 + 4 => 2x = 8 => x = 4.",
+        "type": "mcq"
       },
       "createdAt": "2026-06-30T18:51:00.028Z",
       "usageCount": 0
@@ -995,7 +1012,8 @@
         "full_passage": "",
         "passage": "",
         "question": "Solve for x: 5(x - 2) + 3 = 2(x + 4)",
-        "explanation_vi": "Khai triển hai vế:\n5(x - 2) + 3 = 5x - 10 + 3 = 5x - 7.\n2(x + 4) = 2x + 8.\nPhương trình trở thành: 5x - 7 = 2x + 8.\nChuyển vế: 5x - 2x = 8 + 7 => 3x = 15 => x = 5."
+        "explanation_vi": "Khai triển hai vế:\n5(x - 2) + 3 = 5x - 10 + 3 = 5x - 7.\n2(x + 4) = 2x + 8.\nPhương trình trở thành: 5x - 7 = 2x + 8.\nChuyển vế: 5x - 2x = 8 + 7 => 3x = 15 => x = 5.",
+        "type": "mcq"
       },
       "createdAt": "2026-06-30T18:51:15.636Z",
       "usageCount": 0
@@ -1043,7 +1061,8 @@
         ],
         "passage": "The scientist's findings were so __________ that they changed the way we understand climate change. Many experts were left in disbelief, as the evidence contradicted long-held beliefs.",
         "question": "Which word best fits the blank in the passage?",
-        "explanation_vi": "Văn bản nêu rõ phát hiện của nhà khoa học đã làm thay đổi cách chúng ta hiểu về biến đổi khí hậu ('changed the way we understand') và đi ngược lại các niềm tin lâu đời. Từ 'groundbreaking' (mang tính đột phá, mang tính tiên phong) là lựa chọn hoàn hảo nhất trong ngữ cảnh này."
+        "explanation_vi": "Văn bản nêu rõ phát hiện của nhà khoa học đã làm thay đổi cách chúng ta hiểu về biến đổi khí hậu ('changed the way we understand') và đi ngược lại các niềm tin lâu đời. Từ 'groundbreaking' (mang tính đột phá, mang tính tiên phong) là lựa chọn hoàn hảo nhất trong ngữ cảnh này.",
+        "type": "mcq"
       },
       "createdAt": "2026-07-01T03:13:18.926Z",
       "usageCount": 0
@@ -1096,7 +1115,8 @@
         ],
         "passage": "In the midst of the bustling city, the old library stood as a _______ to the past, its ancient walls whispering stories of a time long gone.",
         "question": "What word best fits in the blank?",
-        "explanation_vi": "Ngữ cảnh miêu tả thư viện cổ kính đứng sừng sững giữa thành phố hiện đại như một chứng nhân lưu giữ quá khứ ('whispering stories of a time long gone'). Cụm từ 'stood as a monument to the past' (đứng như một tượng đài / chứng nhân của quá khứ) là chuẩn thành ngữ và phù hợp ngữ nghĩa nhất."
+        "explanation_vi": "Ngữ cảnh miêu tả thư viện cổ kính đứng sừng sững giữa thành phố hiện đại như một chứng nhân lưu giữ quá khứ ('whispering stories of a time long gone'). Cụm từ 'stood as a monument to the past' (đứng như một tượng đài / chứng nhân của quá khứ) là chuẩn thành ngữ và phù hợp ngữ nghĩa nhất.",
+        "type": "mcq"
       },
       "createdAt": "2026-07-01T03:14:00.894Z",
       "usageCount": 0
@@ -1146,7 +1166,8 @@
         "full_passage": "",
         "passage": "",
         "question": "Solve for x: 2(3x - 4) = 4(x + 1) - 2.",
-        "explanation_vi": "Khai triển hai vế phương trình:\n2(3x - 4) = 6x - 8.\n4(x + 1) - 2 = 4x + 4 - 2 = 4x + 2.\nPhương trình trở thành: 6x - 8 = 4x + 2.\nChuyển vế: 6x - 4x = 2 + 8 => 2x = 10 => x = 5."
+        "explanation_vi": "Khai triển hai vế phương trình:\n2(3x - 4) = 6x - 8.\n4(x + 1) - 2 = 4x + 4 - 2 = 4x + 2.\nPhương trình trở thành: 6x - 8 = 4x + 2.\nChuyển vế: 6x - 4x = 2 + 8 => 2x = 10 => x = 5.",
+        "type": "mcq"
       },
       "createdAt": "2026-07-01T03:29:10.083Z",
       "usageCount": 0
@@ -1196,7 +1217,8 @@
         "full_passage": "",
         "passage": "",
         "question": "Solve for x: 5(x - 2) = 3(x + 4) - 2. What is the value of x?",
-        "explanation_vi": "Khai triển hai vế:\n5(x - 2) = 5x - 10.\n3(x + 4) - 2 = 3x + 12 - 2 = 3x + 10.\nPhương trình trở thành: 5x - 10 = 3x + 10.\nChuyển vế: 5x - 3x = 10 + 10 => 2x = 20 => x = 10."
+        "explanation_vi": "Khai triển hai vế:\n5(x - 2) = 5x - 10.\n3(x + 4) - 2 = 3x + 12 - 2 = 3x + 10.\nPhương trình trở thành: 5x - 10 = 3x + 10.\nChuyển vế: 5x - 3x = 10 + 10 => 2x = 20 => x = 10.",
+        "type": "mcq"
       },
       "createdAt": "2026-07-01T03:29:44.071Z",
       "usageCount": 0
@@ -1246,7 +1268,8 @@
         "full_passage": "",
         "passage": "",
         "question": "What are the roots of the equation $3x^2 + 6x + 3 = 0$?",
-        "explanation_vi": "Chia cả hai vế phương trình cho 3:\nx² + 2x + 1 = 0.\nNhận dạng hằng đẳng thức: (x + 1)² = 0 => x = -1 (nghiệm kép)."
+        "explanation_vi": "Chia cả hai vế phương trình cho 3:\nx² + 2x + 1 = 0.\nNhận dạng hằng đẳng thức: (x + 1)² = 0 => x = -1 (nghiệm kép).",
+        "type": "mcq"
       },
       "createdAt": "2026-07-01T04:31:34.466Z",
       "usageCount": 0
@@ -1296,7 +1319,8 @@
         "full_passage": "",
         "passage": "",
         "question": "Solve for x: 5(x - 2) + 3 = 2(x + 4) - 1",
-        "explanation_vi": "Khai triển cả hai vế:\nVế trái: 5x - 10 + 3 = 5x - 7.\nVế phải: 2x + 8 - 1 = 2x + 7.\nPhương trình: 5x - 7 = 2x + 7.\nChuyển vế: 5x - 2x = 7 + 7 => 3x = 14 => x = 14/3."
+        "explanation_vi": "Khai triển cả hai vế:\nVế trái: 5x - 10 + 3 = 5x - 7.\nVế phải: 2x + 8 - 1 = 2x + 7.\nPhương trình: 5x - 7 = 2x + 7.\nChuyển vế: 5x - 2x = 7 + 7 => 3x = 14 => x = 14/3.",
+        "type": "mcq"
       },
       "createdAt": "2026-07-02T07:51:53.746Z",
       "usageCount": 0
@@ -1309,8 +1333,8 @@
         "title": "Heart of Algebra (Đại số cốt lõi)",
         "full_passage": "",
         "passage": "",
-        "practice_question": "A caterer charges a flat setup fee of $120 plus $18 per guest for a banquet dinner. If the total cost was $1,200, which equation represents this situation in terms of the number of guests, g, and what is the value of g?",
-        "question": "A caterer charges a flat setup fee of $120 plus $18 per guest for a banquet dinner. If the total cost was $1,200, which equation represents this situation in terms of the number of guests, g, and what is the value of g?",
+        "practice_question": "A caterer charges a flat setup fee of 120 USD plus 18 USD per guest for a banquet dinner. If the total cost was 1,200, USD which equation represents this situation in terms of the number of guests, g, and what is the value of g?",
+        "question": "A caterer charges a flat setup fee of 120 USD plus 18 USD per guest for a banquet dinner. If the total cost was 1,200, USD which equation represents this situation in terms of the number of guests, g, and what is the value of g?",
         "choices": [
           "A) 18g + 120 = 1,200; g = 60",
           "B) 120g + 18 = 1,200; g = 10",
@@ -1349,7 +1373,8 @@
         "section": "math",
         "concept_name": "Mô hình hóa chi phí tuyến tính (Linear Cost Modeling)",
         "theory": "Phương trình tuyến tính dạng $C(x) = mx + b$ biểu diễn mối quan hệ chi phí, trong đó $m$ là đơn giá biến đổi cho mỗi đơn vị sản phẩm $x$, và $b$ là chi phí cố định ban đầu không đổi.",
-        "sample_example": "Một công ty thuê bao xe tính phí cố định 15 đô la và 0.25 đô la cho mỗi dặm đi được. Phương trình tổng chi phí cho $d$ dặm là $C = 0.25d + 15$."
+        "sample_example": "Một công ty thuê bao xe tính phí cố định 15 đô la và 0.25 đô la cho mỗi dặm đi được. Phương trình tổng chi phí cho $d$ dặm là $C = 0.25d + 15$.",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.638Z",
       "usageCount": 0
@@ -1402,7 +1427,8 @@
         "section": "math",
         "concept_name": "Xác suất có điều kiện từ bảng tần số hai chiều (Two-Way Tables)",
         "theory": "Xác suất có điều kiện $P(A|B)$ là xác suất biến cố A xảy ra khi đã biết biến cố B xảy ra: $P(A|B) = \\frac{N(A \\cap B)}{N(B)}$. Trong bảng hai chiều, không gian mẫu bị thu hẹp lại chỉ trong hàng hoặc cột của điều kiện B.",
-        "sample_example": "Nếu trong 40 học sinh tham gia câu lạc bộ Khoa học có 25 nữ và 15 nam, xác suất chọn ngẫu nhiên được một nữ từ nhóm học sinh câu lạc bộ Khoa học là 25/40 = 5/8."
+        "sample_example": "Nếu trong 40 học sinh tham gia câu lạc bộ Khoa học có 25 nữ và 15 nam, xác suất chọn ngẫu nhiên được một nữ từ nhóm học sinh câu lạc bộ Khoa học là 25/40 = 5/8.",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.639Z",
       "usageCount": 0
@@ -1455,7 +1481,8 @@
         "section": "math",
         "concept_name": "Chia đa thức và biểu thức hữu tỉ tương đương (Rational Expressions)",
         "theory": "Khi chia đa thức $P(x)$ cho nhị thức $(x - c)$, ta có dạng: $\\frac{P(x)}{x - c} = Q(x) + \\frac{R}{x - c}$, trong đó $Q(x)$ là thương và hằng số $R = P(c)$ là phần dư (Định lý phần dư Polynomial Remainder Theorem).",
-        "sample_example": "Biểu diễn $\\frac{2x + 7}{x + 2} = \\frac{2(x + 2) + 3}{x + 2} = 2 + \\frac{3}{x + 2}$."
+        "sample_example": "Biểu diễn $\\frac{2x + 7}{x + 2} = \\frac{2(x + 2) + 3}{x + 2} = 2 + \\frac{3}{x + 2}$.",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.639Z",
       "usageCount": 0
@@ -1508,7 +1535,8 @@
         "section": "math",
         "concept_name": "Phương trình đường tròn & Bổ sung bình phương (Completing the Square)",
         "theory": "Phương trình đường tròn chính tắc có dạng $(x - h)^2 + (y - k)^2 = r^2$ với tâm $(h, k)$ và bán kính $r > 0$. Khi phương trình cho ở dạng khai triển $x^2 + y^2 + Dx + Ey + F = 0$, ta hoàn thành bình phương để tìm $r = \\sqrt{(D/2)^2 + (E/2)^2 - F}$.",
-        "sample_example": "Cho $x^2 + y^2 - 6x + 8y = 0$. Nhóm lại: $(x^2 - 6x + 9) + (y^2 + 8y + 16) = 9 + 16 = 25$. Vậy $(x - 3)^2 + (y + 4)^2 = 5^2$, bán kính $r = 5$."
+        "sample_example": "Cho $x^2 + y^2 - 6x + 8y = 0$. Nhóm lại: $(x^2 - 6x + 9) + (y^2 + 8y + 16) = 9 + 16 = 25$. Vậy $(x - 3)^2 + (y + 4)^2 = 5^2$, bán kính $r = 5$.",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.639Z",
       "usageCount": 0
@@ -1561,7 +1589,8 @@
         "section": "math",
         "concept_name": "Mô hình suy giảm hàm số mũ (Exponential Decay)",
         "theory": "Mô hình suy giảm hàm mũ có dạng $A(t) = A_0(1 - r)^t$ hoặc $A(t) = A_0(b)^{t/k}$, trong đó $A_0$ là giá trị ban đầu, $r$ là tỷ lệ suy giảm mỗi chu kỳ, và $b$ là hệ số suy giảm sau mỗi khoảng thời gian $k$.",
-        "sample_example": "Chất phóng xạ có khối lượng ban đầu 100g và chu kỳ bán rã 5 ngày được mô hình bằng $M(t) = 100(0.5)^{t/5}$."
+        "sample_example": "Chất phóng xạ có khối lượng ban đầu 100g và chu kỳ bán rã 5 ngày được mô hình bằng $M(t) = 100(0.5)^{t/5}$.",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.639Z",
       "usageCount": 0
@@ -1614,7 +1643,8 @@
         "section": "math",
         "concept_name": "Quan hệ lượng giác của hai góc phụ nhau (Complementary Angle Theorem)",
         "theory": "Đối với hai góc phụ nhau có tổng bằng $90^\\circ$ (hoặc $\\frac{\\pi}{2}$ radian), sin của góc này bằng cosin của góc kia: $\\sin(x) = \\cos(90^\\circ - x)$ và $\\sin(\\frac{\\pi}{2} - x) = \\cos(x)$.",
-        "sample_example": "Nếu $\\sin(35^\\circ) = k$, thì $\\cos(55^\\circ) = k$ vì $35^\\circ + 55^\\circ = 90^\\circ$."
+        "sample_example": "Nếu $\\sin(35^\\circ) = k$, thì $\\cos(55^\\circ) = k$ vì $35^\\circ + 55^\\circ = 90^\\circ$.",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.639Z",
       "usageCount": 0
@@ -1664,7 +1694,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Craft and Structure",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -1714,7 +1745,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Craft and Structure",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -1764,7 +1796,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Information and Ideas",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -1814,7 +1847,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Information and Ideas",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -1864,7 +1898,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Information and Ideas",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -1914,7 +1949,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Information and Ideas",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -1964,7 +2000,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Information and Ideas",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2014,7 +2051,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Craft and Structure",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2064,7 +2102,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Craft and Structure",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2114,7 +2153,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Standard English Conventions",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2164,7 +2204,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Standard English Conventions",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2214,7 +2255,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Standard English Conventions",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2264,7 +2306,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Expression of Ideas",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2314,7 +2357,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Expression of Ideas",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2364,7 +2408,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Craft and Structure",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2414,7 +2459,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Craft and Structure",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2464,7 +2510,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Craft and Structure",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2514,7 +2561,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Craft and Structure",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2564,7 +2612,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Craft and Structure",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2614,7 +2663,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Craft and Structure",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2664,7 +2714,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Craft and Structure",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2714,7 +2765,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Craft and Structure",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2764,7 +2816,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Craft and Structure",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2814,7 +2867,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Craft and Structure",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2864,7 +2918,8 @@
         ],
         "domain": "Reading and Writing",
         "skill": "Craft and Structure",
-        "section": "reading"
+        "section": "reading",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2919,7 +2974,8 @@
         "theory": "The x-intercept of a graph is the point where the line crosses the x-axis (where y = 0). In Desmos, type the equation directly into an expression row and click on the gray intercept dot located along the horizontal x-axis.",
         "sample_example": "For 3x - 6y = 18, setting y = 0 yields 3x = 18 => x = 6. The x-intercept is (6, 0).",
         "desmos_expression": "4x - 7y = 28",
-        "target_equation": "4x - 7y = 28"
+        "target_equation": "4x - 7y = 28",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -2974,7 +3030,8 @@
         "theory": "The solution to a system of linear equations is the point of intersection (x, y) of the two graphs. In Desmos, enter each equation on a separate line; Desmos automatically generates a gray dot at their intersection point.",
         "sample_example": "Graphing y = 2x + 1 and y = -x + 4 shows a gray intersection dot at (1, 3).",
         "desmos_expression": "3x + y = 13; x - 2y = -5",
-        "target_equation": "3x + y = 13"
+        "target_equation": "3x + y = 13",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -3029,7 +3086,8 @@
         "theory": "To find the coordinates where a parabola y = ax^2 + bx + c and a line y = mx + d meet, graph both functions in Desmos. The points where the curves cross are marked with gray dots.",
         "sample_example": "Graphing y = x^2 and y = x + 2 reveals intersection points at (-1, 1) and (2, 4).",
         "desmos_expression": "y = x^2 - 4x + 3; y = 2x - 2",
-        "target_equation": "x^2 - 6x + 5 = 0"
+        "target_equation": "x^2 - 6x + 5 = 0",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -3084,7 +3142,8 @@
         "theory": "For a quadratic function f(x) = ax^2 + bx + c with a < 0, the parabola opens downward and reaches its maximum value at the vertex x = -b / (2a). In Desmos, type the function and click on the apex to read the maximum y-coordinate directly.",
         "sample_example": "For h(t) = -5t^2 + 20t + 10, vertex is at (2, 30); maximum height is 30.",
         "desmos_expression": "h(x) = -4.9x^2 + 29.4x + 1.2",
-        "target_equation": "t = -29.4 / (2 * -4.9) = 3"
+        "target_equation": "t = -29.4 / (2 * -4.9) = 3",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -3139,7 +3198,8 @@
         "theory": "The standard equation of a circle is (x - h)^2 + (y - k)^2 = r^2. In Desmos, general quadratic circle equations like x^2 + y^2 + Dx + Ey = F can be entered directly. Desmos plots the circle, allowing you to measure the diameter or radius directly using grid marks.",
         "sample_example": "x^2 + y^2 - 4x + 6y = 12 completes to (x - 2)^2 + (y + 3)^2 = 25, giving radius r = 5.",
         "desmos_expression": "x^2 + y^2 - 10x + 6y = 47",
-        "target_equation": "(x - 5)^2 + (y + 3)^2 = 81"
+        "target_equation": "(x - 5)^2 + (y + 3)^2 = 81",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.640Z",
       "usageCount": 0
@@ -3194,7 +3254,8 @@
         "theory": "A linear system has no solution if the two lines are parallel and distinct, meaning they share the same slope but different y-intercepts: a1/a2 = b1/b2 != c1/c2. In Desmos, type the equations with variable k and use the slider for k to find where the lines become parallel.",
         "sample_example": "2x + 4y = 8 and kx + 8y = 12 have no solution when 2/k = 4/8 => k = 4.",
         "desmos_expression": "4x + 6y = 15; (k - 2)x + 9y = 22",
-        "target_equation": "4 / (k - 2) = 6 / 9"
+        "target_equation": "4 / (k - 2) = 6 / 9",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.641Z",
       "usageCount": 0
@@ -3249,7 +3310,8 @@
         "theory": "A quadratic equation ax^2 + bx + c = 0 has exactly one real solution if and only if its discriminant Delta = b^2 - 4ac = 0. Graphically in Desmos, this means the parabola is tangent to the x-axis (its vertex lies directly on the x-axis).",
         "sample_example": "x^2 - 6x + c = 0 has one solution when Delta = 36 - 4c = 0 => c = 9.",
         "desmos_expression": "y = 3x^2 - 12x + (2c - 1)",
-        "target_equation": "Delta = (-12)^2 - 4(3)(2c - 1) = 0"
+        "target_equation": "Delta = (-12)^2 - 4(3)(2c - 1) = 0",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.641Z",
       "usageCount": 0
@@ -3304,7 +3366,8 @@
         "theory": "Equations combining exponential terms (such as 2^x) and polynomials cannot generally be solved using elementary algebra. In Desmos, entering y = 2^x + 1 and y = 3x instantly plots both curves and pinpoints their exact intersection coordinates.",
         "sample_example": "Graphing y = 2^x and y = x + 1 in Desmos reveals intersections at (0, 1) and (1, 2).",
         "desmos_expression": "y = 2^x + 1; y = 3x",
-        "target_equation": "2^x + 1 = 3x"
+        "target_equation": "2^x + 1 = 3x",
+        "type": "mcq"
       },
       "createdAt": "2026-11-08T14:10:35.641Z",
       "usageCount": 0
