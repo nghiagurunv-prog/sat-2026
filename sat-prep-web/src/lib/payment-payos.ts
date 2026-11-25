@@ -125,12 +125,17 @@ export const generatePayosOrderCode = generateOrderCode;
 export interface PayosCreateResult {
   ok: boolean;
   payUrl?: string;
+  qrCode?: string;
+  accountNumber?: string;
+  accountName?: string;
+  bin?: string;
+  expiredAt?: number;
   message?: string;
 }
 
 /**
- * Gọi payOS create → trả checkoutUrl để redirect. Đọc creds từ env (server-only).
- * Trả ok:false nếu thiếu creds hoặc payOS trả lỗi (route bắt → 503).
+ * Gọi payOS create → trả checkoutUrl + qrCode + expiredAt để hiển thị VietQR động.
+ * Đọc creds từ env (server-only). Trả ok:false nếu thiếu creds hoặc payOS trả lỗi (route bắt → 503).
  *
  * description payOS giới hạn ~25 ký tự (VietQR content).
  * Đảm bảo đưa mã đơn lên ĐẦU chuỗi hoặc format `SAT ${orderCode}`.slice(0, 25)
@@ -143,6 +148,7 @@ export async function createPayosPayment(args: {
   description: string;
   returnUrl: string;
   cancelUrl: string;
+  expiredAt?: number;
 }): Promise<PayosCreateResult> {
   const clientId = process.env.PAYOS_CLIENT_ID;
   const apiKey = process.env.PAYOS_API_KEY;
@@ -154,9 +160,6 @@ export async function createPayosPayment(args: {
     return { ok: false, message: 'payOS chưa được cấu hình (thiếu creds).' };
   }
 
-  // description payOS tối đa 25 ký tự (VietQR content).
-  // Đưa mã đơn lên ĐẦU chuỗi hoặc giữ nguyên nếu <= 25 ký tự, nếu dài hơn format `SAT ${orderCode}`.slice(0, 25)
-  // để ngân hàng không bao giờ cắt cụt mã đối soát.
   const rawDesc = (args.description || '').trim();
   const description =
     rawDesc.length <= 25 && rawDesc.length > 0
@@ -164,6 +167,11 @@ export async function createPayosPayment(args: {
       : `SAT ${args.orderCode}`.slice(0, 25);
 
   const amount = args.amountVnd ?? args.amount ?? 0;
+  // Mặc định hết hạn sau 15 phút (900 giây) theo spec PayOS v2
+  const expiredAt =
+    typeof args.expiredAt === 'number' && Number.isFinite(args.expiredAt)
+      ? Math.floor(args.expiredAt)
+      : Math.floor(Date.now() / 1000) + 15 * 60;
 
   const params: PayosCreateParams = {
     orderCode: args.orderCode,
@@ -174,7 +182,7 @@ export async function createPayosPayment(args: {
   };
   const signature = signPayosCreate(params, checksumKey);
 
-  const body = { ...params, signature };
+  const body = { ...params, expiredAt, signature };
 
   const res = await fetch(createUrl, {
     method: 'POST',
@@ -188,11 +196,26 @@ export async function createPayosPayment(args: {
   const json = (await res.json().catch(() => ({}))) as {
     code?: string;
     desc?: string;
-    data?: { checkoutUrl?: string } | null;
+    data?: {
+      checkoutUrl?: string;
+      qrCode?: string;
+      accountNumber?: string;
+      accountName?: string;
+      bin?: string;
+      expiredAt?: number;
+    } | null;
   };
 
   if (res.ok && String(json?.code) === '00' && json?.data?.checkoutUrl) {
-    return { ok: true, payUrl: json.data.checkoutUrl };
+    return {
+      ok: true,
+      payUrl: json.data.checkoutUrl,
+      qrCode: json.data.qrCode,
+      accountNumber: json.data.accountNumber,
+      accountName: json.data.accountName,
+      bin: json.data.bin,
+      expiredAt: json.data.expiredAt ?? expiredAt,
+    };
   }
   return {
     ok: false,

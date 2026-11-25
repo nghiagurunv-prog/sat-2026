@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
+import { rateLimitDistributed, getRateLimitKey } from '@/lib/rate-limit';
 import { getReward } from '@/lib/rewards';
 import { tryRedeemReward, listRedemptions } from '@/lib/redemption-store';
 
@@ -36,8 +36,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Cần đăng nhập.' }, { status: 401 });
     }
 
-    // Rate-limit chặt hơn economy (đây là tiền-RA): 10 req/phút/user.
-    const rl = rateLimit(getRateLimitKey(req, 'redeem-post', user.id), 10, 60_000);
+    // Rate-limit phân tán chặt (tiền-RA): 10 req/phút/user (vá #15).
+    const rl = await rateLimitDistributed(getRateLimitKey(req, 'redeem-post', user.id), 10, 60_000);
     if (!rl.allowed) {
       return NextResponse.json(
         { success: false, error: 'Quá nhiều yêu cầu. Thử lại sau.', retryAfterMs: rl.retryAfterMs },

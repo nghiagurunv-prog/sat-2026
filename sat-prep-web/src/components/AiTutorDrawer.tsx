@@ -317,6 +317,21 @@ export function AiTutorDrawer({
         }),
       });
 
+      if (response.status === 429) {
+        const errJson = await response.json().catch(() => ({}));
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `teaser-upsell-${Date.now()}`,
+            role: 'assistant',
+            badge: '✨ Mở Khóa Gia Sư Socratic 24/7',
+            content: `${errJson?.error || 'Em đã trải nghiệm hết 3 lượt Gia sư Socratic miễn phí trên câu Hard hôm nay!'}\n\n💡 **Mẹo bứt phá 1500+**: Nâng cấp gói **Chiến Binh Premium** hoặc **Thủ Khoa Ultimate** tại \`/pricing\` để mở khóa không giới hạn Gia sư AI Socratic, phân tích bẫy từng phương án & kịch bản bấm Desmos 15 giây.`,
+            timestamp: new Date(),
+          },
+        ]);
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }

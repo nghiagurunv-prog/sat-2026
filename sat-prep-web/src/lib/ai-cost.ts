@@ -57,6 +57,26 @@ export function modelForTier(tier: AiTier): string {
   return TIER_AI_MODEL[tier] ?? DEFAULT_MODEL;
 }
 
+/**
+ * Trần fair-use hằng ngày cho model cao cấp `gpt-4o` (gói Ultimate).
+ * Vượt trần sẽ degrade mềm sang `gemini-2.5-flash` / `gpt-4o-mini` (không cắt dịch vụ),
+ * bảo vệ biên lợi nhuận gộp >= 80% ngay cả khi 1 tài khoản Ultimate học cường độ cực cao.
+ */
+export const ULTIMATE_GPT4O_DAILY_CAP = Math.max(
+  1,
+  Number(process.env.ULTIMATE_GPT4O_DAILY_CAP ?? 60) || 60
+);
+
+/**
+ * Chọn tier hiệu lực cho LLM router sau khi xét fair-use trần `gpt-4o` của gói Ultimate.
+ */
+export function resolveEffectiveAiTier(tier: AiTier, usedToday: number): AiTier {
+  if (tier === 'ultimate' && usedToday > ULTIMATE_GPT4O_DAILY_CAP) {
+    return 'premium';
+  }
+  return tier;
+}
+
 /** Ngân sách AI mỗi ngày toàn hệ thống (USD). Override qua env AI_DAILY_BUDGET_USD. */
 export const DAILY_BUDGET_USD = Number(process.env.AI_DAILY_BUDGET_USD ?? 5);
 

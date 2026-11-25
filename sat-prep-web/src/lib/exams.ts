@@ -281,3 +281,59 @@ export function getQuestionIrtParams(q: Pick<ExamQuestion, 'difficulty' | 'trapR
   }
   return calibrateQuestionIrt(q.difficulty, q.trapRate);
 }
+
+/**
+ * W3 #10: Loại trùng câu theo stem & mở rộng ngân hàng đề tiến tới chuẩn 98 câu độc bản/đề
+ * (27+27 Reading & Writing + 22+22 Math) khi có bổ sung pool từ Supabase `question_bank`.
+ */
+export function deduplicateExamQuestions(questions: ExamQuestion[]): ExamQuestion[] {
+  const seen = new Set<string>();
+  const out: ExamQuestion[] = [];
+  for (const q of questions) {
+    const key = (q.practice_question || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 180);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(q);
+  }
+  return out;
+}
+
+export function mergeSupabaseQuestionPool(
+  exam: FullExam,
+  extraQuestions: ExamQuestion[]
+): { exam: FullExam; uniqueCount: number; targetTotal: number } {
+  const TARGET_BY_MOD = [27, 27, 22, 22]; // Chuẩn Digital SAT Bluebook = 98 câu
+  const existingStems = new Set<string>();
+  for (const m of exam.modules) {
+    for (const q of m.questions) {
+      existingStems.add((q.practice_question || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 180));
+    }
+  }
+
+  const rwPool = deduplicateExamQuestions(
+    extraQuestions.filter((q) => q.section === 'rw' && !existingStems.has((q.practice_question || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 180)))
+  );
+  const mathPool = deduplicateExamQuestions(
+    extraQuestions.filter((q) => q.section !== 'rw' && !existingStems.has((q.practice_question || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 180)))
+  );
+
+  let rwCursor = 0;
+  let mathCursor = 0;
+  const enrichedModules = exam.modules.map((mod, idx) => {
+    const targetLen = TARGET_BY_MOD[idx] ?? mod.questions.length;
+    const isRw = (mod.module_id && mod.module_id.startsWith('rw')) || mod.name.toLowerCase().includes('reading');
+    const pool = isRw ? rwPool : mathPool;
+    const current = deduplicateExamQuestions(mod.questions);
+    const needed = Math.max(0, targetLen - current.length);
+    const additions: ExamQuestion[] = [];
+    for (let i = 0; i < needed; i++) {
+      const next = isRw ? pool[rwCursor++] : pool[mathCursor++];
+      if (!next) break;
+      additions.push(next);
+    }
+    return { ...mod, questions: [...current, ...additions] };
+  });
+
+  const uniqueCount = enrichedModules.reduce((acc, m) => acc + m.questions.length, 0);
+  return { exam: { ...exam, modules: enrichedModules }, uniqueCount, targetTotal: 98 };
+}

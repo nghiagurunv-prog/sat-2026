@@ -10,7 +10,7 @@ import { resolveSkillId } from '@/lib/skill-resolver';
 import { issueQuestion, type ChoiceAnalysis } from '@/lib/issued-questions';
 import type { AiTier } from '@/lib/ai-quota';
 import { OPENAI_CHAT_COMPLETIONS_URL } from '@/lib/openai';
-import { checkRateLimit, getRateLimitKey } from '@/lib/rate-limit';
+import { rateLimitDistributed, getRateLimitKey } from '@/lib/rate-limit';
 
 const PROMPT_INJECTION_PATTERNS = [
   /ignore\s+(?:all\s+)?previous\s+instructions/gi,
@@ -263,7 +263,7 @@ export async function POST(req: Request) {
     // tier vì premium/ultimate quota vô hạn nên đây là trần duy nhất chặn 1 tài
     // khoản đốt sạch budget chung. Sử dụng getRateLimitKey thay vì IP thô (lỗ hổng #012).
     const rlKey = getRateLimitKey(req, 'ai-gen', user?.id);
-    const rl = checkRateLimit(rlKey, 10, 60_000);
+    const rl = await rateLimitDistributed(rlKey, 10, 60_000);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: 'Bạn tạo câu hơi nhanh. Chờ chút rồi thử lại nhé.', retryAfterMs: (rl as { retryAfterMs?: number }).retryAfterMs },
@@ -271,26 +271,46 @@ export async function POST(req: Request) {
       );
     }
 
-    // Enforce quota freemium TRƯỚC khi gọi OpenAI (cùng engine với /api/chat) qua
-    // RESERVE-BEFORE-CALL (đóng C1 TOCTOU): increment count NGUYÊN TỬ có khóa dòng
-    // NGAY ĐÂY → N request đồng thời không cùng vượt cap 3/ngày (Free) đốt OpenAI.
-    // Chỉ tính khi THỰC SỰ gọi AI — câu lấy từ Question Bank / degrade budget ở trên
-    // KHÔNG tốn token nên đã return sớm, không chạm reserve. Lỗi RPC → fail-closed.
-    // Quyền lợi A1 (2026-07-07): Ultimate sinh câu bằng model cao cấp (gpt-4o),
-    // free/premium giữ gpt-4o-mini. Dùng cho cả requestBody.model lẫn recordGlobalCost
-    // → kill-switch ngân sách tính đúng chi phí model thật.
+    // Enforce quota freemium TRƯỚC khi gọi OpenAI:
+    // - Khách chưa đăng nhập (vá #4): KHÔNG đẩy 'local-default-user' vào reserveQuota (DB UUID fail-closed),
+    //   mà cấp 2 lượt dùng thử AI / 24h / IP qua rateLimitDistributed rồi mời đăng nhập.
+    // - Đã đăng nhập: giữ nguyên RESERVE-BEFORE-CALL atomic chống TOCTOU.
     const model = modelForTier(tier);
-    const reservation = await reserveQuota(user.id, tier, 'gen');
-    if (!reservation.allowed) {
-      return NextResponse.json(
-        {
-          error: `Bạn đã dùng hết ${reservation.limit} lượt sinh câu hỏi AI hôm nay. Nâng cấp Premium để luyện tập không giới hạn nhé!`,
-          quotaExceeded: true,
-          used: reservation.used,
-          limit: reservation.limit,
-        },
-        { status: 429 }
-      );
+    let reservation: { allowed: boolean; reserved: boolean; used: number; limit: number; date: string } = {
+      allowed: true,
+      reserved: false,
+      used: 0,
+      limit: 2,
+      date: new Date().toISOString().slice(0, 10),
+    };
+    if (!user.isAuthenticated) {
+      const guestKey = getRateLimitKey(req, 'ai-gen-guest', null);
+      const guestRl = await rateLimitDistributed(guestKey, 2, 86_400_000);
+      if (!guestRl.allowed) {
+        return NextResponse.json(
+          {
+            error: 'Bạn đã dùng hết 2 lượt sinh câu hỏi AI miễn phí cho khách hôm nay. Đăng nhập miễn phí để tiếp tục luyện tập!',
+            quotaExceeded: true,
+            guestLimitReached: true,
+            used: 2,
+            limit: 2,
+          },
+          { status: 429 }
+        );
+      }
+    } else {
+      reservation = await reserveQuota(user.id, tier, 'gen');
+      if (!reservation.allowed) {
+        return NextResponse.json(
+          {
+            error: `Bạn đã dùng hết ${reservation.limit} lượt sinh câu hỏi AI hôm nay. Nâng cấp Premium để luyện tập không giới hạn nhé!`,
+            quotaExceeded: true,
+            used: reservation.used,
+            limit: reservation.limit,
+          },
+          { status: 429 }
+        );
+      }
     }
 
     const topicBlock = topicDataBlock(topic);
@@ -318,7 +338,8 @@ Nhiệm vụ:
 QUY TẮC BẮT BUỘC:
 - practice_question, choices, correct_choice PHẢI BẰNG TIẾNG ANH.
 - concept_name, theory, sample_example, explanation PHẢI BẰNG TIẾNG VIỆT 100%.
-- Công thức toán học, phân số, ký tự độ BẮT BUỘC bọc trong cặp dấu $...$ (VD: $\frac{1}{2}$, $180^\circ$).
+- Công thức toán học, phân số, ký tự độ BẮT BUỘC bọc trong cặp dấu $...$ (VD: $\\frac{1}{2}$, $180^\\circ$).
+- BẮT BUỘC thêm "desmos_equations": mảng 1-3 phương trình hoặc biểu thức hồi quy LaTeX sạch (VD: ["y = 2x^2 - 5x + 3", "y = x + 1"]) để học sinh nạp 1-chạm vào Desmos tìm giao điểm/đỉnh trong 15 giây.
 - JSON trả về có difficulty (Hard) và trapRate (vd: 85).`;
     } else if (moduleType === "desmos") {
       systemPrompt = `Mày là chuyên gia dạy giải nhanh SAT bằng máy tính bỏ túi Desmos.
@@ -327,6 +348,7 @@ Nhiệm vụ: Tạo 1 câu hỏi Toán có thể giải cực nhanh bằng cách
 QUY TẮC:
 - Câu hỏi và đáp án Tiếng Anh.
 - Giải thích Tiếng Việt, phải chỉ ra cách gõ lệnh vào Desmos.
+- BẮT BUỘC thêm "desmos_equations": mảng 1-3 phương trình/hồi quy LaTeX sạch nạp thẳng vào Desmos (VD: ["y_1 ~ m x_1 + b"]).
 - JSON trả về có difficulty và trapRate.`;
     } else {
       systemPrompt = `Mày là chuyên gia từ vựng SAT (Vocab).
@@ -400,9 +422,14 @@ BẮT BUỘC thêm trường "choice_analysis": MẢNG, mỗi phần tử ứng 
         explanation: { type: "string" },
         difficulty: { type: "string", description: "Easy, Medium, or Hard" },
         trapRate: { type: "integer", description: "Percentage of students who fall for traps, e.g. 82" },
+        desmos_equations: {
+          type: "array",
+          items: { type: "string" },
+          description: "0-3 biểu thức LaTeX sạch để nạp 1-chạm vào Desmos (mảng rỗng nếu là câu Đọc/Viết)"
+        },
         choice_analysis: choiceAnalysisSchema
       },
-      required: ["title", "full_passage", "archaic_words", "practice_question", "choices", "correct_choice", "explanation", "difficulty", "trapRate", "choice_analysis"],
+      required: ["title", "full_passage", "archaic_words", "practice_question", "choices", "correct_choice", "explanation", "difficulty", "trapRate", "desmos_equations", "choice_analysis"],
       additionalProperties: false
     };
 
@@ -421,9 +448,14 @@ BẮT BUỘC thêm trường "choice_analysis": MẢNG, mỗi phần tử ứng 
         explanation: { type: "string" },
         difficulty: { type: "string", description: "Easy, Medium, or Hard" },
         trapRate: { type: "integer", description: "Percentage of students who fall for traps" },
+        desmos_equations: {
+          type: "array",
+          items: { type: "string" },
+          description: "1-3 biểu thức/phương trình LaTeX nạp thẳng vào Desmos để giải trong 15s"
+        },
         choice_analysis: choiceAnalysisSchema
       },
-      required: ["concept_name", "theory", "sample_example", "practice_question", "choices", "correct_choice", "explanation", "difficulty", "trapRate", "choice_analysis"],
+      required: ["concept_name", "theory", "sample_example", "practice_question", "choices", "correct_choice", "explanation", "difficulty", "trapRate", "desmos_equations", "choice_analysis"],
       additionalProperties: false
     };
 
@@ -536,14 +568,18 @@ BẮT BUỘC thêm trường "choice_analysis": MẢNG, mỗi phần tử ứng 
         responseData.usage?.completion_tokens ?? 0,
         model
       ).catch((e) => console.error('recordGlobalCost:', e)),
-      finalizeUsage(
-        user.id,
-        'gen',
-        responseData.usage?.prompt_tokens ?? 0,
-        responseData.usage?.completion_tokens ?? 0,
-        reservation.reserved,
-        reservation.date
-      ).catch((e) => console.error('finalizeUsage:', e)),
+      ...(user.isAuthenticated
+        ? [
+            finalizeUsage(
+              user.id,
+              'gen',
+              responseData.usage?.prompt_tokens ?? 0,
+              responseData.usage?.completion_tokens ?? 0,
+              reservation.reserved,
+              reservation.date
+            ).catch((e) => console.error('finalizeUsage:', e)),
+          ]
+        : []),
     ]);
 
     // Lưu câu mới vào Question Bank để tái sử dụng (§9.4). Không chặn response

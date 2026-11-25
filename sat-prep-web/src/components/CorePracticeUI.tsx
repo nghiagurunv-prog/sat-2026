@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useGamification } from '@/context/GamificationContext';
 import { LoadingState } from './LoadingState';
 import { matchesAnswer } from '@/lib/answer-match';
-import { BluebookTools } from './BluebookTools';
+import { BluebookTools, validateSprInput, MATH_VOCABULARY } from './BluebookTools';
+import { dispatchDesmosExpression } from './DesmosCalculator';
 
 export interface PracticeQuestion {
   title: string;
@@ -21,6 +22,8 @@ export interface PracticeQuestion {
   questionId?: string;
   isGridInQuestion?: boolean;
   translation?: string;
+  /** Kịch bản biểu thức/hồi quy LaTeX 15s nạp thẳng vào Desmos (#02) */
+  desmos_equations?: string[];
 }
 
 /**
@@ -131,12 +134,18 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
 
   // Điểm 20: Toggles mở rộng cấu trúc lập luận / dịch ý chính
   const [showPassageGist, setShowPassageGist] = useState(true);
+  // W1 #05: Tập trung mục tiêu Rhetorical Synthesis (làm mờ nhẹ bullet nhiễu)
+  const [focusSynthesisGoal, setFocusSynthesisGoal] = useState(true);
+  // W1 #08: Đánh dấu xem lại (Mark for Review) lưu theo từng câu hỏi
+  const [isMarkedForReview, setIsMarkedForReview] = useState(false);
+  // W3 #10: Trạng thái báo lỗi câu hỏi 1-chạm đẩy vào hàng đợi Admin
+  const [reportStatus, setReportStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
 
   const isBookmarked = questionData ? bookmarkedQuestions.includes(questionData.practice_question) : false;
 
   // Nhận diện câu Toán hay R&W
   const isMath = Boolean(
-    (questionData.skillId && (questionData.skillId.startsWith('m_') || questionData.skillId.startsWith('math_'))) ||
+    (questionData.skillId && (questionData.skillId.startsWith('m_') || questionData.skillId.startsWith('math_') || questionData.skillId.startsWith('algebra.') || questionData.skillId.startsWith('advanced_math.') || questionData.skillId.startsWith('geometry.') || questionData.skillId.startsWith('data_analysis.'))) ||
     questionData.title?.toLowerCase().includes('toán') ||
     questionData.title?.toLowerCase().includes('math') ||
     (!questionData.full_passage && (questionData.practice_question.includes('$') || /[\d+\-*/=√^]/.test(questionData.practice_question)))
@@ -150,10 +159,53 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
     /student-produced response|grid-in|enter your answer|điền đáp án/i.test(questionData.practice_question)
   );
 
-  // Điểm 12: Pacing Indicator thông minh (R&W chuẩn ~71s, Math chuẩn ~95s)
+  // Đồng hồ Pacing chuẩn Bluebook (95s Math / 71s R&W) + W1 #07 co giãn theo độ khó (Easy 50s/40s, Medium 95s/71s, Hard 125s/95s)
   const pacingTargetSec = isMath ? 95 : 71;
-  const isOverPacing = timeElapsed > pacingTargetSec;
-  const isWarningPacing = !isOverPacing && timeElapsed >= Math.floor(pacingTargetSec * 0.75);
+  const effectivePacingTargetSec = (() => {
+    const d = (questionData.difficulty || 'Medium').toLowerCase();
+    if (d === 'easy') return isMath ? 50 : 40;
+    if (d === 'hard') return isMath ? 125 : 95;
+    return pacingTargetSec;
+  })();
+  const isOverPacing = timeElapsed > effectivePacingTargetSec;
+  const isWarningPacing = !isOverPacing && timeElapsed >= Math.floor(effectivePacingTargetSec * 0.75);
+
+  // W1 #01 + W2 #02: Trích biểu thức Toán để nạp 1-chạm vào Desmos
+  const desmosEquations = useMemo(() => {
+    if (Array.isArray(questionData.desmos_equations) && questionData.desmos_equations.length > 0) {
+      return questionData.desmos_equations.filter((e) => typeof e === 'string' && e.trim().length > 0).slice(0, 3);
+    }
+    if (!isMath) return [];
+    const text = questionData.practice_question || '';
+    const matches: string[] = [];
+    const regex = /\$([^$]{2,120})\$/g;
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(text)) !== null) {
+      const candidate = m[1].trim();
+      if (/[=xy^]|\\frac|\\sqrt/i.test(candidate) && !matches.includes(candidate)) {
+        matches.push(candidate);
+      }
+      if (matches.length >= 3) break;
+    }
+    return matches;
+  }, [questionData.desmos_equations, questionData.practice_question, isMath]);
+
+  // W2 #04: Tự động phát hiện tối đa 4 từ khóa bẫy thuật ngữ Toán SAT xuất hiện trong đề
+  const detectedMathVocabTraps = useMemo(() => {
+    if (!isMath) return [];
+    const hay = `${questionData.practice_question || ''} ${questionData.full_passage || ''}`.toLowerCase();
+    return MATH_VOCABULARY.filter((item) => {
+      const primary = item.term.split('/')[0].trim().toLowerCase();
+      if (primary.length < 4) return false;
+      return hay.includes(primary);
+    }).slice(0, 4);
+  }, [isMath, questionData.practice_question, questionData.full_passage]);
+
+  // W1 #03: Soát lỗi tự điền SPR realtime ngay khi học sinh gõ
+  const sprLiveCheck = useMemo(
+    () => (isGridIn && gridInInput.length > 0 ? validateSprInput(gridInInput) : null),
+    [isGridIn, gridInInput]
+  );
 
   // Điểm 19: Chiến thuật Rhetorical Synthesis (Student Notes)
   const isRhetoricalSynthesis = Boolean(
@@ -205,7 +257,9 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
         });
         setSavedWords(map);
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[CorePracticeUI] Không thể đọc sat_vocab_vault:', err);
+    }
   }, []);
 
   // Ref giữ handleSubmit mới nhất để timer tự-nộp không dính stale closure
@@ -260,8 +314,55 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
     setConfidence('confident');
     setVocabSaveSuccess(null);
     setShowPassageGist(true);
+    setReportStatus('idle');
+    try {
+      const flaggedRaw = localStorage.getItem('sat_flagged_questions_v1');
+      const flaggedList: string[] = flaggedRaw ? JSON.parse(flaggedRaw) : [];
+      setIsMarkedForReview(Array.isArray(flaggedList) && flaggedList.includes(questionKey));
+    } catch {
+      setIsMarkedForReview(false);
+    }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [questionKey, questionData, timeLimit]);
+
+  const handleToggleMarkForReview = () => {
+    setIsMarkedForReview((prev) => {
+      const next = !prev;
+      try {
+        const raw = localStorage.getItem('sat_flagged_questions_v1');
+        const list: string[] = raw ? JSON.parse(raw) : [];
+        const updated = next
+          ? Array.from(new Set([questionKey, ...(Array.isArray(list) ? list : [])])).slice(0, 200)
+          : (Array.isArray(list) ? list : []).filter((k) => k !== questionKey);
+        localStorage.setItem('sat_flagged_questions_v1', JSON.stringify(updated));
+        window.dispatchEvent(new CustomEvent('sat_flagged_questions_updated', { detail: { count: updated.length } }));
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
+
+  const handleReportQuestionIssue = async () => {
+    if (reportStatus !== 'idle') return;
+    setReportStatus('sending');
+    try {
+      await fetch('/api/questions/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionId: questionData.questionId || questionKey.slice(0, 80),
+          skillId: questionData.skillId || null,
+          subject: isMath ? 'Math' : 'Reading & Writing',
+          stemPreview: (questionData.practice_question || '').slice(0, 280),
+          reason: 'Học sinh báo lỗi câu hỏi / công thức / đáp án',
+        }),
+      });
+      setReportStatus('sent');
+    } catch {
+      setReportStatus('idle');
+    }
+  };
 
   const handleSubmit = async () => {
     if (isSubmitted) return;
@@ -338,7 +439,7 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
           const mistakeId = questionData.questionId ? `practice-${questionData.questionId}` : `practice-${Date.now()}`;
           const newMistake = {
             id: mistakeId,
-            subject: questionData.practice_question?.includes('$') || questionData.practice_question?.includes('\\') ? 'Math' : 'Reading & Writing',
+            subject: isMath ? 'Math' : 'Reading & Writing',
             topic: questionData.skillId || 'Luyện tập kỹ năng Digital SAT',
             question: questionData.practice_question || '',
             passage: questionData.full_passage || undefined,
@@ -358,6 +459,8 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
           const existingList: any[] = rawLocal ? JSON.parse(rawLocal) : [];
           const filteredList = Array.isArray(existingList) ? existingList.filter((m: any) => m.id !== mistakeId) : [];
           localStorage.setItem('sat_mistake_bank_v1', JSON.stringify([newMistake, ...filteredList]));
+          // Vá #13 & W1 #14: đồng bộ realtime Sổ lỗi sai cho Sidebar / Dashboard / Header
+          window.dispatchEvent(new CustomEvent('sat_mistake_bank_updated'));
         } catch (localErr) {
           console.error("Failed to sync mistake to localStorage", localErr);
         }
@@ -376,7 +479,7 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
             explanation: explanationForMistake,
             source: "Core Practice (Next.js)",
             skill_id: questionData.skillId ?? null,
-            subject: questionData.practice_question?.includes('$') || questionData.practice_question?.includes('\\') ? 'Math' : 'Reading & Writing',
+            subject: isMath ? 'Math' : 'Reading & Writing',
           })
         });
       } catch (e) {
@@ -530,7 +633,9 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
         setSavedWords(prev => ({ ...prev, [word.toLowerCase()]: true }));
         setVocabSaveSuccess(`Đã lưu "${word}" vào bộ nhớ máy!`);
         setTimeout(() => setVocabSaveSuccess(null), 3000);
-      } catch {}
+      } catch (err) {
+        console.warn('[CorePracticeUI] Không thể lưu từ vựng vào localStorage:', err);
+      }
     } finally {
       setSavingWord(null);
     }
@@ -617,8 +722,11 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
               ⚠️ {questionData.trapRate}% học sinh sập bẫy
             </span>
             {hasTimeLimit ? (
-              <span className={`px-2 py-1 rounded border bg-[rgba(0,0,0,0.2)] font-bold flex items-center gap-1 ${timeLeft <= 30 ? 'border-red-500 text-red-500 animate-pulse' : 'border-blue-400 text-blue-400'}`}>
+              <span className={`px-2 py-1 rounded border bg-[rgba(0,0,0,0.2)] font-bold flex items-center gap-1 ${((timeLimit ?? 0) >= 600 ? timeLeft <= 300 : timeLeft <= 30) ? 'border-red-500 text-red-400 animate-pulse' : 'border-blue-400 text-blue-400'}`}>
                 ⏱️ Còn lại: {formatTime(timeLeft)}
+                {(timeLimit ?? 0) >= 600 && timeLeft <= 300 && (
+                  <span className="ml-1 text-[10px] uppercase bg-red-600/30 px-1.5 py-0.5 rounded">5 phút cuối!</span>
+                )}
               </span>
             ) : (
               <span className="px-2 py-1 rounded border border-blue-400 text-blue-400 bg-[rgba(0,0,0,0.2)] font-bold flex items-center gap-1">
@@ -643,12 +751,30 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <BluebookTools compact />
+          <BluebookTools compact questionId={questionKey} />
           <button
+            type="button"
+            onClick={handleToggleMarkForReview}
+            className={`text-sm px-3 py-2 rounded font-bold transition-colors border ${isMarkedForReview ? 'bg-rose-500/25 text-rose-200 border-rose-400' : 'bg-transparent text-gray-300 border-gray-600 hover:bg-gray-800'}`}
+            title="Cắm cờ đánh dấu xem lại chuẩn Bluebook (#08)"
+          >
+            {isMarkedForReview ? '🚩 Đã cắm cờ' : '🚩 Mark for Review'}
+          </button>
+          <button
+            type="button"
             onClick={() => toggleBookmark(questionData.practice_question)}
             className={`text-sm px-4 py-2 rounded font-bold transition-colors border ${isBookmarked ? 'bg-yellow-500 text-yellow-900 border-yellow-500' : 'bg-transparent text-gray-300 border-gray-600 hover:bg-gray-800'}`}
           >
             {isBookmarked ? "⭐ Đã Lưu" : "⭐ Lưu Câu Này"}
+          </button>
+          <button
+            type="button"
+            disabled={reportStatus !== 'idle'}
+            onClick={handleReportQuestionIssue}
+            className="text-xs px-2.5 py-2 rounded border border-slate-700 bg-slate-900/70 text-slate-400 hover:text-amber-300 hover:border-amber-500/40 transition-colors disabled:opacity-60"
+            title="Báo lỗi chính tả / công thức / đáp án về hàng đợi Admin (#10)"
+          >
+            {reportStatus === 'sent' ? '✓ Đã báo lỗi' : reportStatus === 'sending' ? '...' : '⚠️ Báo lỗi'}
           </button>
           {!(hideNextUntilSubmitted && !isSubmitted) && (
             <button
@@ -660,13 +786,22 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
         </div>
       </div>
 
-      {/* Điểm 19: Chiến thuật Rhetorical Synthesis (Student Notes) */}
+      {/* Điểm 19 + W1 #05: Chiến thuật Rhetorical Synthesis — làm nổi bật câu mục tiêu & mờ bullet nhiễu */}
       {isRhetoricalSynthesis && (
-        <div className="mb-4 bg-amber-500/10 border-l-4 border-amber-400 p-3.5 rounded-r-lg text-amber-200 text-sm flex items-start gap-2.5 shadow-md">
-          <span className="text-xl shrink-0">⚡</span>
-          <div>
-            <strong className="text-amber-300 font-bold">Mẹo 20 Giây (Rhetorical Synthesis):</strong> Đừng đọc hết các gạch đầu dòng trước! Hãy đọc câu hỏi bên dưới/bên phải trước để xác định đúng yêu cầu (So sánh / Nêu ví dụ / Nguyên nhân), rồi đối chiếu thẳng với 4 đáp án A, B, C, D.
+        <div className="mb-4 bg-amber-500/10 border-l-4 border-amber-400 p-3.5 rounded-r-lg text-amber-200 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-md">
+          <div className="flex items-start gap-2.5">
+            <span className="text-xl shrink-0">⚡</span>
+            <div>
+              <strong className="text-amber-300 font-bold">Mẹo 20 Giây (Rhetorical Synthesis):</strong> Đọc thẳng câu mục tiêu <em>&ldquo;The student wants to...&rdquo;</em> bên dưới trước khi đọc bullet notes để tiết kiệm 40–60 giây!
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setFocusSynthesisGoal((v) => !v)}
+            className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold border border-amber-400/50 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 transition"
+          >
+            {focusSynthesisGoal ? '🎯 Đang làm mờ bullet nhiễu' : '👁️ Hiện rõ toàn bộ notes'}
+          </button>
         </div>
       )}
 
@@ -750,7 +885,9 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
           {/* Nội dung đoạn văn */}
           <div
             onMouseUp={handlePassageMouseUp}
-            className="bg-[#0e1117] border-l-4 border-b border-r border-[#3b82f6] text-[#e2e8f0] p-5 rounded-b text-[16px] leading-relaxed whitespace-pre-wrap shadow-inner font-serif select-text cursor-text overflow-x-auto max-w-full break-words"
+            className={`bg-[#0e1117] border-l-4 border-b border-r border-[#3b82f6] text-[#e2e8f0] p-5 rounded-b text-[16px] leading-relaxed whitespace-pre-wrap shadow-inner font-serif select-text cursor-text overflow-x-auto max-w-full break-words transition-opacity ${
+              isRhetoricalSynthesis && focusSynthesisGoal ? 'opacity-70 hover:opacity-100' : ''
+            }`}
           >
             {renderHighlightedPassage(questionData.full_passage)}
           </div>
@@ -832,9 +969,64 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
         </div>
       )}
       
-      {/* Question */}
-      <div className="text-white text-[18px] mb-6 font-bold whitespace-pre-wrap overflow-x-auto max-w-full break-words">
-        {questionData.practice_question}
+      {/* Question (kèm làm nổi bật mục tiêu Rhetorical Synthesis #05 + 1-chạm Desmos #01/#02 + Thuật ngữ Toán bẫy #04) */}
+      <div className="mb-6 space-y-3">
+        <div
+          className={`text-white text-[18px] font-bold whitespace-pre-wrap overflow-x-auto max-w-full break-words ${
+            isRhetoricalSynthesis && focusSynthesisGoal
+              ? 'bg-amber-500/15 border border-amber-400/50 rounded-xl p-4 ring-1 ring-amber-400/30'
+              : ''
+          }`}
+        >
+          {isRhetoricalSynthesis && focusSynthesisGoal && (
+            <span className="inline-block mb-1.5 text-[11px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 px-2 py-0.5 rounded">
+              🎯 Mục tiêu câu hỏi (Đọc câu này trước!)
+            </span>
+          )}
+          <div>{questionData.practice_question}</div>
+        </div>
+
+        {/* W1 #01 & W2 #02: Nạp công thức / kịch bản Desmos 1-chạm */}
+        {isMath && desmosEquations.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 bg-cyan-950/30 border border-cyan-500/30 rounded-xl px-3.5 py-2.5 text-xs">
+            <span className="font-bold text-cyan-300">🧮 Desmos 1-Chạm:</span>
+            {desmosEquations.map((eq, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => dispatchDesmosExpression(eq, `Biểu thức ${idx + 1}`)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-400/40 text-cyan-100 font-mono transition"
+                title="Mở Desmos & nạp sẵn công thức vào Clipboard để dán Ctrl+V"
+              >
+                <span>⚡ Mở trên Desmos:</span>
+                <span className="text-amber-300 max-w-[180px] truncate">{eq}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* W2 #04: Thanh cảnh báo & tra cứu nhanh từ khóa bẫy Toán SAT trong đề */}
+        {isMath && detectedMathVocabTraps.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 bg-indigo-950/30 border border-indigo-500/30 rounded-xl px-3.5 py-2 text-xs">
+            <span className="font-bold text-indigo-300">🇬🇧 Bẫy thuật ngữ Toán SAT:</span>
+            {detectedMathVocabTraps.map((item) => (
+              <button
+                key={item.term}
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('sat:open-math-vocab', { detail: { term: item.term } }));
+                  }
+                }}
+                className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-indigo-900/50 border border-indigo-500/40 text-slate-200 transition text-left"
+                title={`${item.vi} — Bẫy: ${item.trap}`}
+              >
+                <strong className="text-amber-300 underline decoration-dotted">{item.term}</strong>
+                <span className="text-slate-400 ml-1">({item.vi})</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       
       {/* Điểm 41: Nhập đáp án tự điền SPR (Student-Produced Response) cho Toán (#049) */}
@@ -904,6 +1096,22 @@ export function CorePracticeUI({ questionData, onNext, isLoading, onAnswer, onSu
               </div>
             )}
           </div>
+
+          {/* W1 #03: Soát lỗi tự điền SPR realtime ngay dưới ô nhập (Xanh/Vàng/Đỏ chuẩn College Board) */}
+          {sprLiveCheck && !isSubmitted && (
+            <div
+              className={`rounded-lg px-3 py-2 text-xs font-semibold border ${
+                sprLiveCheck.type === 'success'
+                  ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                  : sprLiveCheck.type === 'warning'
+                  ? 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                  : 'bg-rose-950/50 border-rose-500/50 text-rose-200'
+              }`}
+            >
+              {sprLiveCheck.type === 'success' ? '✅ ' : sprLiveCheck.type === 'warning' ? '⚠️ ' : '🚫 '}
+              {sprLiveCheck.message}
+            </div>
+          )}
 
           {/* Hiển thị đáp án đúng nếu làm sai câu SPR (#047, #049) */}
           {isSubmitted && !isCorrect && (revealedCorrectChoice || questionData.correct_choice) && (

@@ -8,27 +8,25 @@ import { loadVocab } from '@/lib/vocab-store';
 import { isDue, todayStr } from '@/lib/leitner';
 import { getUserTier } from '@/lib/subscription-store';
 import { isValidSkill } from '@/lib/skill-taxonomy';
+import { rateLimitDistributed, getRateLimitKey } from '@/lib/rate-limit';
+import { POST as generatePracticePost } from '@/app/api/generate-practice/route';
 
 /**
  * GRIND QUESTION API — Khổ Luyện (nhồi 1 skill yếu nhất tới mastered).
- *
- * GET [?skillId=…] → chọn skill + độ khó theo MASTERY thật của user
- * (server-authoritative), rồi sinh câu qua /api/generate-practice. Câu trả về
- * mang skillId THẬT nên CorePracticeUI ghi mastery đúng skill (mirror pattern
- * /api/tower/question).
- *
- * Khác Tower: cho phép client TỰ CHỌN skill muốn nhồi (?skillId). Nếu không truyền
- * hoặc không hợp lệ → auto chọn skill YẾU NHẤT (recommendNext). Độ khó luôn theo
- * ZPD của skill đó (selectDifficulty) — không cộng áp lực như Tower vì mục tiêu là
- * củng cố cho tới thành thạo, không phải survival.
- *
- * PHÂN TẦNG: Khổ luyện là quyền lợi ULTIMATE. Không phải ultimate → 403 { locked:true }
- * để UI hiện upsell (đây là HÀNH ĐỘNG sinh câu, không chỉ đọc đề xuất → dùng 403).
+ * W2 #09: Tự động nhồi từ vựng yếu Hộp 1 Leitner vào đoạn văn khổ luyện Đọc-Viết/Từ vựng.
+ * Gọi trực tiếp handler nội bộ generatePracticePost (không forward cookie ra nextUrl.origin).
  */
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
 
-  // Giới hạn count / limit truy vấn tối đa (<= 50) chống DoS/treo server (#016)
+  const rl = await rateLimitDistributed(getRateLimitKey(request, 'grind-q', user.id), 15, 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Bạn gọi câu khổ luyện hơi nhanh. Chờ chút rồi thử lại nhé.', retryAfterMs: rl.retryAfterMs },
+      { status: 429 }
+    );
+  }
+
   const countParam = request.nextUrl.searchParams.get('count') ?? request.nextUrl.searchParams.get('limit');
   if (countParam !== null) {
     const parsed = parseInt(countParam, 10);
@@ -40,21 +38,30 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // GATE ultimate — khổ luyện là quyền lợi cao cấp nhất.
   const tier = await getUserTier(user.id);
   if (tier !== 'ultimate') {
     return NextResponse.json({ locked: true }, { status: 403 });
   }
 
   const summary = await getMasterySummary(user.id);
-
-  // Client có thể chỉ định skill muốn nhồi; không hợp lệ → auto chọn yếu nhất.
   const requested = request.nextUrl.searchParams.get('skillId');
 
   let skillId: string;
   let label: string;
   let moduleType: string;
   let difficulty: Difficulty;
+  let box1Words: string[] = [];
+
+  try {
+    const vocab = await loadVocab(user.id);
+    box1Words = vocab.words
+      .filter((w) => (w.box ?? 1) <= 1)
+      .map((w) => (typeof w.word === 'string' ? w.word.trim() : ''))
+      .filter((word) => word.length > 1)
+      .slice(0, 4);
+  } catch {
+    // fail-safe
+  }
 
   if (requested && isValidSkill(requested)) {
     const s = summary.skills.find((x) => x.id === requested);
@@ -66,9 +73,6 @@ export async function GET(request: NextRequest) {
     moduleType = s.moduleType;
     difficulty = selectDifficulty(s.score);
   } else {
-    // Không chỉ định skill → soạn hàng đợi học ưu tiên SRS due (chống quên) rồi
-    // mới đến skill yếu nhất. Lỗi/vocab đến hạn ôn có giá trị học cao nhất nên đứng
-    // trước. Fail-safe: lỗi đọc SRS → hàng đợi chỉ còn weakness (giữ hành vi cũ).
     const today = todayStr();
     let dueMistakes: { skill_id?: string | null }[] = [];
     let dueVocabCount = 0;
@@ -76,13 +80,13 @@ export async function GET(request: NextRequest) {
       const mistakes = await loadMistakes(user.id);
       dueMistakes = mistakes.filter((m) => isDue(m.next_review, today));
     } catch (e) {
-      console.error('Grind: loadMistakes lỗi (fail-safe → không có due mistake):', e);
+      console.error('Grind: loadMistakes lỗi:', e);
     }
     try {
       const vocab = await loadVocab(user.id);
       dueVocabCount = vocab.words.filter((w) => isDue(w.next_review, today)).length;
     } catch (e) {
-      console.error('Grind: loadVocab lỗi (fail-safe → 0 due vocab):', e);
+      console.error('Grind: loadVocab lỗi:', e);
     }
     const rec = recommendNext(summary);
     const queue = buildStudyQueue(summary, dueMistakes, dueVocabCount, rec);
@@ -95,14 +99,13 @@ export async function GET(request: NextRequest) {
         label = s.label;
         moduleType = s.moduleType;
         difficulty = selectDifficulty(s.score);
-      } else {
-        if (!rec) {
-          return NextResponse.json({ error: 'Không tìm thấy kỹ năng để khổ luyện' }, { status: 404 });
-        }
+      } else if (rec) {
         skillId = rec.skillId;
         label = rec.label;
         moduleType = rec.moduleType;
         difficulty = rec.difficulty;
+      } else {
+        return NextResponse.json({ error: 'Không tìm thấy kỹ năng để khổ luyện' }, { status: 404 });
       }
     } else if (rec) {
       skillId = rec.skillId;
@@ -114,21 +117,31 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const isRwContext =
+    moduleType === 'literature' ||
+    moduleType === 'vocab' ||
+    moduleType === 'vocabulary' ||
+    skillId.startsWith('rw_');
+  const injectedBox1Words = isRwContext ? box1Words : [];
+  const enrichedTopic =
+    injectedBox1Words.length > 0
+      ? `${label} — Lồng ghép tự nhiên từ vựng Leitner Hộp 1 cần ôn: ${injectedBox1Words.join(', ')}`
+      : label;
+
   try {
-    const res = await fetch(new URL('/api/generate-practice', request.nextUrl.origin), {
+    const internalReq = new Request('http://internal.satguru.local/api/generate-practice', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', cookie: request.headers.get('cookie') ?? '' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         moduleType,
-        topic: label,
+        topic: enrichedTopic,
         skillId,
         difficulty,
       }),
     });
+    const res = await generatePracticePost(internalReq);
 
     if (!res.ok) {
-      // Chuyển nguyên trạng thái lỗi (quota 429 / budget 503 / cấu hình 500) để
-      // client hiển thị đúng thông điệp thay vì nuốt mất.
       const data = await res.json().catch(() => ({}));
       return NextResponse.json(
         { error: data?.error ?? 'Không sinh được câu khổ luyện.' },
@@ -137,9 +150,12 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await res.json();
-    // Gắn kèm difficulty + skillId đã chọn (đảm bảo client/Mastery dùng đúng mức,
-    // không phụ thuộc field difficulty do AI tự ghi) — như Tower.
-    return NextResponse.json({ ...data, difficulty, skillId });
+    return NextResponse.json({
+      ...data,
+      difficulty,
+      skillId,
+      ...(injectedBox1Words.length > 0 ? { injectedBox1Words } : {}),
+    });
   } catch (e) {
     console.error('Grind question: lỗi sinh câu hỏi', e);
     return NextResponse.json({ error: 'Lỗi sinh câu khổ luyện.' }, { status: 503 });

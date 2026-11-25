@@ -4,7 +4,8 @@ import { getSkillMastery } from '@/lib/mastery';
 import { getSkill } from '@/lib/skill-taxonomy';
 import { selectDifficulty } from '@/lib/adaptive';
 import { buildVariantRequest } from '@/lib/mistake-variant';
-import { checkRateLimit, getRateLimitKey } from '@/lib/rate-limit';
+import { rateLimitDistributed, getRateLimitKey } from '@/lib/rate-limit';
+import { POST as generatePracticePost } from '@/app/api/generate-practice/route';
 
 const PROMPT_INJECTION_PATTERNS = [
   /ignore\s+(?:all\s+)?previous\s+instructions/gi,
@@ -125,9 +126,9 @@ function validateQuestionSchema(data: unknown): { valid: boolean; reason?: strin
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
 
-  // Rate-limit chống spam AI generation (lỗ hổng #012)
+  // Rate-limit chống spam AI generation (lỗ hổng #012 + #11)
   const rlKey = getRateLimitKey(request, 'ai-gen', user?.id);
-  const rl = checkRateLimit(rlKey, 10, 60_000);
+  const rl = await rateLimitDistributed(rlKey, 10, 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: 'Bạn tạo câu biến thể quá nhanh. Vui lòng thử lại sau.' },
@@ -159,9 +160,10 @@ export async function GET(request: NextRequest) {
   })!;
 
   try {
-    const res = await fetch(new URL('/api/generate-practice', request.nextUrl.origin), {
+    // Gọi trực tiếp handler nội bộ thay vì fetch(request.nextUrl.origin) + forward cookie (vá #11)
+    const internalReq = new Request('http://internal.satguru.local/api/generate-practice', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', cookie: request.headers.get('cookie') ?? '' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         moduleType: req.moduleType,
         topic: req.topic,
@@ -170,6 +172,7 @@ export async function GET(request: NextRequest) {
         ...(req.targetTrapType ? { targetTrapType: req.targetTrapType, trapPromptHint: req.trapPromptHint } : {}),
       }),
     });
+    const res = await generatePracticePost(internalReq);
 
     if (!res.ok) {
       // Chuyển nguyên trạng thái lỗi (quota 429 / budget 503 / cấu hình 500) để

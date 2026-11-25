@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
+import { createAdminClient } from '@/lib/supabase/admin';
+import type { VnUniversityProfile } from '@/lib/uni-benchmarks';
 
 export interface UniPredictInput {
   sat: number;
@@ -262,7 +264,54 @@ async function handlePrediction(req: Request, rawSat: unknown, rawGpa: unknown, 
   const gpa = Number.isFinite(numGpa) ? Math.min(10.0, Math.max(0.0, Number(numGpa.toFixed(2)))) : 8.8;
   const ielts = Number.isFinite(numIelts) ? Math.min(9.0, Math.max(0.0, Number(numIelts.toFixed(1)))) : 7.5;
 
-  const universities = evaluateVietnameseUniversities(sat, gpa, ielts);
+  let universities = evaluateVietnameseUniversities(sat, gpa, ielts);
+
+  // W3 #40: Nếu Admin đã cấu hình động điểm chuẩn trên Supabase `app_dynamic_config`, áp dụng ngưỡng mới realtime
+  let benchmarkSource: 'default' | 'supabase_dynamic' = 'default';
+  try {
+    const sb = createAdminClient();
+    if (sb) {
+      const { data } = await sb
+        .from('app_dynamic_config')
+        .select('value')
+        .eq('key', 'vn_uni_benchmarks_2026')
+        .maybeSingle();
+      if (data && Array.isArray(data.value) && data.value.length > 0) {
+        const dynamicMap = new Map<string, VnUniversityProfile>();
+        for (const item of data.value as VnUniversityProfile[]) {
+          if (item && typeof item.slug === 'string') {
+            dynamicMap.set(item.slug.toLowerCase(), item);
+          }
+        }
+        if (dynamicMap.size > 0) {
+          benchmarkSource = 'supabase_dynamic';
+          universities = universities.map((u) => {
+            const ov = dynamicMap.get(u.id.toLowerCase());
+            if (!ov) return u;
+            const minSat = Number(ov.minSat) || 1200;
+            const safeSat = Number(ov.safeSat) || 1400;
+            const minGpa = Number(ov.minGpa) || 8.0;
+            const isSafe = sat >= safeSat && gpa >= minGpa;
+            const isEligible = sat >= minSat && gpa >= minGpa;
+            return {
+              ...u,
+              floorRequirement: `SAT ≥ ${minSat}${minGpa > 0 ? ` & GPA ≥ ${minGpa}` : ''}`,
+              safeRequirement: `SAT ≥ ${safeSat}`,
+              status: isSafe ? 'SAFE' : isEligible ? 'ELIGIBLE' : 'BELOW_FLOOR',
+              badgeColor: isSafe ? 'emerald' : isEligible ? 'amber' : 'rose',
+              statusMessage: isSafe
+                ? `✅ Rất an toàn theo ngưỡng chuẩn mới nhất (≥ ${safeSat})`
+                : isEligible
+                ? `⚡ Đủ điều kiện nộp hồ sơ (Cần +${Math.max(0, safeSat - sat)}đ để đạt mốc an toàn ${safeSat})`
+                : `⚠️ Chưa đạt ngưỡng sàn cập nhật SAT ≥ ${minSat}`,
+            };
+          });
+        }
+      }
+    }
+  } catch {
+    // Fallback an toàn về bảng chuẩn mặc định khi chưa có bảng/DB
+  }
 
   const safeCount = universities.filter((u) => u.status === 'SAFE').length;
   const eligibleCount = universities.filter((u) => u.status === 'ELIGIBLE' || u.status === 'SAFE').length;
@@ -281,6 +330,7 @@ async function handlePrediction(req: Request, rawSat: unknown, rawGpa: unknown, 
       eligibleCount,
       belowFloorCount: universities.length - eligibleCount,
       benchmarkYear: 2026,
+      benchmarkSource,
     },
   });
 }

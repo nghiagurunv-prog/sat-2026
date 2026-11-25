@@ -11,6 +11,8 @@ import { emitMetric } from '@/lib/telemetry';
  * - Lọc danh sách học viên gói `ultimate` còn hiệu lực, tổng hợp báo cáo tuần
  *   qua `buildParentReport()` và đẩy sang `PARENT_DIGEST_WEBHOOK_URL` (ZNS / Bot bridge).
  */
+export const maxDuration = 60;
+
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET?.trim();
   if (!cronSecret) {
@@ -42,30 +44,48 @@ export async function GET(req: NextRequest) {
     const users = (subs ?? []) as Array<{ user_id: string }>;
     let processed = 0;
     let delivered = 0;
+    const BATCH_SIZE = 10;
 
-    for (const u of users) {
-      try {
-        const report = await buildParentReport(u.user_id);
-        processed++;
-        if (webhookUrl && report) {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 3000);
-          const res = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              channel: 'zns_parent_weekly_digest',
-              brand: 'SAT.Guru',
-              studentId: u.user_id,
-              generatedAt: nowIso,
-              report,
-            }),
-            signal: controller.signal,
-          }).finally(() => clearTimeout(timer));
-          if (res.ok) delivered++;
+    // Xử lý song song theo lô (batch 10) để tránh vượt timeout Vercel khi nhiều học viên Ultimate
+    for (let i = 0; i < users.length; i += BATCH_SIZE) {
+      const batch = users.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(async (u) => {
+          const report = await buildParentReport(u.user_id);
+          let sent = false;
+          if (webhookUrl && report) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 3000);
+            try {
+              const res = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  channel: 'zns_parent_weekly_digest',
+                  brand: 'SAT.Guru',
+                  studentId: u.user_id,
+                  generatedAt: nowIso,
+                  report,
+                }),
+                signal: controller.signal,
+              });
+              sent = res.ok;
+            } finally {
+              clearTimeout(timer);
+            }
+          }
+          return { sent };
+        })
+      );
+
+      for (let idx = 0; idx < results.length; idx++) {
+        const r = results[idx];
+        if (r.status === 'fulfilled') {
+          processed++;
+          if (r.value.sent) delivered++;
+        } else {
+          console.warn(`[cron/parent-weekly-digest] Lỗi xử lý user ${batch[idx]?.user_id}:`, r.reason);
         }
-      } catch (innerErr) {
-        console.warn(`[cron/parent-weekly-digest] Lỗi xử lý user ${u.user_id}:`, innerErr);
       }
     }
 

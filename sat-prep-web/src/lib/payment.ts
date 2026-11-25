@@ -1,5 +1,11 @@
 import { randomUUID } from 'crypto';
-import type { PaidTier, BillingPeriod } from './subscription';
+import {
+  getPlan,
+  resolveCheckoutPlan,
+  type PaidTier,
+  type BillingPeriod,
+  type CheckoutPlanSpec,
+} from './subscription';
 
 /**
  * ============================================================================
@@ -75,5 +81,25 @@ export function buildOrderInfo(tier: PaidTier, period: BillingPeriod): string {
     yearly: 'nam',
   };
   const periodLabel = PERIOD_LABELS[period];
-  return `Nang cap goi ${tierLabel} ${periodLabel} - Gia su AI SAT`;
+  return `Nang cap goi ${tierLabel} ${periodLabel} - SAT.Guru`;
+}
+
+/**
+ * Tra cứu gói thanh toán hợp nhất (Standard PLANS, Sprint Packs, Study Squad Packs).
+ * Client chỉ gửi { tier, period } hoặc { planId }; server quyết định 100% số tiền.
+ */
+export function resolvePaymentSpec(input: {
+  planId?: unknown;
+  tier?: unknown;
+  period?: unknown;
+}): CheckoutPlanSpec | undefined {
+  if (typeof input.planId === 'string' && input.planId.trim().length > 0) {
+    return resolveCheckoutPlan({ planId: input.planId });
+  }
+  if (!isValidTier(input.tier) || !isValidPeriod(input.period)) {
+    return undefined;
+  }
+  const std = getPlan(input.tier, input.period);
+  if (!std) return undefined;
+  return resolveCheckoutPlan({ tier: std.tier, period: std.period });
 }

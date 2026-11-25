@@ -132,6 +132,29 @@ export async function getTransaction(orderId: string): Promise<PaymentTxn | null
   return mapRow(data);
 }
 
+/**
+ * Đọc trạng thái công khai tối thiểu ({ orderId, status }) không chứa PII qua admin client.
+ * Dùng làm fallback tại /api/payment/return khi WebView Zalo/Safari drop cookie SameSite
+ * khiến getTransaction(RLS) trả null dù IPN đã xác nhận đơn thành công.
+ */
+export async function getTransactionPublicStatus(
+  orderId: string
+): Promise<{ orderId: string; status: TxnStatus } | null> {
+  if (!orderId) return null;
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from('payment_transactions')
+    .select('order_id, status')
+    .eq('order_id', orderId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return {
+    orderId: data.order_id as string,
+    status: data.status as TxnStatus,
+  };
+}
+
 /** Liệt kê giao dịch CỦA MÌNH (đường ĐỌC, RLS). Mới nhất trước. */
 export async function listUserTransactions(userId: string): Promise<PaymentTxn[]> {
   const supabase = await createClient();

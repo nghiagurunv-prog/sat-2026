@@ -3,7 +3,10 @@ import crypto from 'crypto';
 import { getCurrentUser } from '@/lib/auth';
 import { getUserDataPath } from '@/lib/user-data';
 import { saveProgressRaw, getProgressFromDb, saveProgressToDb, mergeProgress } from '@/lib/progress-store';
+import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
 import fs from 'fs';
+
+const MAX_SAVE_PAYLOAD_BYTES = 500 * 1024; // 500KB chống phình DB / DoS
 
 const SECRET_KEY: string = (() => {
   const s = process.env.SAT_PREP_SECRET;
@@ -44,7 +47,26 @@ function generateSignature(data: Record<string, unknown>): string {
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
-    const data = await req.json();
+    if (!user.isAuthenticated) {
+      return NextResponse.json({ error: 'Vui lòng đăng nhập để đồng bộ dữ liệu lên máy chủ.' }, { status: 401 });
+    }
+
+    const rl = rateLimit(getRateLimitKey(req, 'save-data', user.id), 15, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: 'Đồng bộ quá nhanh. Vui lòng thử lại sau ít giây.', retryAfterMs: rl.retryAfterMs },
+        { status: 429 }
+      );
+    }
+
+    const rawText = await req.text();
+    if (Buffer.byteLength(rawText, 'utf8') > MAX_SAVE_PAYLOAD_BYTES) {
+      return NextResponse.json(
+        { error: 'Dung lượng dữ liệu lưu vượt quá giới hạn 500KB.' },
+        { status: 413 }
+      );
+    }
+    const data = JSON.parse(rawText);
 
     // 🛡️ CHỐNG LỖI "EMPTY-STATE WIPE" (#020) & XUNG ĐỘT ĐA TAB (#022):
     // Khi học sinh đăng nhập trên thiết bị mới, state khởi tạo ban đầu có thể là rỗng (totalXP = 0).

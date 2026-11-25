@@ -9,7 +9,7 @@ import { TIER_COIN_MULTIPLIER } from '@/lib/subscription';
 import { generateModule } from '@/lib/exam-generator';
 import * as ExamGeneratorModule from '@/lib/exam-generator';
 import { getExamById, getExamQuestionMap } from '@/lib/exams';
-import { determineAdaptivePath } from '@/lib/exam-scoring';
+import { determineAdaptivePath, computeSectionScore } from '@/lib/exam-scoring';
 import { isE2E, e2eModule, e2eGrade, E2E_ECONOMY } from '@/lib/e2e';
 import { bumpDailyActivity } from '@/lib/daily-activity-store';
 import { matchesAnswer } from '@/lib/answer-match';
@@ -128,6 +128,9 @@ export async function POST(request: NextRequest) {
     // getGradedResult non-null (đã chấm, retry) đều là câu sở hữu hợp lệ → đếm.
     // Câu ID lạ/không sở hữu → cả 2 null → KHÔNG đếm (client không thổi được mẫu số).
     let gradedTotal = 0;
+    const submittedAnswerMap: Record<string, string> = {};
+    const correctAnswerMap: Record<string, string> = {};
+    const difficultyMap: Record<string, string> = {};
     const gradedItems: Array<{
       questionId: string;
       correct: boolean;
@@ -141,11 +144,14 @@ export async function POST(request: NextRequest) {
       if (result) {
         // Chấm MỚI (CAS thắng) → tính điểm + đủ điều kiện thưởng.
         gradedTotal++;
+        const d: Difficulty = VALID_DIFFICULTY.includes(result.difficulty as Difficulty)
+          ? (result.difficulty as Difficulty)
+          : 'Medium';
+        submittedAnswerMap[questionId] = answer;
+        correctAnswerMap[questionId] = result.correctChoice;
+        difficultyMap[questionId] = d;
         if (result.correct) {
           correct++;
-          const d: Difficulty = VALID_DIFFICULTY.includes(result.difficulty as Difficulty)
-            ? (result.difficulty as Difficulty)
-            : 'Medium';
           correctDifficulties.push(d);
         }
         gradedItems.push({
@@ -162,6 +168,9 @@ export async function POST(request: NextRequest) {
       const prior = await getGradedResult(questionId, user.id);
       if (prior) {
         gradedTotal++;
+        submittedAnswerMap[questionId] = prior.correct ? (prior.correctChoice ?? answer) : '__WRONG__';
+        correctAnswerMap[questionId] = prior.correctChoice ?? 'A';
+        difficultyMap[questionId] = 'Medium';
         if (prior.correct) correct++;
         gradedItems.push({
           questionId,
@@ -185,12 +194,16 @@ export async function POST(request: NextRequest) {
         if (fallbackCorrectChoice) {
           gradedTotal++;
           const isLocalCorrect = matchesAnswer(answer, fallbackCorrectChoice);
+          const d: Difficulty = VALID_DIFFICULTY.includes((localLookup?.difficulty ?? mapItem?.difficulty) as Difficulty)
+            ? ((localLookup?.difficulty ?? mapItem?.difficulty) as Difficulty)
+            : 'Medium';
+          submittedAnswerMap[questionId] = answer;
+          correctAnswerMap[questionId] = fallbackCorrectChoice;
+          difficultyMap[questionId] = d;
           if (isLocalCorrect) {
             correct++;
-            const d: Difficulty = VALID_DIFFICULTY.includes((localLookup?.difficulty ?? mapItem?.difficulty) as Difficulty)
-              ? ((localLookup?.difficulty ?? mapItem?.difficulty) as Difficulty)
-              : 'Medium';
-            correctDifficulties.push(d);
+            // 🔒 ROOT A/C (T2 Audit P0): Nhánh fallback Local-First không có CAS
+            // trên `issued_questions` → TUYỆT ĐỐI KHÔNG cộng xu/XP (tránh replay faucet).
           }
           gradedItems.push({
             questionId,
@@ -233,6 +246,10 @@ export async function POST(request: NextRequest) {
     // Module 1 → quyết adaptive path + sinh Module 2.
     if (moduleNum === 1) {
       const adaptivePath = determineAdaptivePath(correct, gradedTotal, section);
+      const irtScore = computeSectionScore(
+        [{ answers: submittedAnswerMap, correctAnswers: correctAnswerMap, difficulties: difficultyMap }],
+        adaptivePath
+      );
       const origin = request.nextUrl.origin;
       const cookie = request.headers.get('cookie') ?? '';
 
@@ -244,7 +261,15 @@ export async function POST(request: NextRequest) {
         // module:null để client GHI điểm rồi kết thúc section êm. Endpoint không
         // idempotent (CAS) nên client KHÔNG được retry — đây là đường thoát an toàn.
         return NextResponse.json({
-          moduleResult: { correct, total: gradedTotal },
+          moduleResult: {
+            correct,
+            total: gradedTotal,
+            scaledScore: irtScore.scaled,
+            theta: irtScore.theta,
+            se: irtScore.se,
+            scoringMethod: irtScore.scoringMethod,
+          },
+          score: irtScore,
           gradedItems,
           adaptivePath,
           granted,
@@ -278,7 +303,15 @@ export async function POST(request: NextRequest) {
       );
 
       return NextResponse.json({
-        moduleResult: { correct, total: gradedTotal },
+        moduleResult: {
+          correct,
+          total: gradedTotal,
+          scaledScore: irtScore.scaled,
+          theta: irtScore.theta,
+          se: irtScore.se,
+          scoringMethod: irtScore.scoringMethod,
+        },
+        score: irtScore,
         gradedItems,
         adaptivePath,
         granted,
@@ -300,8 +333,29 @@ export async function POST(request: NextRequest) {
     if (section === 'math') {
       await bumpDailyActivity(user.id, 'exam_complete'); // await: tránh drop RPC khi serverless freeze
     }
+    // 🔒 SERVER-AUTHORITATIVE (T2 Audit P1): Không tin `body.adaptivePath` từ client để né trần Easy.
+    // Suy luận nhánh M2 trực tiếp từ tỷ lệ câu Hard trong chính module server đã phát/chấm
+    // (M2 Hard có ~55-59% câu Hard; M2 Easy chỉ có ~15-18% câu Hard).
+    const gradedDiffs = Object.values(difficultyMap);
+    const hardRatio = gradedDiffs.length > 0
+      ? gradedDiffs.filter((d) => d === 'Hard').length / gradedDiffs.length
+      : 0;
+    const serverInferredPath = hardRatio >= 0.35 ? 'hard' : 'easy';
+    const m2Path = body?.adaptivePath === 'easy' ? 'easy' : serverInferredPath;
+    const irtScore = computeSectionScore(
+      [{ answers: submittedAnswerMap, correctAnswers: correctAnswerMap, difficulties: difficultyMap }],
+      m2Path
+    );
     return NextResponse.json({
-      moduleResult: { correct, total: gradedTotal },
+      moduleResult: {
+        correct,
+        total: gradedTotal,
+        scaledScore: irtScore.scaled,
+        theta: irtScore.theta,
+        se: irtScore.se,
+        scoringMethod: irtScore.scoringMethod,
+      },
+      score: irtScore,
       gradedItems,
       granted,
       economy: economyOut,

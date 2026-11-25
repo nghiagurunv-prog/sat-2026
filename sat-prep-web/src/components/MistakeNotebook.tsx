@@ -495,13 +495,16 @@ export function MistakeNotebook() {
   // Bản đồ Chiến dịch 14 Ngày Quét Sạch Lỗi Sai Banner
   const [showCampaignBanner, setShowCampaignBanner] = useState<boolean>(true);
 
-  // Hàm thưởng Tinh Thể Phục Thù và đồng bộ localStorage
+  // Hàm thưởng Tinh Thể Phục Thù và đồng bộ localStorage + event realtime (#14)
   const awardMasteryShard = (amount = 1, reason = 'Khắc phục thành công câu sai!') => {
     setMasteryShards(prev => {
       const next = prev + amount;
       try {
         localStorage.setItem('sat_mastery_shards_v1', String(next));
-      } catch {}
+        window.dispatchEvent(new CustomEvent('sat_mistake_bank_updated', { detail: { masteryShards: next } }));
+      } catch (err) {
+        console.warn('[MistakeNotebook] Không thể lưu sat_mastery_shards_v1:', err);
+      }
       return next;
     });
     setShardToast({ amount, message: reason });
@@ -599,7 +602,9 @@ export function MistakeNotebook() {
       const next = !prev;
       try {
         localStorage.setItem('sat_campaign_banner_open_v1', JSON.stringify(next));
-      } catch {}
+      } catch (err) {
+        console.warn('[MistakeNotebook] Không thể lưu sat_campaign_banner_open_v1:', err);
+      }
       return next;
     });
   };
@@ -615,7 +620,9 @@ export function MistakeNotebook() {
       }
       try {
         localStorage.setItem('sat_mistake_root_causes_v1', JSON.stringify(next));
-      } catch {}
+      } catch (err) {
+        console.warn('[MistakeNotebook] Không thể lưu sat_mistake_root_causes_v1:', err);
+      }
       return next;
     });
   };
@@ -631,7 +638,9 @@ export function MistakeNotebook() {
       }
       try {
         localStorage.setItem('sat_mistake_notes_v1', JSON.stringify(next));
-      } catch {}
+      } catch (err) {
+        console.warn('[MistakeNotebook] Không thể lưu sat_mistake_notes_v1:', err);
+      }
       return next;
     });
     setIsEditingNote(false);
@@ -644,7 +653,9 @@ export function MistakeNotebook() {
       const next = exists ? prev.filter(id => id !== mistakeId) : [...prev, mistakeId];
       try {
         localStorage.setItem('sat_mistake_archived_v1', JSON.stringify(next));
-      } catch {}
+      } catch (err) {
+        console.warn('[MistakeNotebook] Không thể lưu sat_mistake_archived_v1:', err);
+      }
       return next;
     });
   };
@@ -655,7 +666,9 @@ export function MistakeNotebook() {
       const next = !prev;
       try {
         localStorage.setItem('sat_mistake_blind_retry_v1', JSON.stringify(next));
-      } catch {}
+      } catch (err) {
+        console.warn('[MistakeNotebook] Không thể lưu sat_mistake_blind_retry_v1:', err);
+      }
       return next;
     });
   };
@@ -2447,40 +2460,59 @@ export function MistakeNotebook() {
                 </div>
               )}
 
-              {/* Tùy chọn thử chọn phương án (+1 Tinh thể nếu đoán trúng) */}
-              {currentMistake.choices && currentMistake.choices.length > 0 && (
+              {/* W1 #06: Chế độ Phục thù che đáp án tuyệt đối (Blind Revenge) — xáo trộn A/B/C/D chống nhớ vị trí, làm đúng mới mở giải thích */}
+              {currentMistake.choices && currentMistake.choices.length > 0 && (() => {
+                // Xáo trộn xác định theo id câu hỏi để mỗi câu có thứ tự mới, không rung re-render
+                const seed = Array.from(currentMistakeId).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+                const shuffledChoices = currentMistake.choices
+                  .map((text, origIdx) => ({ text, origIdx, sortKey: ((origIdx + 1) * 31 + seed * 17) % 97 }))
+                  .sort((a, b) => a.sortKey - b.sortKey);
+                return (
                 <div className="space-y-2 pt-1">
                   <div className="text-xs text-gray-300 font-semibold flex items-center justify-between">
-                    <span>🎯 Thử chọn đáp án bạn cho là đúng:</span>
-                    <span className="text-[11px] text-amber-400 font-bold">+1 Tinh Thể nếu nhẩm đúng!</span>
+                    <span>🎯 Phục thù mù (Đã ẩn đáp án cũ &amp; xáo trộn A/B/C/D — chọn đúng để mở giải thích):</span>
+                    <span className="text-[11px] text-amber-400 font-bold">+1 Tinh Thể nếu phục thù đúng!</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {currentMistake.choices.map((c, i) => (
+                    {shuffledChoices.map(({ text: c }, i) => {
+                      const cleanText = c.replace(/^[A-D][).:\s]+/i, '');
+                      const displayLabel = String.fromCharCode(65 + i);
+                      const pickedThis = browseGuess === c;
+                      const isRightChoice = isMistakeAnswerCorrect(c, currentMistake.correct_choice);
+                      return (
                       <button
-                        key={i}
+                        key={`${currentMistakeId}-shuf-${i}`}
                         type="button"
                         onClick={() => {
                           if (browseGuess === c) return;
                           setBrowseGuess(c);
-                          if (isMistakeAnswerCorrect(c, currentMistake.correct_choice)) {
-                            awardMasteryShard(1, 'Xuất sắc! Nhẩm chính xác đáp án khi che đề! +1 Tinh Thể Phục Thù');
+                          if (isRightChoice) {
+                            awardMasteryShard(1, 'Phục thù thành công ở chế độ Blind Revenge! +1 Tinh Thể Phục Thù');
+                            setBrowseRevealed(true);
                           }
                         }}
                         className={`p-2.5 rounded-lg border text-xs text-left transition-all ${
-                          browseGuess === c
-                            ? 'bg-blue-600/30 border-blue-400 text-white font-bold'
-                            : 'bg-[#131922] border-[#262730] text-gray-300 hover:bg-[#1f2937]'
+                          pickedThis
+                            ? isRightChoice
+                              ? 'bg-emerald-500/20 border-emerald-400 text-emerald-100'
+                              : 'bg-rose-500/20 border-rose-400 text-rose-100'
+                            : 'bg-[#1b2533] border-[#262730] text-gray-200 hover:bg-[#223042]'
                         }`}
                       >
-                        <span className="font-bold text-amber-400 mr-2">
-                          {String.fromCharCode(65 + i)}.
-                        </span>
-                        {c}
+                        <span className="font-black text-amber-400 mr-1.5">{displayLabel}.</span>
+                        <span>{cleanText}</span>
+                        {pickedThis && !isRightChoice && (
+                          <span className="block mt-1 text-[10px] text-rose-300 font-semibold">
+                            ✕ Chưa chính xác — hãy dùng Nấc Gợi Ý trên và thử lại!
+                          </span>
+                        )}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
-              )}
+                );
+              })()}
 
               {/* 3 Nút kích hoạt Thang gợi ý */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2">

@@ -477,14 +477,18 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
       try {
         localStorage.setItem(GAMIFICATION_STORAGE_KEY, JSON.stringify(state));
-      } catch {}
+      } catch (err) {
+        console.warn('[GamificationContext] Không thể flush localStorage:', err);
+      }
 
       try {
         if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
           const blob = new Blob([JSON.stringify(state)], { type: 'application/json' });
           navigator.sendBeacon('/api/save-data', blob);
         }
-      } catch {}
+      } catch (err) {
+        console.warn('[GamificationContext] Không thể sendBeacon /api/save-data:', err);
+      }
     };
 
     window.addEventListener('beforeunload', handleFlush);

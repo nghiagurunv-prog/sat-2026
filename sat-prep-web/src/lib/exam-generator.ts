@@ -208,17 +208,34 @@ export async function generateModule(
     }
   }
 
-  // Bổ sung thêm câu hỏi từ kho local bank nếu đề gốc có ít câu hơn chuẩn hoặc cần đủ bộ
-  const bankPool = getLocalBankPool(section);
-  if (localQuestions.length < totalQuestions && bankPool.length > 0) {
-    const needed = Math.min(totalQuestions, Math.max(localQuestions.length, isDiagnostic ? 8 : 12)) - localQuestions.length;
+  // Bổ sung thêm câu hỏi từ kho local bank nếu đề gốc có ít câu hơn chuẩn (full 27 RW / 22 Math)
+  // và ưu tiên phân tách độ khó theo adaptivePath (hard → ưu tiên Hard/Medium; easy → Easy/Medium).
+  const rawBankPool = getLocalBankPool(section);
+  const usedStems = new Set(localQuestions.map((q) => q.practice_question.trim().toLowerCase().slice(0, 100)));
+  const rankDiff = (d: Difficulty): number => {
+    if (moduleNum === 2 && adaptivePath === 'hard') {
+      return d === 'Hard' ? 0 : d === 'Medium' ? 1 : 2;
+    }
+    if (moduleNum === 2 && adaptivePath === 'easy') {
+      return d === 'Easy' ? 0 : d === 'Medium' ? 1 : 2;
+    }
+    return d === 'Medium' ? 0 : d === 'Hard' ? 1 : 2;
+  };
+  const bankPool = [...rawBankPool].sort((a, b) => rankDiff(a.difficulty) - rankDiff(b.difficulty));
+  const freshPool = bankPool.filter((q) => !usedStems.has(q.practice_question.trim().toLowerCase().slice(0, 100)));
+  const sourcePool = freshPool.length > 0 ? freshPool : bankPool;
+
+  if (localQuestions.length < totalQuestions && sourcePool.length > 0) {
+    const baseLen = localQuestions.length;
+    const needed = totalQuestions - baseLen;
+    const offset = moduleNum === 2 ? (adaptivePath === 'hard' ? 3 : 7) : 0;
     for (let i = 0; i < needed; i++) {
-      const src = bankPool[(i + (moduleNum === 2 ? 7 : 0)) % bankPool.length];
-      const skill = skills[(localQuestions.length + i) % skills.length];
+      const src = sourcePool[(i + offset) % sourcePool.length];
+      const skill = skills[(baseLen + i) % skills.length];
       const cloned: ExamQuestion = {
         ...src,
-        id: `${examId || 'sat'}_${section}_m${moduleNum}_b${i + 1}_${src.id}`,
-        difficulty: difficulties[(localQuestions.length + i) % difficulties.length] || src.difficulty,
+        id: `${examId || 'sat'}_${section}_m${moduleNum}_${adaptivePath ?? 'base'}_b${i + 1}_${src.id}`,
+        difficulty: difficulties[(baseLen + i) % difficulties.length] || src.difficulty,
         skillId: src.skillId || skill?.id,
       };
       LOCAL_ANSWER_CACHE.set(cloned.id, cloned);

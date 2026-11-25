@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getTransaction } from '@/lib/payment-store';
+import { getTransaction, getTransactionPublicStatus } from '@/lib/payment-store';
 
 /**
  * ============================================================================
@@ -12,7 +12,7 @@ import { getTransaction } from '@/lib/payment-store';
  * ============================================================================
  */
 
-const ALLOWED_STATUSES = new Set(['paid', 'pending', 'cancelled', 'failed', 'unknown']);
+const ALLOWED_STATUSES = new Set(['paid', 'pending', 'processing', 'cancelled', 'failed', 'unknown']);
 const ALLOWED_PATHS = new Set(['/upgrade', '/pricing', '/dashboard']);
 
 /** Lấy origin an toàn từ NEXT_PUBLIC_APP_URL / APP_BASE_URL hoặc req.nextUrl.origin (chống Open Redirect) */
@@ -50,14 +50,25 @@ export async function GET(req: Request) {
   // Làm sạch orderId an toàn: chỉ cho phép chữ cái, số, gạch nối, gạch dưới, max 64 ký tự
   const orderId = /^[a-zA-Z0-9_-]{1,64}$/.test(rawOrderId.trim()) ? rawOrderId.trim() : '';
 
-  // Làm sạch cờ cancel và trạng thái gửi kèm từ query
+  // Làm sạch cờ cancel / mã lỗi từ VNPay (`vnp_ResponseCode`) và MoMo (`resultCode`)
   const rawCancel = url.searchParams.get('cancel');
   const rawStatus = (url.searchParams.get('status') || '').toLowerCase().trim();
+  const vnpCode = url.searchParams.get('vnp_ResponseCode');
+  const momoCode = url.searchParams.get('resultCode');
+
+  const isVnpCancelled = vnpCode === '24';
+  const isVnpFailed = vnpCode !== null && vnpCode !== '' && vnpCode !== '00' && vnpCode !== '24';
+  const isMomoCancelled = momoCode === '1006';
+  const isMomoFailed = momoCode !== null && momoCode !== '' && momoCode !== '0' && momoCode !== '1006';
+
   const isCancelled =
     rawCancel === 'true' ||
     rawCancel === '1' ||
     rawStatus === 'cancelled' ||
-    rawStatus === 'cancel';
+    rawStatus === 'cancel' ||
+    isVnpCancelled ||
+    isMomoCancelled;
+  const isGatewayFailed = isVnpFailed || isMomoFailed;
 
   const origin = getSafeOrigin(req, url);
 
@@ -66,12 +77,34 @@ export async function GET(req: Request) {
     const txn = await getTransaction(orderId);
     if (txn && ALLOWED_STATUSES.has(txn.status)) {
       status = txn.status; // 'pending' (IPN chưa tới) | 'paid' | ...
+    } else {
+      // Fallback an toàn (chỉ status, 0 PII) khi Zalo WebView / Mobile Safari drop cookie SameSite
+      const pubTxn = await getTransactionPublicStatus(orderId);
+      if (pubTxn && ALLOWED_STATUSES.has(pubTxn.status)) {
+        status = pubTxn.status;
+      }
     }
   }
 
-  // Nếu DB chưa cập nhật kịp hoặc pending nhưng có tín hiệu cancel từ cổng thanh toán
-  if ((status === 'unknown' || status === 'pending') && isCancelled) {
-    status = 'cancelled';
+  // Vá #14: Khi giao dịch đang tồn tại ở trạng thái 'pending' trong DB, KHÔNG cho phép
+  // query chưa ký (?cancel=true / ?status=cancelled) ghi đè trạng thái hiển thị thành cancelled;
+  // chuyển sang 'processing' để UI tiếp tục đối chiếu trạng thái thật từ DB (IPN là nguồn sự thật).
+  // Chỉ áp mã hủy/lỗi tường minh từ cổng (VNPay 24 / MoMo 1006 / gateway fail) hoặc khi chưa có đơn.
+  const isGatewayCancelled = isVnpCancelled || isMomoCancelled;
+  if (status === 'pending') {
+    if (isGatewayCancelled) {
+      status = 'cancelled';
+    } else if (isGatewayFailed) {
+      status = 'failed';
+    } else {
+      status = 'processing';
+    }
+  } else if (status === 'unknown') {
+    if (isCancelled) {
+      status = 'cancelled';
+    } else if (isGatewayFailed) {
+      status = 'failed';
+    }
   } else if (!ALLOWED_STATUSES.has(status)) {
     status = 'unknown';
   }

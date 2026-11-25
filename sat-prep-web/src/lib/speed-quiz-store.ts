@@ -118,20 +118,26 @@ export async function claimMilestones(
   if (reached.length === 0) return { totalCoins: 0, claims: [], available: true };
 
   const admin = createAdminClient();
+  const outcomes = await Promise.all(
+    reached.map(async (m) => {
+      const { data, error } = await admin.rpc('claim_speed_quiz_milestone', {
+        p_user_id: userId,
+        p_day_key: dayKey,
+        p_milestone: m.correct,
+        p_coins: m.coins,
+      });
+      return { m, data, error };
+    })
+  );
+
   let totalCoins = 0;
   const claims: MilestoneClaim[] = [];
 
-  for (const m of reached) {
-    const { data, error } = await admin.rpc('claim_speed_quiz_milestone', {
-      p_user_id: userId,
-      p_day_key: dayKey,
-      p_milestone: m.correct,
-      p_coins: m.coins,
-    });
+  for (const { m, data, error } of outcomes) {
     if (error) {
       if (isMissing(error)) return { totalCoins: 0, claims: [], available: false };
       console.error('claimMilestone RPC lỗi:', error.message);
-      continue; // mốc lỗi thì bỏ qua, tiếp mốc khác (không chặn)
+      continue;
     }
     const r = (data ?? {}) as { ok?: boolean; claimed?: boolean };
     if (r.ok && r.claimed) {

@@ -32,7 +32,9 @@ export default function ForgePage() {
           const saved = localStorage.getItem('sat_mastery_shards_v1');
           setMasteryShards(saved ? parseInt(saved, 10) || 0 : 0);
         }
-      } catch {}
+      } catch (err) {
+        console.warn('[forge] Không thể đọc sat_mastery_shards_v1:', err);
+      }
     };
 
     syncShards();
@@ -64,7 +66,9 @@ export default function ForgePage() {
             localStorage.setItem('sat_mastery_shards_v1', String(newCount));
             window.dispatchEvent(new Event('sat_mastery_shards_changed'));
           }
-        } catch {}
+        } catch (err) {
+          console.warn('[forge] Không thể lưu sat_mastery_shards_v1:', err);
+        }
       }
 
       // Khi dùng Tinh Thể: kích hoạt bảo hộ tuyệt đối không rớt cấp

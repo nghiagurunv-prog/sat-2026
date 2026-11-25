@@ -76,7 +76,9 @@ export default function ShopPage() {
     setUnlockedMaterials(updated);
     try {
       localStorage.setItem('sat_unlocked_materials_v1', JSON.stringify(updated));
-    } catch {}
+    } catch (err) {
+      console.warn('[shop] Không thể lưu sat_unlocked_materials_v1:', err);
+    }
     showToast(`🎉 Mở khóa thành công "${item.name}"! Bạn có thể tải ngay.`, 'success');
   };
 

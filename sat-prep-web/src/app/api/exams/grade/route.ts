@@ -8,6 +8,7 @@ import { applyExamRewardFromDifficulties, MAX_EXAM_QUESTIONS, type Difficulty, t
 import { getUserTier } from '@/lib/subscription-store';
 import { TIER_COIN_MULTIPLIER } from '@/lib/subscription';
 import { bumpDailyActivity } from '@/lib/daily-activity-store';
+import { computeSectionScore } from '@/lib/exam-scoring';
 
 /**
  * NỘP BÀI THI (ROOT A follow-up đường thi) — server chấm + thưởng.
@@ -56,6 +57,9 @@ export async function POST(req: Request) {
     // Chấm từng câu server-side (CAS). Kết quả correct/độ khó lấy TỪ SERVER, không
     // tin client. Câu đã answered (nộp lại) → gradeAnswer trả null → không tính.
     const correctDifficulties: Difficulty[] = [];
+    const submittedAnswerMap: Record<string, string> = {};
+    const correctAnswerMap: Record<string, string> = {};
+    const difficultyMap: Record<string, string> = {};
     const results: Array<{ questionId: string; correct: boolean; correctChoice: string; explanation?: string | null }> = [];
     let correct = 0;
     let graded = 0;
@@ -79,6 +83,12 @@ export async function POST(req: Request) {
         graded++;
         // CHỈ tin tưởng kết quả chấm server-authoritative từ gradeAnswer (cấm nhận item.correctAns từ client)
         const isCorrect = result.correct;
+        const d: Difficulty = VALID_DIFFICULTY.includes(result.difficulty as Difficulty)
+          ? (result.difficulty as Difficulty)
+          : 'Medium';
+        submittedAnswerMap[questionId] = userAns;
+        correctAnswerMap[questionId] = result.correctChoice;
+        difficultyMap[questionId] = d;
         results.push({
           questionId,
           correct: isCorrect,
@@ -87,9 +97,6 @@ export async function POST(req: Request) {
         });
         if (isCorrect) {
           correct++;
-          const d: Difficulty = VALID_DIFFICULTY.includes(result.difficulty as Difficulty)
-            ? (result.difficulty as Difficulty)
-            : 'Medium';
           correctDifficulties.push(d);
         }
         continue;
@@ -100,6 +107,12 @@ export async function POST(req: Request) {
         if (q) {
           graded++;
           const isCorrect = isChoiceCorrect(userAns, q.correct_choice);
+          const d: Difficulty = VALID_DIFFICULTY.includes(q.difficulty as Difficulty)
+            ? (q.difficulty as Difficulty)
+            : 'Medium';
+          submittedAnswerMap[questionId] = userAns;
+          correctAnswerMap[questionId] = q.correct_choice;
+          difficultyMap[questionId] = d;
           results.push({
             questionId,
             correct: isCorrect,
@@ -142,9 +155,19 @@ export async function POST(req: Request) {
       await bumpDailyActivity(user.id, 'exam_complete'); // await: tránh drop RPC khi serverless freeze
     }
 
+    // Chấm điểm quy đổi IRT 2PL EAP server-authoritative (thang điểm đầy đủ 200-800, không tin body.adaptivePath từ client)
+    const irtScore = computeSectionScore(
+      [{ answers: submittedAnswerMap, correctAnswers: correctAnswerMap, difficulties: difficultyMap }],
+      'hard'
+    );
+
     return NextResponse.json({
       correct,
       graded,
+      scaledScore: irtScore.scaled,
+      theta: irtScore.theta,
+      se: irtScore.se,
+      scoringMethod: irtScore.scoringMethod,
       results,
       granted,
       economy: economyOut,

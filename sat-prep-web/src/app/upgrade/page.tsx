@@ -1,19 +1,19 @@
 'use client';
 
-import { Suspense, useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   PLANS,
   SPRINT_EXAM_PACKS,
-  calculateCoinDiscount,
   validateCoupon,
   applyCouponPrice,
   type PaidTier,
   type BillingPeriod,
-  type SprintExamPack,
 } from '@/lib/subscription';
 import { useToast } from '@/context/ToastContext';
 import { B2bCenterPricingSection } from '@/components/pricing/B2bCenterPricingSection';
+import { VerifiedActivityTicker } from '@/components/VerifiedActivityTicker';
 
 // Cổng thanh toán: payOS (chuyển khoản QR, khuyên dùng VN cá nhân) + Stripe
 // (thẻ quốc tế) + VNPay/MoMo (khi có creds doanh nghiệp).
@@ -123,7 +123,9 @@ function StatusBanner() {
   const map: Record<string, { cls: string; msg: string }> = {
     paid: { cls: 'bg-[#064e3b] border-[#10b981] text-[#34d399]', msg: '🎉 Thanh toán thành công! Gói của bạn đã được kích hoạt.' },
     pending: { cls: 'bg-[#1e293b] border-[#3b82f6] text-[#93c5fd]', msg: '⏳ Đang xác nhận thanh toán. Gói sẽ kích hoạt ngay khi cổng xác nhận (thường trong ít phút).' },
-    unknown: { cls: 'bg-[#450a0a] border-[#ef4444] text-[#fca5a5]', msg: '❌ Không tìm thấy giao dịch. Nếu đã bị trừ tiền, vui lòng liên hệ hỗ trợ.' },
+    processing: { cls: 'bg-[#1e293b] border-[#f59e0b] text-[#fcd34d]', msg: '🔄 Bạn vừa thoát trang thanh toán. Nếu đã chuyển khoản, hệ thống vẫn tự động đối soát webhook và kích hoạt gói (Hotline: 0986.722.324).' },
+    cancelled: { cls: 'bg-[#3b1b1b] border-[#f97316] text-[#fdba74]', msg: '⚠️ Giao dịch đã bị hủy từ cổng thanh toán. Bạn có thể tạo đơn mới bất kỳ lúc nào.' },
+    unknown: { cls: 'bg-[#450a0a] border-[#ef4444] text-[#fca5a5]', msg: '❌ Không tìm thấy giao dịch. Nếu đã bị trừ tiền, vui lòng liên hệ hỗ trợ 0986.722.324.' },
   };
   const meta = map[status] ?? map.unknown;
   return <div className={`px-4 py-3 rounded-xl border-2 font-bold text-sm ${meta.cls}`}>{meta.msg}</div>;
@@ -137,6 +139,7 @@ function FeatureCell({ value, tone }: { value: CellValue; tone: 'free' | 'paid' 
 }
 
 function UpgradeContent() {
+  const router = useRouter();
   const { showToast } = useToast();
   const [gateway, setGateway] = useState<Gateway>('payos');
   const [period, setPeriod] = useState<BillingPeriod>('yearly'); // mặc định năm (tiết kiệm nhất)
@@ -144,42 +147,19 @@ function UpgradeContent() {
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
 
-  // Coins-to-Cash state
-  const [userCoins, setUserCoins] = useState<number>(3500);
-  const [useCoinsDiscount, setUseCoinsDiscount] = useState<boolean>(true);
-
-  // Parent Payment Modal state
+  // Parent Payment Modal state (luôn gắn với đơn PayOS THẬT có orderId & payUrl duy nhất)
   const [isParentModalOpen, setIsParentModalOpen] = useState<boolean>(false);
   const [selectedParentPack, setSelectedParentPack] = useState<{
     name: string;
     duration: string;
     priceVnd: number;
     originalPriceVnd?: number;
-    code: string;
+    orderId: string;
+    payUrl: string;
     features: string[];
-  }>({
-    name: SPRINT_EXAM_PACKS[1].name,
-    duration: '45 Ngày',
-    priceVnd: SPRINT_EXAM_PACKS[1].priceVnd,
-    originalPriceVnd: SPRINT_EXAM_PACKS[1].originalPriceVnd,
-    code: 'SPRINT45D',
-    features: SPRINT_EXAM_PACKS[1].features,
-  });
+  } | null>(null);
 
   const selectedGateway = GATEWAYS.find((g) => g.id === gateway) ?? GATEWAYS[0];
-
-  useEffect(() => {
-    try {
-      const stored =
-        localStorage.getItem('sat_user_coins') ||
-        localStorage.getItem('sat_coins') ||
-        localStorage.getItem('user_coins');
-      if (stored) {
-        const val = parseInt(stored, 10);
-        if (!isNaN(val) && val > 0) setUserCoins(val);
-      }
-    } catch {}
-  }, []);
 
   const handleApplyCoupon = () => {
     const check = validateCoupon(couponInput);
@@ -194,44 +174,79 @@ function UpgradeContent() {
   };
 
   /**
-   * Tính giá tiền sau khi áp dụng coupon và xu học tập (Coins-to-Cash)
+   * Tính giá hiển thị KHỚP 100% với server (/api/payment/create): chỉ áp dụng Coupon KOL.
+   * Coins-to-Cash tạm tắt ở Launch v1 để tuyệt đối không lệch giá giữa UI và cổng PayOS/Stripe.
    */
   const computePrice = (basePrice: number) => {
     const afterCoupon = applyCouponPrice(basePrice, appliedCoupon);
-    if (!useCoinsDiscount) {
-      return { finalPrice: afterCoupon, coinDiscountVnd: 0, coinsUsed: 0 };
+    return { finalPrice: afterCoupon, coinDiscountVnd: 0, coinsUsed: 0 };
+  };
+
+  /**
+   * Tạo đơn PayOS THẬT (có orderId & checkoutUrl duy nhất) rồi mở Modal gửi link VietQR cho Phụ huynh.
+   * Tuyệt đối KHÔNG dùng STK tĩnh hay nội dung CK không có mã đơn.
+   */
+  const openParentPayosModal = async (tier: PaidTier, targetPeriod: BillingPeriod) => {
+    const key = `parent-${tier}-${targetPeriod}`;
+    if (loadingKey) return;
+    const plan = planFor(tier, targetPeriod);
+    if (!plan) {
+      showToast('❌ Gói học chưa khả dụng cho chu kỳ này.', 'error');
+      return;
     }
-    const coinRes = calculateCoinDiscount(userCoins, afterCoupon);
-    return {
-      finalPrice: coinRes.finalPriceVnd,
-      coinDiscountVnd: coinRes.discountVnd,
-      coinsUsed: coinRes.coinsUsed,
-    };
+
+    setLoadingKey(key);
+    try {
+      const res = await fetch('/api/payment/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gateway: 'payos',
+          tier,
+          period: targetPeriod,
+          ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        showToast('🔐 Vui lòng đăng nhập tài khoản học viên trước khi tạo mã thanh toán gửi Phụ huynh.', 'error');
+        router.push('/login?next=/upgrade');
+        return;
+      }
+      if (!res.ok || !data.success || !data.payUrl || !data.orderId) {
+        showToast(
+          `❌ ${data?.error ?? 'Cổng PayOS tạm bận, chưa tạo được mã VietQR.'} Hotline hỗ trợ: 0986.722.324.`,
+          'error'
+        );
+        return;
+      }
+
+      const pricing = computePrice(plan.priceVnd);
+      setSelectedParentPack({
+        name: `Gói ${TIER_META[tier].label} (${PERIOD_LABEL[targetPeriod]})`,
+        duration: PERIOD_LABEL[targetPeriod],
+        priceVnd: typeof data.amountVnd === 'number' ? data.amountVnd : pricing.finalPrice,
+        originalPriceVnd: plan.priceVnd,
+        orderId: String(data.orderId),
+        payUrl: String(data.payUrl),
+        features: [
+          'Truy cập đầy đủ kho đề thi chuẩn College Board',
+          'Gia sư AI chấm điểm & phân tích bẫy lỗi sai tức thì',
+          'Báo cáo tiến độ học tập gửi phụ huynh định kỳ',
+        ],
+      });
+      setIsParentModalOpen(true);
+    } catch {
+      showToast('❌ Mất kết nối tới cổng thanh toán. Vui lòng thử lại hoặc gọi 0986.722.324.', 'error');
+    } finally {
+      setLoadingKey(null);
+    }
   };
 
-  const openParentModalForPlan = (
-    name: string,
-    duration: string,
-    basePrice: number,
-    code: string,
-    features?: string[]
-  ) => {
-    const pricing = computePrice(basePrice);
-    setSelectedParentPack({
-      name,
-      duration,
-      priceVnd: pricing.finalPrice,
-      originalPriceVnd: basePrice,
-      code,
-      features: features || [
-        'Truy cập đầy đủ kho đề thi chuẩn College Board',
-        'Gia sư AI chấm điểm & phân tích bẫy lỗi sai tức thì',
-        'Báo cáo tiến độ học tập gửi phụ huynh định kỳ',
-      ],
-    });
-    setIsParentModalOpen(true);
-  };
-
+  /**
+   * Tạo phiên thanh toán trực tiếp qua PayOS / Stripe — FAIL-CLOSED hoàn toàn,
+   * tuyệt đối KHÔNG silent fallback sang chuyển khoản thủ công khi có lỗi.
+   */
   const handleBuy = async (tier: PaidTier) => {
     const key = `${tier}-${period}`;
     if (loadingKey) return;
@@ -245,51 +260,27 @@ function UpgradeContent() {
           tier,
           period,
           ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),
-          ...(useCoinsDiscount ? { coinsRedeemed: userCoins } : {}),
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        showToast('🔐 Vui lòng đăng nhập tài khoản học viên trước khi nâng cấp gói.', 'error');
+        router.push('/login?next=/upgrade');
+        return;
+      }
       if (res.ok && data.success && data.payUrl) {
         window.location.assign(data.payUrl);
         return;
       }
-      const plan = planFor(tier, period);
-      if (plan) {
-        openParentModalForPlan(
-          `Gói ${TIER_META[tier].label} (${PERIOD_LABEL[period]})`,
-          PERIOD_LABEL[period],
-          plan.priceVnd,
-          `${tier.toUpperCase()}_${period.toUpperCase()}`
-        );
-        showToast('Mở VietQR chuyển khoản nhanh 1 chạm!', 'info');
-      } else {
-        showToast(`❌ ${data?.error ?? 'Không thể tạo giao dịch.'}`, 'error');
-      }
+      showToast(
+        `❌ ${data?.error ?? 'Không thể khởi tạo phiên thanh toán.'} Cần hỗ trợ gọi 0986.722.324.`,
+        'error'
+      );
     } catch {
-      const plan = planFor(tier, period);
-      if (plan) {
-        openParentModalForPlan(
-          `Gói ${TIER_META[tier].label} (${PERIOD_LABEL[period]})`,
-          PERIOD_LABEL[period],
-          plan.priceVnd,
-          `${tier.toUpperCase()}_${period.toUpperCase()}`
-        );
-      } else {
-        showToast('❌ Lỗi kết nối, vui lòng thử lại sau.', 'error');
-      }
+      showToast('❌ Lỗi kết nối tới máy chủ thanh toán. Vui lòng thử lại sau.', 'error');
     } finally {
       setLoadingKey(null);
     }
-  };
-
-  const handleBuySprint = (pack: SprintExamPack) => {
-    openParentModalForPlan(
-      pack.name,
-      `${pack.durationDays} Ngày`,
-      pack.priceVnd,
-      pack.id.toUpperCase(),
-      pack.features
-    );
   };
 
   const tiers: Tier[] = ['free', 'premium', 'ultimate'];
@@ -311,162 +302,45 @@ function UpgradeContent() {
         <StatusBanner />
       </Suspense>
 
-      {/* KHỐI ĐỔI XU HỌC TẬP GIẢM GIÁ (Coins-to-Cash) */}
-      <div className="bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-orange-500/15 border-2 border-amber-500/40 rounded-2xl p-4 md:p-5 shadow-lg">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {/* THÔNG BÁO LAUNCH V1: Giá niêm yết đồng nhất 100% qua cổng tự động */}
+      <div className="bg-gradient-to-r from-amber-500/10 via-slate-800/40 to-sky-500/10 border border-amber-500/30 rounded-2xl p-4 shadow-md">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-400 flex items-center justify-center text-2xl shrink-0 shadow-inner">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center text-xl shrink-0">
               🪙
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-black text-amber-300">
-                  Đổi Xu Học Tập Giảm Giá Học Phí (Coins-to-Cash)
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-black text-amber-300">
+                  Xu học tập &amp; Chính sách giá minh bạch
                 </h3>
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  Tối đa giảm 15%
+                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                  Coins-to-Cash: Sắp ra mắt
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-0.5">
-                Quy đổi: <strong className="text-white">100 Xu = 1.000₫</strong> (1 Xu = 10₫). Chăm chỉ làm đúng bài tập là học phí tự động giảm trực tiếp!
+                Toàn bộ Xu bạn tích lũy vẫn được bảo lưu nguyên vẹn để đổi quà tại <Link href="/shop" className="text-amber-300 underline">Cửa hàng phần thưởng</Link>. Giá hiển thị bên dưới khớp 100% với số tiền cổng payOS / Stripe thu (hỗ trợ mã ưu đãi KOL).
               </p>
             </div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-3 self-end sm:self-center">
-            <div className="bg-[#0f172a] px-3.5 py-2 rounded-xl border border-amber-500/30 text-right">
-              <span className="text-[10px] text-slate-400 block font-semibold">Túi xu của bạn</span>
-              <span className="text-sm font-black text-amber-400 flex items-center justify-end gap-1">
-                🪙 {userCoins.toLocaleString('vi-VN')} Xu
-              </span>
-            </div>
-
-            <label className="flex items-center gap-2 cursor-pointer bg-[#1b2533] px-3.5 py-2.5 rounded-xl border border-slate-700 hover:border-amber-400/60 transition select-none">
-              <input
-                type="checkbox"
-                checked={useCoinsDiscount}
-                onChange={(e) => setUseCoinsDiscount(e.target.checked)}
-                className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 focus:ring-offset-0 bg-[#0f172a] border-slate-600 accent-amber-500 cursor-pointer"
-              />
-              <span className="text-xs font-bold text-white">
-                {useCoinsDiscount ? '✓ Đang dùng Xu' : 'Bật dùng Xu'}
-              </span>
-            </label>
-          </div>
         </div>
-
-        {useCoinsDiscount && (
-          <div className="mt-3 pt-3 border-t border-amber-500/20 flex flex-wrap items-center justify-between text-xs text-slate-300 gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-emerald-400 font-bold">✨ Quyền lợi kích hoạt:</span>
-              <span>
-                {userCoins.toLocaleString('vi-VN')} Xu hiện có quy đổi thành{' '}
-                <strong className="text-emerald-300">{(userCoins * 10).toLocaleString('vi-VN')}₫</strong> tiền giảm trừ học phí (hệ thống tự động trừ tối đa 15% giá gói).
-              </span>
-            </div>
-            <span className="text-[11px] text-slate-400 italic">
-              * Tích lũy thêm xu mỗi ngày qua việc làm đúng bài tập, giữ streak và đấu boss.
-            </span>
-          </div>
-        )}
       </div>
 
-      {/* GÓI MÙA THI NƯỚC RÚT & SQUAD PASS (Sprint Exam Packs) */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xl">🚀</span>
-              <h2 className="text-lg font-black text-white">
-                GÓI NƯỚC RÚT MÙA THI & SQUAD PASS 2026
-              </h2>
-              <span className="text-[10px] font-black uppercase bg-gradient-to-r from-rose-500 to-amber-500 text-white px-2 py-0.5 rounded-full font-bold">
-                Mới
-              </span>
-            </div>
-            <p className="text-xs text-slate-400">
-              Linh hoạt theo nhu cầu: Luyện thi cấp tốc 24h, bứt tốc 45 ngày trước kỳ thi, hoặc lập nhóm cùng tiến trường chuyên giảm 30%.
-            </p>
+      {/* GÓI NƯỚC RÚT (Tạm đóng ở Launch v1 để đồng bộ thanh toán tự động 100% cho gói Premium & Ultimate) */}
+      <div className="bg-[#151e2b] border border-[#262730] rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-base">🚀</span>
+            <h2 className="text-sm font-extrabold text-white">
+              Gói Nước Rút 45 Ngày &amp; Squad Pass ({SPRINT_EXAM_PACKS.length} gói mùa thi)
+            </h2>
+            <span className="text-[10px] font-bold uppercase bg-slate-800 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full">
+              Sắp mở thanh toán tự động
+            </span>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {SPRINT_EXAM_PACKS.map((pack) => {
-            const pricing = computePrice(pack.priceVnd);
-            return (
-              <div
-                key={pack.id}
-                className={`rounded-2xl p-5 border flex flex-col justify-between transition-all relative ${
-                  pack.id === 'sprint_45d'
-                    ? 'bg-gradient-to-b from-[#1e293b] to-[#151e2b] border-amber-400/80 shadow-[0_0_20px_rgba(251,191,36,0.15)] ring-1 ring-amber-400/30'
-                    : 'bg-[#1b2533] border-[#262730] hover:border-slate-600'
-                }`}
-              >
-                {pack.badge && (
-                  <div className="self-start mb-2 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-amber-950 shadow-sm">
-                    {pack.badge}
-                  </div>
-                )}
-
-                <div>
-                  <h3 className="text-base font-extrabold text-white">{pack.name}</h3>
-                  <p className="text-xs text-slate-400 mt-1 min-h-[36px]">{pack.description}</p>
-
-                  <div className="my-4 p-3 rounded-xl bg-[#0f172a]/70 border border-slate-800">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-black text-[#fbbf24]">
-                        {formatVnd(pricing.finalPrice)}
-                      </span>
-                      {pack.originalPriceVnd && (
-                        <span className="text-xs text-slate-500 line-through">
-                          {formatVnd(pack.originalPriceVnd)}
-                        </span>
-                      )}
-                    </div>
-                    {pricing.coinDiscountVnd > 0 && (
-                      <div className="text-[11px] text-emerald-400 font-bold mt-1 flex items-center gap-1">
-                        🪙 Đã giảm {formatVnd(pricing.coinDiscountVnd)} từ {pricing.coinsUsed.toLocaleString('vi-VN')} Xu!
-                      </div>
-                    )}
-                  </div>
-
-                  <ul className="space-y-2 mb-5">
-                    {pack.features.map((feat, idx) => (
-                      <li key={idx} className="text-xs text-slate-300 flex items-start gap-2">
-                        <span className="text-emerald-400 font-bold shrink-0">✓</span>
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="space-y-2 pt-2 border-t border-slate-800/80">
-                  <button
-                    type="button"
-                    onClick={() => handleBuySprint(pack)}
-                    className="w-full py-2.5 px-3 rounded-xl font-bold text-xs bg-gradient-to-r from-amber-400 to-orange-500 text-amber-950 hover:brightness-110 active:scale-[0.99] transition shadow-md"
-                  >
-                    ⚡ Đăng Ký Gói Này ({formatVnd(pricing.finalPrice)})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      openParentModalForPlan(
-                        pack.name,
-                        `${pack.durationDays} Ngày`,
-                        pack.priceVnd,
-                        pack.id.toUpperCase(),
-                        pack.features
-                      )
-                    }
-                    className="w-full py-2 px-3 rounded-xl font-bold text-xs bg-slate-800/80 hover:bg-slate-700/80 text-sky-300 border border-sky-400/30 transition flex items-center justify-center gap-1.5"
-                  >
-                    <span>👨‍👩‍👧 Nhờ Phụ Huynh thanh toán VietQR</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          <p className="text-xs text-slate-400 mt-1">
+            Đợt mở bán hiện tại ưu tiên kích hoạt tự động 24/7 cho các gói <strong>Premium</strong> và <strong>Ultimate</strong> bên dưới qua payOS VietQR &amp; Stripe.
+          </p>
         </div>
       </div>
 
@@ -643,17 +517,13 @@ function UpgradeContent() {
                       {plan && (
                         <button
                           type="button"
-                          onClick={() =>
-                            openParentModalForPlan(
-                              `Gói ${meta.label} (${PERIOD_LABEL[period]})`,
-                              PERIOD_LABEL[period],
-                              plan.priceVnd,
-                              `${tier.toUpperCase()}_${period.toUpperCase()}`
-                            )
-                          }
-                          className="w-full text-[11px] font-bold text-sky-300 hover:text-sky-200 py-1.5 rounded-lg bg-sky-950/40 border border-sky-500/30 transition flex items-center justify-center gap-1"
+                          disabled={loadingKey !== null}
+                          onClick={() => void openParentPayosModal(tier, period)}
+                          className="w-full text-[11px] font-bold text-sky-300 hover:text-sky-200 py-1.5 rounded-lg bg-sky-950/40 border border-sky-500/30 transition flex items-center justify-center gap-1 disabled:opacity-50"
                         >
-                          👨‍👩‍👧 Nhờ Phụ Huynh thanh toán
+                          {loadingKey === `parent-${tier}-${period}`
+                            ? '⏳ Đang tạo mã VietQR...'
+                            : '👨‍👩‍👧 Nhờ Phụ Huynh thanh toán VietQR'}
                         </button>
                       )}
                     </div>
@@ -818,18 +688,15 @@ function UpgradeContent() {
           </div>
           <button
             type="button"
-            onClick={() =>
-              openParentModalForPlan(
-                'Chiến Binh Nước Rút 45 Ngày (Khuyên Dùng)',
-                '45 Ngày',
-                699_000,
-                'SPRINT45D',
-                SPRINT_EXAM_PACKS[1].features
-              )
-            }
-            className="shrink-0 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold text-xs shadow-lg hover:shadow-emerald-500/25 transition active:scale-[0.99] flex items-center gap-2"
+            disabled={loadingKey !== null}
+            onClick={() => void openParentPayosModal('premium', period)}
+            className="shrink-0 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold text-xs shadow-lg hover:shadow-emerald-500/25 transition active:scale-[0.99] flex items-center gap-2 disabled:opacity-50"
           >
-            <span>👨‍👩‍👧 Mở VietQR Thanh Toán Cho Con (Zalo 1 Chạm)</span>
+            <span>
+              {loadingKey === `parent-premium-${period}`
+                ? '⏳ Đang tạo link PayOS...'
+                : '👨‍👩‍👧 Mở VietQR Thanh Toán Cho Con (Zalo 1 Chạm)'}
+            </span>
             <span>➔</span>
           </button>
         </div>
@@ -839,7 +706,15 @@ function UpgradeContent() {
         {selectedGateway.reassurance}
       </p>
 
-      {/* MODAL: NHỜ PHỤ HUYNH THANH TOÁN QUA ZALO / VIETQR 1 CHẠM */}
+      {/* Liên kết pháp lý minh bạch trước thanh toán */}
+      <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-slate-400 pt-1">
+        <Link href="/terms" className="hover:text-white underline">Điều khoản sử dụng</Link>
+        <Link href="/privacy" className="hover:text-white underline">Chính sách bảo mật</Link>
+        <Link href="/refund" className="hover:text-white underline">Chính sách hoàn tiền 7 ngày</Link>
+        <Link href="/contact" className="hover:text-amber-300 underline">Hotline hỗ trợ: 0986.722.324</Link>
+      </div>
+
+      {/* MODAL: NHỜ PHỤ HUYNH THANH TOÁN QUA LINK PAYOS VIETQR CHÍNH THỨC (CÓ MÃ ĐƠN RIÊNG) */}
       {isParentModalOpen && selectedParentPack && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 md:p-6 overflow-y-auto animate-in fade-in duration-200">
           <div className="bg-[#131b26] border-2 border-amber-400/50 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden my-auto">
@@ -849,10 +724,10 @@ function UpgradeContent() {
                 <span className="text-3xl">👨‍👩‍👧</span>
                 <div>
                   <h3 className="text-lg font-black text-white">
-                    NHỜ PHỤ HUYNH THANH TOÁN (VIETQR 1 CHẠM)
+                    NHỜ PHỤ HUYNH THANH TOÁN (PAYOS VIETQR CHÍNH THỨC)
                   </h3>
                   <p className="text-xs text-indigo-200">
-                    Gửi thông tin gói học và mã VietQR thanh toán nhanh qua Zalo cho Bố/Mẹ
+                    Đơn hàng #{selectedParentPack.orderId} đã khởi tạo — gửi link chính thức qua Zalo cho Bố/Mẹ
                   </p>
                 </div>
               </div>
@@ -872,7 +747,7 @@ function UpgradeContent() {
               <div className="bg-[#1b2533] border border-slate-700/80 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider block">
-                    Gói học sinh lựa chọn
+                    Mã đơn hàng đối soát tự động: #{selectedParentPack.orderId}
                   </span>
                   <h4 className="text-base font-black text-white mt-0.5">
                     {selectedParentPack.name}
@@ -893,11 +768,6 @@ function UpgradeContent() {
                       </span>
                     )}
                   </div>
-                  {useCoinsDiscount && (
-                    <span className="text-[10px] text-amber-300 font-bold block">
-                      🪙 Đã áp dụng giảm giá Xu học tập
-                    </span>
-                  )}
                 </div>
               </div>
 
@@ -908,103 +778,49 @@ function UpgradeContent() {
                   <span>CAM KẾT CỦA CON GỬI BỐ MẸ:</span>
                 </div>
                 <p className="text-xs text-slate-200 leading-relaxed italic">
-                  &ldquo;Con cam kết học tập nghiêm túc tối thiểu 45 phút mỗi ngày, luyện tập đều đặn trên SAT.Guru và quyết tâm đạt mục tiêu điểm SAT <strong>1450+</strong> để tự tin xét tuyển thẳng Đại học và chinh phục học bổng du học! Bố/Mẹ có thể theo dõi biểu đồ tiến độ của con bất kỳ lúc nào qua Cổng Phụ Huynh.&rdquo;
+                  &ldquo;Con cam kết học tập nghiêm túc tối thiểu 45 phút mỗi ngày, luyện tập đều đặn trên SAT.Guru và quyết tâm đạt mục tiêu điểm SAT <strong>1450+</strong> để tự tin xét tuyển thẳng Đại học! Bố/Mẹ có thể theo dõi biểu đồ tiến độ của con bất kỳ lúc nào qua Cổng Phụ Huynh.&rdquo;
                 </p>
               </div>
 
-              {/* Khung VietQR Động */}
-              <div className="bg-[#0f172a] border border-slate-800 rounded-2xl p-5 flex flex-col md:flex-row items-center gap-6">
-                <div className="bg-white p-3 rounded-xl shrink-0 shadow-lg flex flex-col items-center">
-                  <img
-                    src={`https://img.vietqr.io/image/MB-0345678999-compact2.png?amount=${selectedParentPack.priceVnd}&addInfo=SATGURU%20${selectedParentPack.code}&accountName=SAT%20NGHIAGURU`}
-                    alt="Mã VietQR Thanh Toán"
-                    className="w-48 h-48 object-contain"
-                    loading="lazy"
-                  />
-                  <span className="text-[10px] font-bold text-slate-600 mt-1">Quét mã bằng App Ngân Hàng</span>
+              {/* Khung Link Cổng Thanh Toán payOS Chính Thức */}
+              <div className="bg-[#0f172a] border border-emerald-500/30 rounded-2xl p-5 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="font-bold text-white text-sm">🏦 Cổng thanh toán VietQR chính thức (payOS)</span>
+                  <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                    Webhook đối soát &amp; kích hoạt tự động 24/7
+                  </span>
                 </div>
-
-                <div className="space-y-2.5 text-xs w-full">
-                  <div className="font-bold text-white text-sm border-b border-slate-800 pb-2 flex items-center justify-between">
-                    <span>Thông tin chuyển khoản nhanh:</span>
-                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                      Tự động kích hoạt 24/7
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Ngân hàng:</span>
-                    <span className="font-bold text-white">MB Bank (Quân Đội)</span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Số tài khoản:</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-mono font-bold text-amber-300 text-sm">0345678999</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText('0345678999');
-                          showToast('Đã chép số tài khoản!', 'success');
-                        }}
-                        className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded"
-                      >
-                        Chép
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Chủ tài khoản:</span>
-                    <span className="font-bold text-white">SAT NGHIAGURU ACADEMY</span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Số tiền:</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-black text-emerald-400 text-sm">
-                        {formatVnd(selectedParentPack.priceVnd)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(String(selectedParentPack.priceVnd));
-                          showToast('Đã chép số tiền!', 'success');
-                        }}
-                        className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded"
-                      >
-                        Chép
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Nội dung CK:</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-mono font-bold text-sky-300 bg-sky-950/60 px-2 py-0.5 rounded border border-sky-500/30">
-                        SATGURU {selectedParentPack.code}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(`SATGURU ${selectedParentPack.code}`);
-                          showToast('Đã chép nội dung chuyển khoản!', 'success');
-                        }}
-                        className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded"
-                      >
-                        Chép
-                      </button>
-                    </div>
-                  </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Bố/Mẹ bấm vào đường link thanh toán riêng cho đơn <strong>#{selectedParentPack.orderId}</strong> dưới đây để hiện mã VietQR chính xác đến từng đồng. Ngay khi ngân hàng xác nhận, tài khoản của con sẽ tự động lên VIP trong 10–30 giây.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+                  <a
+                    href={selectedParentPack.payUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold text-xs text-center shadow-md transition"
+                  >
+                    🏦 Mở Trang Quét Mã VietQR Ngay ➔
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedParentPack.payUrl);
+                      showToast('📋 Đã chép link thanh toán PayOS!', 'success');
+                    }}
+                    className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-500/30 font-bold text-xs transition"
+                  >
+                    🔗 Chép Link Thanh Toán
+                  </button>
                 </div>
               </div>
 
               {/* Nút Sao chép tin nhắn gửi Zalo */}
-              <div className="space-y-3 pt-2">
+              <div className="space-y-3 pt-1">
                 <div className="bg-[#1b2533] border border-slate-700 rounded-xl p-3 text-[11px] text-slate-300 space-y-1">
-                  <span className="text-xs font-bold text-white block">💬 Mẫu tin nhắn gửi Bố/Mẹ:</span>
-                  <p className="italic text-slate-400">
-                    &ldquo;Bố/Mẹ ơi, con xin phép đăng ký {selectedParentPack.name} tại SAT.Guru để kịp luyện thi SAT. Học phí là {formatVnd(selectedParentPack.priceVnd)}. Con cam kết học hành nghiêm túc và đạt mục tiêu 1450+! Bố/Mẹ quét VietQR hoặc bấm link thanh toán nhanh giúp con nhé: {typeof window !== 'undefined' ? window.location.origin : ''}/upgrade?status=pending&pack={selectedParentPack.code}&rdquo;
+                  <span className="text-xs font-bold text-white block">💬 Mẫu tin nhắn gửi Bố/Mẹ qua Zalo:</span>
+                  <p className="italic text-slate-400 break-all">
+                    &ldquo;Bố/Mẹ ơi, con xin phép đăng ký {selectedParentPack.name} tại SAT.Guru để luyện thi Digital SAT. Học phí là {formatVnd(selectedParentPack.priceVnd)} (Mã đơn #{selectedParentPack.orderId}). Bố/Mẹ bấm link cổng VietQR chính thức sau để quét mã thanh toán tự động giúp con nhé: {selectedParentPack.payUrl}&rdquo;
                   </p>
                 </div>
 
@@ -1012,10 +828,9 @@ function UpgradeContent() {
                   <button
                     type="button"
                     onClick={() => {
-                      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-                      const message = `Bố/Mẹ ơi, con xin phép đăng ký ${selectedParentPack.name} tại SAT.Guru để kịp luyện thi SAT.\n- Học phí: ${formatVnd(selectedParentPack.priceVnd)}\n- STK MB Bank: 0345678999 (SAT NGHIAGURU)\n- Nội dung CK: SATGURU ${selectedParentPack.code}\nCon cam kết học hành nghiêm túc và đạt mục tiêu 1450+!\nBố/Mẹ bấm link sau để xem VietQR chuyển khoản nhanh giúp con nhé: ${origin}/upgrade?status=pending&pack=${selectedParentPack.code}`;
+                      const message = `Bố/Mẹ ơi, con xin phép đăng ký ${selectedParentPack.name} tại SAT.Guru để luyện thi Digital SAT.\n- Học phí: ${formatVnd(selectedParentPack.priceVnd)}\n- Mã đơn hàng: #${selectedParentPack.orderId}\n- Link quét VietQR chính thức (tự động kích hoạt): ${selectedParentPack.payUrl}\nCần hỗ trợ Bố/Mẹ có thể gọi Hotline SAT.Guru: 0986.722.324 ạ!`;
                       navigator.clipboard.writeText(message);
-                      showToast('📋 Đã sao chép tin nhắn kèm link gửi Bố/Mẹ qua Zalo!', 'success');
+                      showToast('📋 Đã sao chép tin nhắn kèm link PayOS gửi Bố/Mẹ qua Zalo!', 'success');
                     }}
                     className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2"
                   >
@@ -1025,7 +840,7 @@ function UpgradeContent() {
                   <button
                     type="button"
                     onClick={() => {
-                      window.open('https://zalo.me', '_blank');
+                      window.open('https://zalo.me', '_blank', 'noopener,noreferrer');
                     }}
                     className="w-full py-3 px-4 rounded-xl bg-[#0068FF] hover:bg-[#0055d4] text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2"
                   >
@@ -1037,6 +852,9 @@ function UpgradeContent() {
           </div>
         </div>
       )}
+
+      {/* W3 #27: Hoạt động thực tế đã xác thực từ DB (0 dữ liệu ảo) */}
+      <VerifiedActivityTicker />
 
       {/* Mục #25 & #27: B2B Center License + Score Guarantee dùng chung 1 nguồn duy nhất */}
       <B2bCenterPricingSection />

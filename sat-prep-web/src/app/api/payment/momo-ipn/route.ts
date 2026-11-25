@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { verifyMomoIpnSignature, isMomoSuccess, type MomoIpnPayload } from '@/lib/payment-momo';
 import { confirmPaymentAtomic } from '@/lib/payment-store';
+import {
+  emitMetric,
+  isWebhookRecentlyConfirmed,
+  markWebhookConfirmed,
+  checkWebhookTimestampAnomaly,
+} from '@/lib/telemetry';
 
 /**
  * ============================================================================
@@ -42,6 +48,17 @@ export async function POST(req: Request) {
     const orderId = String(payload.orderId ?? '');
     const gatewayTxnId = String(payload.transId ?? '');
     const amountVnd = Number(payload.amount ?? 0);
+
+    // Chống replay & giám sát độ trễ timestamp webhook
+    if (payload.responseTime) {
+      checkWebhookTimestampAnomaly('momo', orderId, payload.responseTime);
+    }
+
+    const dedupKey = `momo:${orderId}:${gatewayTxnId}`;
+    if (orderId && isWebhookRecentlyConfirmed(dedupKey)) {
+      return new NextResponse(null, { status: 204 });
+    }
+
     const outcome = await confirmPaymentAtomic(orderId, gatewayTxnId, amountVnd);
 
     // 4) A2: GÓI ĐÃ ĐƯỢC CẤP NGUYÊN TỬ trong confirm_payment RPC (cùng transaction
@@ -51,6 +68,7 @@ export async function POST(req: Request) {
 
     // 4.1) Idempotent: Nếu đơn đã thanh toán trước đó (order.status === 'paid'), bỏ qua không cộng trùng
     if (outcome.alreadyConfirmed) {
+      if (orderId) markWebhookConfirmed(dedupKey);
       return new NextResponse(null, { status: 204 });
     }
 
@@ -59,6 +77,11 @@ export async function POST(req: Request) {
     if (!outcome.ok) {
       if (outcome.reason === 'amount_mismatch') {
         console.warn(`[momo-ipn] Số tiền không khớp hoặc không đủ cho đơn orderId=${orderId}: nhận ${amountVnd} VND`);
+        emitMetric('payment_webhook_amount_mismatch', 1, {
+          gateway: 'momo',
+          orderId,
+          amountVnd,
+        });
         return new NextResponse(null, { status: 204 });
       }
       if (outcome.reason === 'not_found') {
@@ -70,6 +93,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'Confirm failed, retry' }, { status: 500 });
     }
 
+    if (orderId) markWebhookConfirmed(dedupKey);
+    emitMetric('payment_webhook_confirmed', 1, {
+      gateway: 'momo',
+      orderId,
+      amountVnd,
+    });
     // MoMo: 204 = đã nhận IPN và xử lý thành công
     return new NextResponse(null, { status: 204 });
   } catch (error) {

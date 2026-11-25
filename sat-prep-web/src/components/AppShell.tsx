@@ -67,6 +67,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined') return;
     setIsOffline(!window.navigator.onLine);
 
+    // W2 #30: Đăng ký PWA Service Worker cache tĩnh font/CSS KaTeX & icons
+    if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
+      navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+    }
+
     const handleOnline = () => {
       setIsOffline(false);
       setJustReconnected(true);
@@ -82,6 +87,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
+    // W2 #30: Đăng ký Service Worker PWA cache tài nguyên KaTeX & icons
+    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+      navigator.serviceWorker.register('/sw.js').catch(() => {
+        // Bỏ qua êm ái nếu WebView không hỗ trợ SW
+      });
+    }
 
     return () => {
       window.removeEventListener('online', handleOnline);

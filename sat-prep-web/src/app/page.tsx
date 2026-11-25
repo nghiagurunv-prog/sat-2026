@@ -9,6 +9,7 @@ import { BadgeSystem } from '@/components/BadgeSystem';
 import { AITutoring } from '@/components/AITutoring';
 import { MistakeNotebook } from '@/components/MistakeNotebook';
 import { DiagnosticBanner } from '@/components/DiagnosticBanner';
+import { useExamCountdown } from '@/hooks/useExamCountdown';
 
 export type TargetSchoolKey = 'FTU' | 'NEU' | 'HUST' | 'VNU' | 'VINUNI' | 'FULBRIGHT' | 'US_TOP50';
 
@@ -229,6 +230,11 @@ export default function Home() {
   // --- LIVE STUDENT STATS FROM LOCALSTORAGE ---
   const [liveScore, setLiveScore] = useState<{ latest: number | null; best: number | null }>({ latest: null, best: null });
   const [unmasteredMistakesCount, setUnmasteredMistakesCount] = useState<number>(0);
+  // W1 #13: Đồng bộ đếm ngược kỳ thi SAT College Board 2026–2027 + KPI số câu hôm nay toàn app
+  const homeCountdown = useExamCountdown({
+    currentScore: liveScore.latest ?? 1250,
+    targetScore: 1450,
+  });
 
   // Đọc localStorage khi client mount
   useEffect(() => {
@@ -457,6 +463,48 @@ export default function Home() {
 
       {/* Gợi ý làm bài test xếp lớp */}
       {!focusMode && <DiagnosticBanner />}
+
+      {/* W1 #13 & W2 #29: Dải Đếm Ngược Kỳ Thi SAT College Board 2026–2027 đồng bộ toàn app */}
+      {isClient && !focusMode && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-500/30 bg-slate-900/80 px-4 py-2.5 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-slate-200">
+            <span className="rounded-md bg-indigo-500/20 px-2 py-0.5 font-bold text-indigo-300">
+              📅 {homeCountdown.targetExam.name}
+            </span>
+            <span>
+              Còn <strong className="text-amber-300">{homeCountdown.daysUntilExam} ngày</strong>
+            </span>
+            <span className="text-slate-500">•</span>
+            <span>
+              KPI hôm nay: <strong className="text-emerald-300">{homeCountdown.dailyQuestionKpi} câu chuẩn</strong>
+            </span>
+            {homeCountdown.isFinal7DayCram && (
+              <span className="rounded-full bg-rose-500/20 px-2 py-0.5 font-semibold text-rose-300">
+                🚨 Final 7-Day Cram Mode
+              </span>
+            )}
+            {homeCountdown.isRegUrgent && !homeCountdown.regClosed && (
+              <span className="rounded-full bg-amber-500/20 px-2 py-0.5 font-semibold text-amber-300">
+                ⏰ Hạn đăng ký còn {homeCountdown.daysUntilRegDeadline} ngày (tránh phí muộn $34)
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/uni-predict"
+              className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 font-bold text-emerald-300 transition hover:bg-emerald-500/20"
+            >
+              🎓 Soi điểm ĐH Top VN
+            </Link>
+            <Link
+              href="/dashboard"
+              className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 font-semibold text-slate-300 transition hover:bg-white/10"
+            >
+              Đổi ngày thi →
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* ======================================================== */}
       {/* 🎯 WIZARD ONBOARDING 30S & HERO GOAL BANNER               */}
@@ -1189,6 +1237,22 @@ export default function Home() {
 
       {/* COMPONENT 2: AI Tutoring (Luyện Câu Hỏi Mới) / Sổ tay ôn câu sai */}
       {learningMode === 'ai' ? <AITutoring /> : <MistakeNotebook />}
+
+      {/* Footer Pháp lý & Hỗ trợ Thương mại SAT.Guru */}
+      {!focusMode && (
+        <footer className="mt-10 pt-6 border-t border-[#262730] text-xs text-[#94a3b8] flex flex-col sm:flex-row items-center justify-between gap-3 pb-6">
+          <div>
+            <strong className="text-white">SAT.Guru</strong> — Hệ thống Luyện thi Digital SAT AI • Hotline CSKH:{' '}
+            <a href="tel:0986722324" className="text-amber-300 font-bold hover:underline">0986.722.324</a>
+          </div>
+          <nav className="flex flex-wrap items-center gap-4" aria-label="Liên kết pháp lý">
+            <Link href="/terms" className="hover:text-white transition">Điều khoản sử dụng</Link>
+            <Link href="/privacy" className="hover:text-white transition">Chính sách bảo mật</Link>
+            <Link href="/refund" className="hover:text-white transition">Chính sách hoàn tiền</Link>
+            <Link href="/contact" className="hover:text-white transition">Liên hệ hỗ trợ</Link>
+          </nav>
+        </footer>
+      )}
 
     </div>
   );
