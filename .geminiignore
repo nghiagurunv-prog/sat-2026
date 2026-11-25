@@ -1,0 +1,27 @@
+node_modules/
+.next/
+*.tsbuildinfo
+test-results/
+.vercel/
+.git/
+dist/
+build/
+coverage/
+
+# V33 Clone Profile Shield
+test_clone_profile*/
+*chrome_profile*/
+
+# V33.2 Anti-Bloat Search Shield
+scratch/
+_scratch/
+backups*/
+backup*/
+luat_sat_chi_tiet/
+PROJECT_HISTORY_ARCHIVE.md
+*.bundle.js
+*.min.js
+*.gz
+*.jsc
+*.map
+*.wasm

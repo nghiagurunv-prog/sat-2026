@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
 import { buildLeaderboard } from '@/lib/leaderboard-store';
+import { createClient } from '@/lib/supabase/server';
 
 /**
  * LEADERBOARD & INTER-SCHOOL CHAMPIONSHIP API
@@ -43,7 +44,8 @@ export interface UserSchoolProfile {
   updatedAt: string;
 }
 
-// Global in-memory storage cho School Profiles
+// Cache LRU giới hạn 500 bản ghi (tránh phình RAM & luôn ưu tiên đọc Supabase trước — vá #16)
+const MAX_SCHOOL_CACHE = 500;
 declare global {
   // eslint-disable-next-line no-var
   var __SAT_USER_SCHOOL_PROFILES__: Map<string, UserSchoolProfile> | undefined;
@@ -52,6 +54,16 @@ declare global {
 const userSchoolMap: Map<string, UserSchoolProfile> =
   globalThis.__SAT_USER_SCHOOL_PROFILES__ ??
   (globalThis.__SAT_USER_SCHOOL_PROFILES__ = new Map());
+
+function setSchoolCache(userId: string, profile: UserSchoolProfile): void {
+  if (userSchoolMap.has(userId)) {
+    userSchoolMap.delete(userId);
+  } else if (userSchoolMap.size >= MAX_SCHOOL_CACHE) {
+    const oldest = userSchoolMap.keys().next().value;
+    if (oldest !== undefined) userSchoolMap.delete(oldest);
+  }
+  userSchoolMap.set(userId, profile);
+}
 
 // Danh sách trường THPT Chuyên mẫu chuẩn toàn quốc với các chỉ số học thuật ấn tượng
 const INITIAL_SCHOOL_RANKINGS: Omit<SchoolRankingItem, 'rank' | 'isMySchool'>[] = [
@@ -246,7 +258,11 @@ function sanitizeLeaderboardEntry<T extends Record<string, any>>(entry: T): T {
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
 
-  const rl = rateLimit(`leaderboard:${user.id}`, 60, 60_000);
+  const rl = rateLimit(
+    getRateLimitKey(request, 'leaderboard', user.isAuthenticated ? user.id : null),
+    60,
+    60_000
+  );
   if (!rl.allowed) {
     return NextResponse.json(
       { error: 'Quá nhiều request. Thử lại sau.', retryAfterMs: rl.retryAfterMs },
@@ -268,7 +284,30 @@ export async function GET(request: NextRequest) {
       limit,
       classCode
     );
-    const userSchool = userSchoolMap.get(user.id) || null;
+    let userSchool: UserSchoolProfile | null = null;
+    if (user.isAuthenticated) {
+      try {
+        const supabase = await createClient();
+        const { data: prof } = await supabase
+          .from('user_profiles')
+          .select('school_name, target_score, updated_at')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (prof?.school_name) {
+          userSchool = {
+            schoolName: String(prof.school_name),
+            targetScore: Number(prof.target_score) || 1450,
+            updatedAt: String(prof.updated_at || new Date().toISOString()),
+          };
+          setSchoolCache(user.id, userSchool);
+        }
+      } catch {
+        // Bảng user_profiles chưa migrate → fallback cache bounded êm ái
+      }
+    }
+    if (!userSchool) {
+      userSchool = userSchoolMap.get(user.id) || null;
+    }
 
     // Tính toán bảng xếp hạng trường có tính thêm lực chiến của user
     const schoolList: SchoolRankingItem[] = INITIAL_SCHOOL_RANKINGS.map((item, idx) => {
@@ -291,7 +330,7 @@ export async function GET(request: NextRequest) {
       s.rank = i + 1;
     });
 
-    // Sinh mã referral dựa trên user id
+    // Sinh mã referral dựa trên user id (chỉ số thật, KHÔNG hardcode số giả 3/21/1500)
     const cleanId = (user.id || 'GUEST').replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase();
     const referralCode = `SAT-${cleanId || 'GURU26'}`;
 
@@ -308,9 +347,9 @@ export async function GET(request: NextRequest) {
       userSchool,
       referralStats: {
         code: referralCode,
-        invitedCount: 3,
-        bonusDaysPro: 21,
-        bonusCoins: 1500,
+        invitedCount: 0,
+        bonusDaysPro: 0,
+        bonusCoins: 0,
         referralUrl: `https://satguru.edu.vn/auth/register?ref=${referralCode}`,
         challengeUrl: `https://satguru.edu.vn/arena?challenger=${referralCode}&mode=speed5`,
       },
@@ -323,8 +362,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();
+  if (!user.isAuthenticated) {
+    return NextResponse.json({ error: 'Vui lòng đăng nhập để ghi danh trường THPT.' }, { status: 401 });
+  }
 
-  const rl = rateLimit(`leaderboard-post:${user.id}`, 20, 60_000);
+  const rl = rateLimit(getRateLimitKey(req, 'leaderboard-post', user.id), 20, 60_000);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: 'Thao tác quá nhanh. Vui lòng chờ giây lát.', retryAfterMs: rl.retryAfterMs },
@@ -352,12 +394,28 @@ export async function POST(req: Request) {
     }
 
     const profile: UserSchoolProfile = {
-      schoolName: schoolName.trim(),
+      schoolName: schoolName.trim().slice(0, 120),
       targetScore: parsedScore,
       updatedAt: new Date().toISOString(),
     };
 
-    userSchoolMap.set(user.id, profile);
+    setSchoolCache(user.id, profile);
+    try {
+      const supabase = await createClient();
+      await supabase
+        .from('user_profiles')
+        .upsert(
+          {
+            user_id: user.id,
+            school_name: profile.schoolName,
+            target_score: profile.targetScore,
+            updated_at: profile.updatedAt,
+          },
+          { onConflict: 'user_id' }
+        );
+    } catch {
+      // Bảng user_profiles chưa migrate → vẫn lưu in-memory không làm hỏng UX
+    }
 
     return NextResponse.json({
       success: true,

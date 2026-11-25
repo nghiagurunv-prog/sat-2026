@@ -18,32 +18,40 @@ import { rateLimit, getClientIp } from '@/lib/rate-limit';
  * lệ (secret/session) không chạm limit. Middleware allow /api/admin (public) nên
  * endpoint này tự bảo vệ.
  */
-export async function GET(req: Request) {
+async function verifyAdminOrLimit(req: Request) {
   const auth = await verifyAdmin(req as NextRequest);
   if (!auth.ok) {
     const rl = rateLimit(`admin-auth-fail:${getClientIp(req)}`, 10, 60_000);
     if (!rl.allowed) {
-      return NextResponse.json(
-        { success: false, error: 'Quá nhiều lần thử sai. Vui lòng thử lại sau.', retryAfterMs: rl.retryAfterMs },
-        { status: 429 }
-      );
+      return {
+        ok: false as const,
+        response: NextResponse.json(
+          { success: false, error: 'Quá nhiều lần thử sai. Vui lòng thử lại sau.', retryAfterMs: rl.retryAfterMs },
+          { status: 429 }
+        ),
+      };
     }
-    return NextResponse.json(
-      { success: false, error: auth.error || 'Không có quyền truy cập.' },
-      { status: auth.status || 403 }
-    );
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { success: false, error: auth.error || 'Không có quyền truy cập.' },
+        { status: auth.status || 403 }
+      ),
+    };
   }
+  return { ok: true as const, auth };
+}
+
+export async function GET(req: Request) {
+  const check = await verifyAdminOrLimit(req);
+  if (!check.ok) return check.response;
   return NextResponse.json(await getCostReport());
 }
 
 export async function POST(req: Request) {
-  const auth = await verifyAdmin(req as NextRequest);
-  if (!auth.ok) {
-    return NextResponse.json(
-      { success: false, error: auth.error || 'Không có quyền truy cập.' },
-      { status: auth.status || 403 }
-    );
-  }
+  const check = await verifyAdminOrLimit(req);
+  if (!check.ok) return check.response;
+  const { auth } = check;
 
   try {
     const body = await req.json().catch(() => ({}));

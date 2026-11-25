@@ -6,8 +6,8 @@ import { resolveShareCode } from '@/lib/parent-share-store';
 import { buildParentReport, type ParentReport } from '@/lib/parent-report-store';
 import { getUserTierAdmin } from '@/lib/subscription-store';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { checkBudget, recordGlobalCost } from '@/lib/ai-cost';
-import { OPENAI_CHAT_COMPLETIONS_URL } from '@/lib/openai';
+import { checkBudget, recordGlobalCost, modelForTier } from '@/lib/ai-cost';
+import { callUnifiedLlm } from '@/lib/ai-router';
 import { todayVN } from '@/lib/daily-snapshot-store';
 
 /**
@@ -37,8 +37,8 @@ import { todayVN } from '@/lib/daily-snapshot-store';
  * ============================================================================
  */
 
-// Cấu hình cứng ở server (giống /api/chat) — comment ngắn nên MAX_TOKENS thấp hơn.
-const MODEL = 'gpt-4o-mini';
+// Cấu hình cứng ở server (giống /api/chat) — Ultimate dùng modelForTier('ultimate'), có failover Gemini qua ai-router.
+const ULTIMATE_MODEL = modelForTier('ultimate');
 const MAX_TOKENS = 500;
 const TEMPERATURE = 0.7;
 // Giới hạn kích thước dữ liệu tóm tắt đầu vào gửi cho AI
@@ -172,8 +172,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ comment: null });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
+    const hasAnyLlmKey = Boolean(
+      (process.env.OPENAI_API_KEY || '').trim() ||
+      (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim()
+    );
+    if (!hasAnyLlmKey) {
       return NextResponse.json({ comment: null });
     }
 
@@ -190,39 +193,30 @@ export async function GET(request: NextRequest) {
 
     const userPrompt = `Số liệu tiến độ của con:\n${summary}`;
 
-    const response = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        max_tokens: MAX_TOKENS,
+    // Multi-LLM Router: ưu tiên model Ultimate (gpt-4o) và tự động failover sang Gemini 2.5 Flash khi OpenAI chặn/lỗi.
+    let llmRes;
+    try {
+      llmRes = await callUnifiedLlm({
+        tier: 'ultimate',
+        systemPrompt,
+        userPrompt,
+        maxTokens: MAX_TOKENS,
         temperature: TEMPERATURE,
-      }),
-    });
-
-    // FAIL-SAFE: OpenAI lỗi (kể cả 403 chặn địa lý VN) → ẩn khối, giữ báo cáo.
-    if (!response.ok) {
-      console.error('mentor-comment OpenAI lỗi:', response.status, await response.text().catch(() => ''));
+      });
+    } catch (llmErr) {
+      console.error('mentor-comment Multi-LLM lỗi:', llmErr);
       return NextResponse.json({ comment: null });
     }
 
-    const data = await response.json();
-    const comment: string = data.choices?.[0]?.message?.content?.trim() ?? '';
+    const comment: string = llmRes.text.trim();
     if (!comment) {
       return NextResponse.json({ comment: null });
     }
 
     // Ghi chi phí vào sổ cái chung (AWAIT — serverless có thể bị kill sớm).
-    const tokIn = data.usage?.prompt_tokens ?? 0;
-    const tokOut = data.usage?.completion_tokens ?? 0;
-    await recordGlobalCost(tokIn, tokOut, MODEL).catch((e) => console.error('recordGlobalCost:', e));
+    await recordGlobalCost(llmRes.tokensIn, llmRes.tokensOut, llmRes.model || ULTIMATE_MODEL).catch((e) =>
+      console.error('recordGlobalCost:', e)
+    );
 
     // Lưu cache (best-effort) cho lần xem sau trong ngày.
     await saveCachedComment(admin, hash, comment, summary).catch((e) => console.error('saveCache:', e));

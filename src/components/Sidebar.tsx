@@ -93,6 +93,8 @@ export function Sidebar() {
 
   // [Point 14] Thu gọn Sidebar dạng Icon Rail 64px - 72px cho iPad & Laptop
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+  // W1 #18: Chế độ "Học Thuật Tập Trung" (Academic Focus Mode) — gom/ẩn 10 mục RPG cho HS 11-12 & Phụ huynh
+  const [academicFocusMode, setAcademicFocusMode] = useState<boolean>(false);
 
   useEffect(() => {
     try {
@@ -100,10 +102,40 @@ export function Sidebar() {
       if (saved !== null) {
         setIsCollapsed(saved === 'true');
       }
+      const savedFocus = localStorage.getItem('sat_academic_focus_mode_v1');
+      if (savedFocus !== null) {
+        setAcademicFocusMode(savedFocus === 'true');
+      }
     } catch {
       // ignore
     }
   }, []);
+
+  const toggleAcademicFocusMode = useCallback(() => {
+    setAcademicFocusMode((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('sat_academic_focus_mode_v1', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
+  const visibleMenuGroups: MenuGroup[] = academicFocusMode
+    ? [
+        ...MENU_GROUPS.slice(0, 4),
+        {
+          title: '🎯 GÓC TIẾP SỨC (TỐI GIẢN)',
+          icon: '🎯',
+          items: [
+            { name: '🏆 Bảng Xếp Hạng Liên Trường', path: '/leaderboard', icon: '🏆' },
+            { name: '📜 Nhiệm Vụ Học Tập', path: '/quests', icon: '📜' },
+          ],
+        },
+      ]
+    : MENU_GROUPS;
 
   const toggleCollapse = useCallback(() => {
     setIsCollapsed((prev) => {
@@ -194,7 +226,9 @@ export function Sidebar() {
             try {
               const raw = localStorage.getItem('sat_mistake_archived_v1');
               if (raw) archived = JSON.parse(raw);
-            } catch {}
+            } catch (err) {
+              console.warn('[Sidebar] Không thể đọc sat_mistake_archived_v1:', err);
+            }
             const activeDue = data.filter((m: { id?: string }) => !archived.includes(m?.id || ''));
             setDueMistakesCount(activeDue.length);
           }
@@ -206,9 +240,15 @@ export function Sidebar() {
 
     fetchDueMistakes();
     const interval = setInterval(fetchDueMistakes, 30000);
+    // W1 #14: lắng nghe sự kiện đồng bộ realtime Sổ lỗi sai từ CorePracticeUI / MistakeNotebook
+    const onMistakeUpdated = () => {
+      void fetchDueMistakes();
+    };
+    window.addEventListener('sat_mistake_bank_updated', onMistakeUpdated);
     return () => {
       isMounted = false;
       clearInterval(interval);
+      window.removeEventListener('sat_mistake_bank_updated', onMistakeUpdated);
     };
   }, []);
 
@@ -512,10 +552,25 @@ export function Sidebar() {
 
         <hr className="border-[#262730]" />
 
-        <h2 className="text-[14px] font-bold text-white mb-2 px-2">🗺️ BẢN ĐỒ HUẤN LUYỆN</h2>
+        <div className="flex items-center justify-between px-2 mb-2 gap-2">
+          <h2 className="text-[14px] font-bold text-white">🗺️ BẢN ĐỒ HUẤN LUYỆN</h2>
+          <button
+            type="button"
+            onClick={toggleAcademicFocusMode}
+            className={cn(
+              'text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors',
+              academicFocusMode
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                : 'bg-[#1b2533] text-slate-400 border-slate-700 hover:text-white'
+            )}
+            title="Chế độ Học Thuật Tập Trung: ẩn bớt 10 mục game RPG, tối ưu cho HS lớp 11–12 & Phụ huynh (#18)"
+          >
+            {academicFocusMode ? '🎓 Tập Trung: BẬT' : '🎓 Chế độ Tập Trung'}
+          </button>
+        </div>
 
         <div className="space-y-4">
-          {MENU_GROUPS.map((group, idx) => {
+          {visibleMenuGroups.map((group, idx) => {
             const isExpanded = expandedGroups.includes(idx);
             return (
               <div key={idx} className="st-expander border-[#262730]">

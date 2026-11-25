@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { AdminOpsExtensions } from '@/components/AdminOpsExtensions';
 
 /**
  * ============================================================================
@@ -346,8 +347,8 @@ export default function AdminPage() {
   const [newTipTitle, setNewTipTitle] = useState('');
   const [newTipContent, setNewTipContent] = useState('');
 
-  // Tab 5: Redemptions Data & Filter (#C084)
-  const [redemptions, setRedemptions] = useState<Redemption[]>(INITIAL_REDEMPTIONS);
+  // Tab 5: Redemptions Data & Filter (#C084) — khởi tạo rỗng, chỉ nạp từ DB thật
+  const [redemptions, setRedemptions] = useState<Redemption[]>([]);
   const [redemptionStatusFilter, setRedemptionStatusFilter] = useState<string>('ALL');
   const [redemptionSearch, setRedemptionSearch] = useState<string>('');
   const [rowBusy, setRowBusy] = useState<string | null>(null);
@@ -367,155 +368,17 @@ export default function AdminPage() {
   const [ecoMode, setEcoMode] = useState(true);
   const [dailyBudgetLimit, setDailyBudgetLimit] = useState(20);
 
-  // Tab 1: Revenue & VIP Activation State
+  // Tab 1: Revenue & VIP Activation State (100% từ /api/admin/orders — KHÔNG trộn mock GMV)
   const [vipTargetEmail, setVipTargetEmail] = useState('');
   const [vipSelectedPlan, setVipSelectedPlan] = useState<'PRO' | 'PREMIUM' | 'ULTIMATE'>('PREMIUM');
   const [vipCustomDays, setVipCustomDays] = useState(90);
-  const [transactions, setTransactions] = useState<PaymentTransaction[]>([
-    {
-      id: 'TXN-984210',
-      userEmail: 'nguyen.minhanh@gmail.com',
-      userName: 'Nguyễn Minh Anh',
-      plan: 'ULTIMATE',
-      amount: 1499000,
-      gateway: 'VietQR',
-      status: 'SUCCESS',
-      createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'TXN-984209',
-      userEmail: 'tranhoang.sat@yahoo.com',
-      userName: 'Trần Hoàng Long',
-      plan: 'PREMIUM',
-      amount: 699000,
-      gateway: 'PayOS',
-      status: 'SUCCESS',
-      createdAt: new Date(Date.now() - 48 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'TXN-984208',
-      userEmail: 'le.gia.huy@outlook.com',
-      userName: 'Lê Gia Huy',
-      plan: 'PRO',
-      amount: 299000,
-      gateway: 'VietQR',
-      status: 'SUCCESS',
-      createdAt: new Date(Date.now() - 110 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 'TXN-984207',
-      userEmail: 'vu.hoangnam@gmail.com',
-      userName: 'Vũ Hoàng Nam',
-      plan: 'PREMIUM',
-      amount: 699000,
-      gateway: 'Manual_Admin',
-      status: 'SUCCESS',
-      createdAt: new Date(Date.now() - 250 * 60 * 1000).toISOString(),
-    },
-  ]);
+  const [transactions, setTransactions] = useState<PaymentTransaction[]>([]);
 
-  // Tab 2: Student CRM Data
+  // Tab 2: Student CRM Data (100% từ /api/admin/students — KHÔNG trộn mock)
   const [searchStudent, setSearchStudent] = useState('');
-  const [students, setStudents] = useState<StudentRecord[]>([
-    {
-      id: 'STU-1001',
-      name: 'Nguyễn Minh Anh',
-      email: 'nguyen.minhanh@gmail.com',
-      phone: '0981234567',
-      targetScore: 1520,
-      predictedScore: 1460,
-      vipStatus: 'ACTIVE',
-      vipExpiry: '2027-02-15',
-      coins: 450,
-      mockTestsDone: 8,
-      accuracy: 86,
-      classCode: 'SAT-PRO-12A1',
-      lastActiveDaysAgo: 1,
-      riskLevel: 'SAFE',
-    },
-    {
-      id: 'STU-1002',
-      name: 'Trần Hoàng Long',
-      email: 'tranhoang.sat@yahoo.com',
-      phone: '0904567891',
-      targetScore: 1450,
-      predictedScore: 1380,
-      vipStatus: 'ACTIVE',
-      vipExpiry: '2026-12-05',
-      coins: 220,
-      mockTestsDone: 5,
-      accuracy: 78,
-      classCode: 'SAT-K68-FTU',
-      lastActiveDaysAgo: 2,
-      riskLevel: 'SAFE',
-    },
-    {
-      id: 'STU-1003',
-      name: 'Phạm Thuỳ Dương',
-      email: 'thuyduong.pham@gmail.com',
-      phone: '0903334444',
-      targetScore: 1400,
-      predictedScore: 1210,
-      vipStatus: 'TRIAL',
-      vipExpiry: '2026-11-12',
-      coins: 50,
-      mockTestsDone: 2,
-      accuracy: 64,
-      classCode: 'SAT-PRO-12A1',
-      lastActiveDaysAgo: 7,
-      riskLevel: 'HIGH',
-    },
-    {
-      id: 'STU-1004',
-      name: 'Lê Gia Huy',
-      email: 'le.gia.huy@outlook.com',
-      phone: '0978889999',
-      targetScore: 1550,
-      predictedScore: 1510,
-      vipStatus: 'ACTIVE',
-      vipExpiry: '2026-12-01',
-      coins: 600,
-      mockTestsDone: 14,
-      accuracy: 92,
-      classCode: 'CHUYEN-TOAN-K33',
-      lastActiveDaysAgo: 0,
-      riskLevel: 'SAFE',
-    },
-    {
-      id: 'STU-1005',
-      name: 'Vũ Tuấn Kiệt',
-      email: 'tuankiet.vu@gmail.com',
-      phone: '0934567890',
-      targetScore: 1480,
-      predictedScore: 1260,
-      vipStatus: 'TRIAL',
-      vipExpiry: '2026-11-09',
-      coins: 30,
-      mockTestsDone: 1,
-      accuracy: 59,
-      classCode: 'SAT-K68-FTU',
-      lastActiveDaysAgo: 6,
-      riskLevel: 'HIGH',
-    },
-    {
-      id: 'STU-1006',
-      name: 'Đỗ Mai Phương',
-      email: 'maiphuong.do@yahoo.com',
-      phone: '0945678123',
-      targetScore: 1500,
-      predictedScore: 1410,
-      vipStatus: 'ACTIVE',
-      vipExpiry: '2027-01-20',
-      coins: 180,
-      mockTestsDone: 6,
-      accuracy: 72,
-      classCode: 'CHUYEN-TOAN-K33',
-      lastActiveDaysAgo: 4,
-      riskLevel: 'MEDIUM',
-    },
-  ]);
+  const [students, setStudents] = useState<StudentRecord[]>([]);
 
-  // Tab 3: Question Triage Data
+  // Tab 3: Question Triage Data (dùng ISO tĩnh tránh React 19 hydration mismatch)
   const [reports, setReports] = useState<ReportedQuestion[]>([
     {
       id: 'REP-501',
@@ -524,7 +387,7 @@ export default function AdminPage() {
       reportedBy: 'nguyen.minhanh@gmail.com',
       issueType: 'LOI_DICH',
       description: 'Từ visceral trong phần giải thích tiếng Việt chưa giải thích hết sắc thái bản năng của nhân vật Judith.',
-      reportedAt: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
+      reportedAt: '2026-11-08T09:25:00.000Z',
       status: 'PENDING',
     },
     {
@@ -534,7 +397,7 @@ export default function AdminPage() {
       reportedBy: 'le.gia.huy@outlook.com',
       issueType: 'LOI_LATEX',
       description: 'Công thức khai triển (ax+3)(2x-5) bị xô dòng khi hiển thị trên điện thoại màn hình nhỏ.',
-      reportedAt: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
+      reportedAt: '2026-11-08T08:00:00.000Z',
       status: 'PENDING',
     },
     {
@@ -544,7 +407,7 @@ export default function AdminPage() {
       reportedBy: 'thuyduong.pham@gmail.com',
       issueType: 'SAI_DAP_AN',
       description: 'Đề bài hỏi k nhưng em bấm k = 9 bị báo sai, giải thích rất kỹ nhưng cần thêm ghi chú song song.',
-      reportedAt: new Date(Date.now() - 340 * 60 * 1000).toISOString(),
+      reportedAt: '2026-11-08T04:20:00.000Z',
       status: 'RESOLVED',
     },
   ]);
@@ -563,14 +426,18 @@ export default function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const [rRes, cRes] = await Promise.all([
+      const [rRes, cRes, oRes, sRes] = await Promise.all([
         fetch('/api/admin/redemptions', { headers: authHeaders(), cache: 'no-store' }),
         fetch('/api/admin/ai-cost', { headers: authHeaders(), cache: 'no-store' }),
+        fetch('/api/admin/orders', { headers: authHeaders(), cache: 'no-store' }),
+        fetch('/api/admin/students', { headers: authHeaders(), cache: 'no-store' }),
       ]);
 
       if (rRes.status === 403 || cRes.status === 403) {
         setNeedSecret(true);
-        setRedemptions(INITIAL_REDEMPTIONS);
+        setRedemptions([]);
+        setTransactions([]);
+        setStudents([]);
         setCost(null);
         setError(
           secret
@@ -587,10 +454,50 @@ export default function AdminPage() {
       setNeedSecret(false);
       if (rRes.ok) {
         const d = await rRes.json();
-        setRedemptions(Array.isArray(d.redemptions) && d.redemptions.length > 0 ? d.redemptions : INITIAL_REDEMPTIONS);
+        setRedemptions(Array.isArray(d.redemptions) ? d.redemptions : []);
       }
       if (cRes.ok) {
         setCost(await cRes.json());
+      }
+      if (oRes.ok) {
+        const od = await oRes.json().catch(() => ({}));
+        const mapped: PaymentTransaction[] = Array.isArray(od.orders)
+          ? od.orders.map((row: Record<string, unknown>) => {
+              const rawTier = String(row.tier ?? row.plan_id ?? 'premium').toUpperCase();
+              const plan: PaymentTransaction['plan'] =
+                rawTier === 'ULTIMATE' ? 'ULTIMATE' : rawTier === 'PRO' ? 'PRO' : 'PREMIUM';
+              const rawGw = String(row.gateway ?? 'PayOS').toLowerCase();
+              const gateway: PaymentTransaction['gateway'] =
+                rawGw.includes('vietqr') || rawGw.includes('bank')
+                  ? 'VietQR'
+                  : rawGw.includes('manual')
+                  ? 'Manual_Admin'
+                  : 'PayOS';
+              const rawStatus = String(row.status ?? 'pending').toLowerCase();
+              const status: PaymentTransaction['status'] =
+                rawStatus === 'paid' || rawStatus === 'success'
+                  ? 'SUCCESS'
+                  : rawStatus === 'cancelled' || rawStatus === 'refunded' || rawStatus === 'failed'
+                  ? 'REFUNDED'
+                  : 'PENDING';
+              const uid = String(row.user_id ?? 'student');
+              return {
+                id: String(row.order_id ?? row.order_code ?? row.id ?? ''),
+                userEmail: String(row.user_email ?? `${uid.slice(0, 8)}@user.sat.guru`),
+                userName: String(row.user_name ?? `Học viên ${uid.slice(0, 6)}`),
+                plan,
+                amount: Number(row.amount_vnd ?? row.amount ?? 0),
+                gateway,
+                status,
+                createdAt: String(row.created_at ?? '2026-11-08T00:00:00.000Z'),
+              };
+            })
+          : [];
+        setTransactions(mapped);
+      }
+      if (sRes.ok) {
+        const sd = await sRes.json().catch(() => ({}));
+        setStudents(Array.isArray(sd.students) ? sd.students : []);
       }
     } catch {
       setError('Lỗi kết nối. Kiểm tra mạng rồi thử lại.');
@@ -600,7 +507,7 @@ export default function AdminPage() {
   }, [authHeaders, secret]);
 
   useEffect(() => {
-    queueMicrotask(load);
+    void load();
   }, [load]);
 
   // Hành động Duyệt Đổi Quà (Tab 5) - Chống double-click #071 & Hỗ trợ reject #075
@@ -686,140 +593,194 @@ export default function AdminPage() {
     }
   };
 
-  // Hành động Kích Hoạt VIP 1-Click (Tab 1) - Chống double-click #071
-  const handleManualActivateVip = (e: React.FormEvent) => {
+  // Hành động Kích Hoạt VIP 1-Click (Tab 1) — gọi thật POST /api/admin/students (lưu DB + audit log)
+  const handleManualActivateVip = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isActivatingVip) return;
-    if (!vipTargetEmail.trim()) {
-      alert('Vui lòng nhập Email hoặc User ID!');
+    const target = vipTargetEmail.trim();
+    if (!target) {
+      setError('Vui lòng nhập Email hoặc User ID học viên!');
       return;
     }
 
     setIsActivatingVip(true);
+    setError(null);
+    setNotice(null);
     try {
-      const planPrices = {
-        PRO: 299000,
-        PREMIUM: 699000,
-        ULTIMATE: 1499000,
-      };
-
-      const newTxn: PaymentTransaction = {
-        id: `VIP-${Math.floor(100000 + Math.random() * 900000)}`,
-        userEmail: vipTargetEmail.trim(),
-        userName: vipTargetEmail.split('@')[0] || 'VIP Member',
-        plan: vipSelectedPlan,
-        amount: planPrices[vipSelectedPlan],
-        gateway: 'Manual_Admin',
-        status: 'SUCCESS',
-        createdAt: new Date().toISOString(),
-      };
-
-      setTransactions((prev) => [newTxn, ...prev]);
-
-      // Cập nhật student nếu có
-      setStudents((prev) => {
-        const existing = prev.find((s) => s.email.toLowerCase() === vipTargetEmail.toLowerCase());
-        if (existing) {
-          return prev.map((s) =>
-            s.email.toLowerCase() === vipTargetEmail.toLowerCase()
-              ? {
-                  ...s,
-                  vipStatus: 'ACTIVE',
-                  vipExpiry: new Date(Date.now() + vipCustomDays * 24 * 3600 * 1000).toISOString().split('T')[0],
-                }
-              : s
-          );
-        }
-        return [
-          {
-            id: `STU-${Math.floor(1000 + Math.random() * 9000)}`,
-            name: vipTargetEmail.split('@')[0],
-            email: vipTargetEmail.trim(),
-            phone: 'Chưa cập nhật',
-            targetScore: 1500,
-            predictedScore: 1350,
-            vipStatus: 'ACTIVE',
-            vipExpiry: new Date(Date.now() + vipCustomDays * 24 * 3600 * 1000).toISOString().split('T')[0],
-            coins: 200,
-            mockTestsDone: 0,
-            accuracy: 0,
-          },
-          ...prev,
-        ];
+      const res = await fetch('/api/admin/students', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          action: 'manual_vip',
+          target,
+          plan: vipSelectedPlan,
+          days: vipCustomDays,
+        }),
       });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.success) {
+        setError(`❌ ${d.error ?? 'Không thể kích hoạt VIP trên máy chủ.'}`);
+        return;
+      }
 
-      setNotice(`⚡ Đã kích hoạt gói VIP ${vipSelectedPlan} (${vipCustomDays} ngày) thành công cho học viên: ${vipTargetEmail}!`);
+      setNotice(
+        `⚡ Đã kích hoạt gói VIP ${String(d.tier || vipSelectedPlan).toUpperCase()} (+${vipCustomDays} ngày) và lưu vào DB cho: ${target}!`
+      );
       setVipTargetEmail('');
+      await load();
+    } catch {
+      setError('❌ Lỗi kết nối khi gọi /api/admin/students.');
     } finally {
       setIsActivatingVip(false);
     }
   };
 
-  // Hành động Duyệt / Hoàn tiền đơn hàng (Chống double-click #071)
-  const handleToggleTransactionStatus = (txnId: string, nextStatus: 'SUCCESS' | 'REFUNDED') => {
+  // Hành động Duyệt / Hủy / Hoàn tiền đơn hàng (gọi thật POST /api/admin/orders + thu hồi VIP khi refund)
+  const handleToggleTransactionStatus = async (txnId: string, nextStatus: 'SUCCESS' | 'REFUNDED') => {
     if (processingOrderId === txnId) return;
     setProcessingOrderId(txnId);
+    setError(null);
+    setNotice(null);
     try {
+      const currentTxn = transactions.find((t) => t.id === txnId);
+      const apiAction: 'approve' | 'refund' | 'cancel' =
+        nextStatus === 'SUCCESS'
+          ? 'approve'
+          : currentTxn?.status === 'SUCCESS'
+          ? 'refund'
+          : 'cancel';
+
+      const res = await fetch('/api/admin/orders', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          orderId: txnId,
+          action: apiAction,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.success) {
+        setError(`❌ ${d.error ?? 'Không thể cập nhật đơn hàng trên máy chủ.'}`);
+        return;
+      }
+
       setTransactions((prev) =>
         prev.map((t) => (t.id === txnId ? { ...t, status: nextStatus } : t))
       );
-      setNotice(`✅ Đã cập nhật trạng thái đơn #${txnId} sang ${nextStatus === 'SUCCESS' ? 'Thành công' : 'Hoàn tiền'}`);
+      setNotice(
+        apiAction === 'refund'
+          ? `✅ Đã đánh dấu Hoàn tiền đơn #${txnId} và thu hồi quyền VIP trên DB.`
+          : `✅ Đã cập nhật trạng thái đơn #${txnId} sang ${nextStatus === 'SUCCESS' ? 'Thành công' : 'Đã hủy'}.`
+      );
+    } catch {
+      setError('❌ Lỗi kết nối khi gọi /api/admin/orders.');
     } finally {
       setTimeout(() => setProcessingOrderId(null), 300);
     }
   };
 
-  // Hành động CRM: Tặng Xu (Chống double-click #071)
-  const handleRewardCoins = (studentId: string, amount: number) => {
+  // Hành động CRM: Tặng Xu (gọi thật POST /api/admin/students lưu user_economy + audit log)
+  const handleRewardCoins = async (studentId: string, amount: number) => {
     if (processingStudentId === studentId) return;
     setProcessingStudentId(studentId);
+    setError(null);
+    setNotice(null);
     try {
-      setStudents((prev) =>
-        prev.map((s) => (s.id === studentId ? { ...s, coins: s.coins + amount } : s))
-      );
-      setNotice(`🎁 Đã tặng thành công +${amount} Xu cho học viên #${studentId}!`);
-    } finally {
-      setTimeout(() => setProcessingStudentId(null), 300);
-    }
-  };
+      const res = await fetch('/api/admin/students', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          action: 'reward_coins',
+          userId: studentId,
+          amount,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.success) {
+        setError(`❌ ${d.error ?? 'Không thể cộng Xu trên máy chủ.'}`);
+        return;
+      }
 
-  // Hành động CRM: Gia hạn VIP (Chống double-click #071)
-  const handleExtendVipDays = (studentId: string, days: number) => {
-    if (processingStudentId === studentId) return;
-    setProcessingStudentId(studentId);
-    try {
-      setStudents((prev) =>
-        prev.map((s) => {
-          if (s.id !== studentId) return s;
-          const currentExp = new Date(s.vipExpiry).getTime();
-          const baseTime = currentExp > Date.now() ? currentExp : Date.now();
-          const newExpiry = new Date(baseTime + days * 24 * 3600 * 1000).toISOString().split('T')[0];
-          return { ...s, vipStatus: 'ACTIVE', vipExpiry: newExpiry };
-        })
-      );
-      setNotice(`📅 Đã gia hạn thêm +${days} ngày VIP cho học viên #${studentId}!`);
-    } finally {
-      setTimeout(() => setProcessingStudentId(null), 300);
-    }
-  };
-
-  // Hành động Question Triage: Sửa nhanh & Thưởng 50 Xu (Chống double-click #071)
-  const handleResolveAndReward = (reportId: string, studentEmail: string) => {
-    if (processingReportId === reportId) return;
-    setProcessingReportId(reportId);
-    try {
-      setReports((prev) =>
-        prev.map((r) => (r.id === reportId ? { ...r, status: 'RESOLVED' } : r))
-      );
-      // Tặng 50 Xu cho học sinh đã báo lỗi
       setStudents((prev) =>
         prev.map((s) =>
-          s.email.toLowerCase() === studentEmail.toLowerCase()
-            ? { ...s, coins: s.coins + 50 }
+          s.id === studentId
+            ? { ...s, coins: typeof d.coins === 'number' ? d.coins : s.coins + amount }
             : s
         )
       );
-      setNotice(`⭐ Đã duyệt sửa câu hỏi #${reportId} và tự động gửi tặng 50 Xu tri ân tới học sinh: ${studentEmail}!`);
+      setNotice(`🎁 Đã cộng +${amount} Xu thật vào DB cho học viên #${studentId.slice(0, 8)}!`);
+    } catch {
+      setError('❌ Lỗi kết nối khi gọi /api/admin/students.');
+    } finally {
+      setTimeout(() => setProcessingStudentId(null), 300);
+    }
+  };
+
+  // Hành động CRM: Gia hạn VIP (gọi thật POST /api/admin/students lưu user_subscriptions + audit log)
+  const handleExtendVipDays = async (studentId: string, days: number) => {
+    if (processingStudentId === studentId) return;
+    setProcessingStudentId(studentId);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch('/api/admin/students', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          action: 'extend_vip',
+          userId: studentId,
+          days,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.success) {
+        setError(`❌ ${d.error ?? 'Không thể gia hạn VIP trên máy chủ.'}`);
+        return;
+      }
+
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.id === studentId
+            ? { ...s, vipStatus: 'ACTIVE', vipExpiry: String(d.vipExpiry || s.vipExpiry) }
+            : s
+        )
+      );
+      setNotice(`📅 Đã gia hạn thêm +${days} ngày VIP thật trên DB cho học viên #${studentId.slice(0, 8)}!`);
+    } catch {
+      setError('❌ Lỗi kết nối khi gọi /api/admin/students.');
+    } finally {
+      setTimeout(() => setProcessingStudentId(null), 300);
+    }
+  };
+
+  // Hành động Question Triage: Sửa nhanh & Thưởng 50 Xu thật qua /api/admin/students
+  const handleResolveAndReward = async (reportId: string, studentEmail: string) => {
+    if (processingReportId === reportId) return;
+    setProcessingReportId(reportId);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch('/api/admin/students', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          action: 'reward_coins',
+          target: studentEmail,
+          amount: 50,
+          note: `Report triage reward #${reportId}`,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.success) {
+        setError(`❌ Chưa thể thưởng Xu cho ${studentEmail}: ${d.error ?? 'Không tìm thấy tài khoản.'}`);
+        return;
+      }
+      setReports((prev) =>
+        prev.map((r) => (r.id === reportId ? { ...r, status: 'RESOLVED' } : r))
+      );
+      setNotice(`⭐ Đã duyệt báo lỗi #${reportId} và cộng thật +50 Xu vào DB cho ${studentEmail}!`);
+    } catch {
+      setError('❌ Lỗi kết nối khi gửi thưởng Xu báo lỗi.');
     } finally {
       setTimeout(() => setProcessingReportId(null), 300);
     }
@@ -2429,6 +2390,11 @@ export default function AdminPage() {
           );
         })()}
 
+        {/* W3 #10 & #40: Hàng đợi báo lỗi câu hỏi + Quản trị động điểm chuẩn ĐH VN */}
+        <div className="mt-8">
+          <AdminOpsExtensions adminSecret={secret} />
+        </div>
+
         {/* =========================================================================
             FOOTER QUẢN TRỊ NỀN TẢNG SAT.GURU
            ========================================================================= */}
@@ -2439,7 +2405,7 @@ export default function AdminPage() {
                 SAT.Guru — Hệ Thống Luyện Thi Digital SAT AI (Admin Cockpit)
               </p>
               <p className="mt-1 text-slate-400">
-                Phụ trách học thuật: <span className="font-semibold text-slate-300">Thầy Nghĩa Guru (Nguyễn Trọng Nghĩa)</span>
+                Phụ trách học thuật: <span className="font-semibold text-slate-300">Thầy Nghĩa Guru (Nguyễn Viết Nghĩa)</span>
               </p>
               <p className="mt-1 text-slate-400">
                 Nền tảng EdTech độc lập — Luyện thi Digital SAT 1300–1550+ chuẩn College Board Bluebook

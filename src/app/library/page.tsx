@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { CorePracticeUI, type PracticeQuestion } from '@/components/CorePracticeUI';
 
 type QuestionCard = {
@@ -10,6 +11,7 @@ type QuestionCard = {
   source: string;
   subject: 'Reading & Writing' | 'Math';
   difficulty: string;
+  isLocked?: boolean;
 };
 
 type ActiveExam = {
@@ -247,6 +249,7 @@ export default function LibraryPage() {
   const [active, setActive] = useState<ActiveExam | null>(null);
   const [startingId, setStartingId] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
+  const [proLockBanner, setProLockBanner] = useState<string | null>(null);
 
   // =========================================================================
   // POINTS 93 & 97: CHẾ ĐỘ XEM CHI TIẾT CÂU HỎI & BỐ CỤC MOBILE / IPAD
@@ -390,14 +393,24 @@ export default function LibraryPage() {
     rememberScrollPosition();
     setStartingId(id);
     setStartError(null);
+    setProLockBanner(null);
     try {
       const res = await fetch('/api/library', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       });
-      if (!res.ok) throw new Error('start failed');
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 403 && data?.code === 'PRO_EXAM_REQUIRED') {
+        setProLockBanner(
+          data?.error || 'Bộ đề này thuộc kho đề chuyên sâu PRO/VIP. Nâng cấp tài khoản để mở khóa toàn bộ thư viện!'
+        );
+        return;
+      }
+      if (!res.ok) {
+        setStartError(data?.error || 'Không thể bắt đầu làm bài. Vui lòng thử lại.');
+        return;
+      }
       setActive({ question: data.question, timeLimit: data.timeLimit });
 
       // Đánh dấu câu đã làm vào danh sách
@@ -405,7 +418,9 @@ export default function LibraryPage() {
         const next = new Set(prev).add(id);
         try {
           localStorage.setItem('sat_completed_questions_v1', JSON.stringify(Array.from(next)));
-        } catch {}
+        } catch (err) {
+          console.warn('[library] Không thể lưu sat_completed_questions_v1:', err);
+        }
         return next;
       });
     } catch {
@@ -565,6 +580,21 @@ export default function LibraryPage() {
         </div>
       </div>
 
+      {proLockBanner && (
+        <div className="bg-purple-950/70 border border-purple-500/60 text-purple-100 rounded-xl px-4 py-3.5 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span>🔒</span>
+            <span>{proLockBanner}</span>
+          </div>
+          <Link
+            href="/upgrade"
+            className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-950 font-bold text-xs whitespace-nowrap hover:from-amber-300 hover:to-yellow-400 transition-all"
+          >
+            Nâng cấp PRO ngay →
+          </Link>
+        </div>
+      )}
+
       {startError && (
         <div className="bg-[#450a0a] border border-[#ef4444] text-[#fca5a5] rounded-xl px-4 py-3 text-sm flex items-center gap-2">
           <span>⚠️</span>
@@ -605,10 +635,10 @@ export default function LibraryPage() {
               >
                 <div className="flex-1 w-full">
                   <div className="flex items-center gap-2.5 mb-2.5 flex-wrap">
-                    {/* Bookmark Star Button (Point 95) */}
+                    {/* Bookmark Star Button (Point 95 — WCAG 2.1 touch target >= 44x44px) */}
                     <button
                       onClick={(e) => toggleBookmark(q.id, e)}
-                      className={`p-1.5 rounded-lg border transition-all ${
+                      className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg border transition-all ${
                         isBookmarked
                           ? 'bg-amber-400/20 text-amber-300 border-amber-400/50 shadow-sm'
                           : 'bg-[#141d2b] text-gray-400 border-[#2d3a4f] hover:text-amber-300'
@@ -618,6 +648,12 @@ export default function LibraryPage() {
                     >
                       {isBookmarked ? '⭐' : '☆'}
                     </button>
+
+                    {q.isLocked && (
+                      <span className="bg-purple-500/20 text-purple-200 text-xs px-2.5 py-1 rounded-md font-bold border border-purple-500/40">
+                        🔒 PRO
+                      </span>
+                    )}
 
                     <span className="bg-[#334155] text-white text-xs px-2.5 py-1 rounded-md font-mono font-medium">
                       {q.subject}
@@ -664,9 +700,13 @@ export default function LibraryPage() {
                   <button
                     onClick={() => handleStart(q.id)}
                     disabled={startingId !== null}
-                    className="flex-1 md:flex-none bg-gradient-to-r from-yellow-300 to-amber-500 hover:from-yellow-200 hover:to-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-[#78350f] px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition-all shadow-md active:scale-95 min-h-[44px] flex items-center justify-center gap-1.5"
+                    className={`flex-1 md:flex-none disabled:opacity-50 disabled:cursor-not-allowed px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition-all shadow-md active:scale-95 min-h-[44px] flex items-center justify-center gap-1.5 ${
+                      q.isLocked
+                        ? 'bg-purple-600/80 hover:bg-purple-500 text-white border border-purple-400/40'
+                        : 'bg-gradient-to-r from-yellow-300 to-amber-500 hover:from-yellow-200 hover:to-amber-400 text-[#78350f]'
+                    }`}
                   >
-                    {startingId === q.id ? '⏳ Đang mở...' : '🚀 Làm bài'}
+                    {startingId === q.id ? '⏳ Đang mở...' : q.isLocked ? '🔒 Mở khóa PRO' : '🚀 Làm bài'}
                   </button>
                 </div>
               </div>

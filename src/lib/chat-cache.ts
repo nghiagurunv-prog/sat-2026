@@ -23,6 +23,8 @@ export interface ChatCacheParts {
    * Bỏ trống → coi như '' (giữ khóa cũ cho caller chưa truyền → 0 regression).
    */
   model?: string;
+  /** Dải điểm mục tiêu tùy chọn ('sub1300' | '1300-1450' | '1500+') để cá nhân hóa cache theo mục tiêu. */
+  targetBand?: string;
 }
 
 /**
@@ -39,6 +41,7 @@ export function chatCacheHash(parts: ChatCacheParts): string {
     // Phân khoang theo model (thêm CUỐI): caller cũ không truyền → '' → khóa
     // trùng hệt bản trước khi tách model, nên cache cũ vẫn dùng lại được.
     norm(parts.model ?? ''),
+    norm(parts.targetBand ?? ''),
   ].join('');
   return crypto.createHash('sha256').update(key).digest('hex');
 }

@@ -8,8 +8,10 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { rawToScaled, type AdaptivePath } from '@/lib/exam-scoring';
 import { BluebookTools } from './BluebookTools';
+import { dispatchDesmosExpression } from './DesmosCalculator';
 import {
   computeHighlightOffsets,
+  slicePassageByHighlights,
   evaluateInExamPacing,
   inspectReviewQuestionStatus,
   type PassageHighlightRange,
@@ -479,7 +481,9 @@ export default function ExamRunner({
         try {
           const parsed = JSON.parse(historyRaw);
           if (Array.isArray(parsed)) combinedEntries = parsed;
-        } catch {}
+        } catch (err) {
+          console.warn('[ExamRunner] Không thể parse sat_exam_history_log_v1:', err);
+        }
       }
 
       // Fallback hoặc gộp nếu sat_exam_history_log_v1 chưa có hoặc ít hơn
@@ -516,7 +520,9 @@ export default function ExamRunner({
               existingIds.add(entryId);
             }
           });
-        } catch {}
+        } catch (err) {
+          console.warn('[ExamRunner] Không thể parse sat_exam_history_v1:', err);
+        }
       }
 
       setExamHistory(combinedEntries.slice(0, 50));
@@ -843,7 +849,9 @@ export default function ExamRunner({
     try {
       localStorage.removeItem(`sat_active_exam_session_${effectiveMode}`);
       setSavedSession(null);
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[ExamRunner] Không thể xoá bản nháp phiên thi:', e);
+    }
 
     // Lưu Lịch sử làm bài vào CẢ 2 KHÓA (Điểm 70: sat_exam_history_log_v1 & sat_exam_history_v1)
     try {
@@ -890,7 +898,9 @@ export default function ExamRunner({
           } else if (typeof parsedV1 === 'object' && parsedV1 !== null) {
             histV1List = Object.values(parsedV1).flat();
           }
-        } catch {}
+        } catch (err) {
+          console.warn('[ExamRunner] Không thể parse lịch sử thi cũ sat_exam_history_v1:', err);
+        }
       }
       const updatedV1 = [newEntry, ...histV1List].slice(0, 50);
       localStorage.setItem('sat_exam_history_v1', JSON.stringify(updatedV1));
@@ -1070,7 +1080,9 @@ export default function ExamRunner({
   const discardSavedSession = () => {
     try {
       localStorage.removeItem(`sat_active_exam_session_${effectiveMode}`);
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[ExamRunner] Không thể huỷ bản nháp phiên thi:', e);
+    }
     setSavedSession(null);
   };
 
@@ -1204,10 +1216,14 @@ export default function ExamRunner({
     const selection = window.getSelection();
     const selectedText = selection?.toString().trim();
     if (selectedText && selectedText.length > 0 && selectedText.length <= 600) {
+      const passageSource = currentQuestion?.full_passage || currentQuestion?.practice_question || '';
+      const existing = highlights[qKey] || [];
+      const range = computeHighlightOffsets(passageSource, selectedText, existing);
       const newH: PassageHighlight = {
         id: `${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         text: selectedText,
         color: activeHighlightColor,
+        ...(range ? { startOffset: range.startOffset, endOffset: range.endOffset } : {}),
       };
       setHighlights((prev) => ({
         ...prev,
@@ -1230,9 +1246,41 @@ export default function ExamRunner({
     }));
   };
 
-  // Hàm wrap chữ highlight trong đoạn văn
+  // Hàm wrap chữ highlight trong đoạn văn: ưu tiên slice theo startOffset/endOffset
+  // chuẩn Bluebook (không tô trùng các từ giống nhau khác vị trí); fallback regex cho dữ liệu cũ.
   const highlightTextNode = (text: string, hList: PassageHighlight[]) => {
     if (!hList || hList.length === 0 || !text) return text;
+    const getColorClass = (color: PassageHighlight['color']) => {
+      if (color === 'green') {
+        return 'bg-emerald-400/40 text-emerald-100 px-1 py-0.5 rounded border-b-2 border-emerald-400 font-medium';
+      }
+      if (color === 'pink') {
+        return 'bg-pink-400/40 text-pink-100 px-1 py-0.5 rounded border-b-2 border-pink-400 font-medium';
+      }
+      return 'bg-yellow-400/40 text-yellow-100 px-1 py-0.5 rounded border-b-2 border-yellow-400 font-medium';
+    };
+
+    const offsetMatched = hList.filter(
+      (h) =>
+        typeof h.startOffset === 'number' &&
+        typeof h.endOffset === 'number' &&
+        h.startOffset >= 0 &&
+        h.endOffset <= text.length &&
+        text.slice(h.startOffset, h.endOffset) === h.text
+    );
+    if (offsetMatched.length > 0) {
+      const slices = slicePassageByHighlights(text, offsetMatched);
+      return slices.map((slice, idx) =>
+        slice.highlight ? (
+          <mark key={slice.highlight.id || idx} className={getColorClass(slice.highlight.color)}>
+            {slice.text}
+          </mark>
+        ) : (
+          <span key={idx}>{slice.text}</span>
+        )
+      );
+    }
+
     const sortedH = [...hList].sort((a, b) => b.text.length - a.text.length);
     const escaped = sortedH.map((h) => h.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
     const regex = new RegExp(`(${escaped.join('|')})`, 'gi');
@@ -1242,14 +1290,8 @@ export default function ExamRunner({
     return parts.map((part, pIdx) => {
       const matched = sortedH.find((h) => h.text.toLowerCase() === part.toLowerCase());
       if (matched) {
-        let colorClass = 'bg-yellow-400/40 text-yellow-100 px-1 py-0.5 rounded border-b-2 border-yellow-400 font-medium';
-        if (matched.color === 'green') {
-          colorClass = 'bg-emerald-400/40 text-emerald-100 px-1 py-0.5 rounded border-b-2 border-emerald-400 font-medium';
-        } else if (matched.color === 'pink') {
-          colorClass = 'bg-pink-400/40 text-pink-100 px-1 py-0.5 rounded border-b-2 border-pink-400 font-medium';
-        }
         return (
-          <mark key={pIdx} className={colorClass}>
+          <mark key={pIdx} className={getColorClass(matched.color)}>
             {part}
           </mark>
         );
@@ -2559,8 +2601,8 @@ ${overTimeCount > 0 ? `⚠️ Câu ngâm quá 120s: ${overTimeCount} câu\n` : '
               </div>
             )}
 
-            {/* Bluebook Calculators / Tools */}
-            <BluebookTools compact />
+            {/* Bluebook Calculators / Tools (tách nháp theo từng câu hỏi qKey — #08) */}
+            <BluebookTools compact questionId={qKey} />
 
             {/* Điểm 02: Đồng hồ & Ẩn giờ / Cảnh báo <= 5 phút */}
             <div className="flex items-center gap-2 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-[#334155]">
@@ -2831,11 +2873,41 @@ ${overTimeCount > 0 ? `⚠️ Câu ngâm quá 120s: ${overTimeCount} câu\n` : '
             </div>
 
             {/* Đề bài câu hỏi */}
-            <div className={`font-bold text-white mb-6 ${getQuestionFontSize()}`}>
+            <div className={`font-bold text-white mb-4 ${getQuestionFontSize()}`}>
               <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                 {currentQuestion.practice_question}
               </ReactMarkdown>
             </div>
+
+            {/* W1 #01: Nút nạp biểu thức Toán 1-chạm vào Desmos ngay trong phòng thi Bluebook */}
+            {currentModule.section === 'math' && (() => {
+              const eqs: string[] = [];
+              const re = /\$([^$]{2,120})\$/g;
+              let m: RegExpExecArray | null;
+              while ((m = re.exec(currentQuestion.practice_question || '')) !== null) {
+                const expr = m[1].trim();
+                if (/[=xy^]|\\frac|\\sqrt/i.test(expr) && !eqs.includes(expr)) {
+                  eqs.push(expr);
+                }
+                if (eqs.length >= 2) break;
+              }
+              if (eqs.length === 0) return null;
+              return (
+                <div className="mb-4 flex flex-wrap items-center gap-2 bg-cyan-950/30 border border-cyan-500/30 rounded-xl px-3 py-2 text-xs">
+                  <span className="font-bold text-cyan-300">🧮 Desmos 1-Chạm:</span>
+                  {eqs.map((expr, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => dispatchDesmosExpression(expr, `Câu ${currentQuestionIndex + 1}`)}
+                      className="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-400/40 text-cyan-100 font-mono transition"
+                    >
+                      ⚡ Mở trên Desmos: <span className="text-amber-300">{expr.slice(0, 40)}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* DANH SÁCH ĐÁP ÁN: TRẮC NGHIỆM A-D HOẶC Ô ĐIỀN SỐ SPR GRID-IN */}
             {isSprQuestion ? (

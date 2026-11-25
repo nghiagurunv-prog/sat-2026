@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import { verifyStripeWebhook, isStripeConfigured } from '@/lib/payment-stripe';
 import { confirmPaymentAtomic } from '@/lib/payment-store';
+import {
+  emitMetric,
+  isWebhookRecentlyConfirmed,
+  markWebhookConfirmed,
+} from '@/lib/telemetry';
 
 /**
  * ============================================================================
@@ -53,6 +58,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ received: true });
     }
 
+    // 3.5) Kiểm tra loại tiền tệ (chặn lỗ hổng quy đổi tiền tệ: chỉ chấp nhận VND)
+    const currency = typeof session.currency === 'string' ? session.currency.trim().toLowerCase() : '';
+    if (currency && currency !== 'vnd') {
+      console.warn(`[stripe-webhook] Currency mismatch: expected vnd, got "${currency}"`);
+      emitMetric('payment_webhook_currency_mismatch', 1, {
+        gateway: 'stripe',
+        currency,
+        sessionId: session.id,
+      });
+      return NextResponse.json({ received: true, reason: 'currency_mismatch' }, { status: 200 });
+    }
+
     // 4) Map ngược về đơn: orderId ở metadata (ưu tiên) hoặc client_reference_id.
     const orderId = session.metadata?.orderId ?? session.client_reference_id ?? '';
     const gatewayTxnId =
@@ -61,11 +78,18 @@ export async function POST(req: Request) {
         : session.payment_intent?.id ?? '';
     const amountVnd = Number(session.amount_total ?? 0); // VND zero-decimal → = priceVnd
 
+    // Idempotent fast-path cho webhook retry trùng trong cửa sổ ngắn
+    const dedupKey = `stripe:${orderId}:${gatewayTxnId}`;
+    if (orderId && isWebhookRecentlyConfirmed(dedupKey)) {
+      return NextResponse.json({ received: true, alreadyPaid: true });
+    }
+
     // 5) Xác nhận atomic (kiểm tiền + idempotent + cấp gói nguyên tử A2 + hỗ trợ pending/expired).
     const outcome = await confirmPaymentAtomic(orderId, gatewayTxnId, amountVnd);
 
     // 5.1) Idempotent: Đơn đã thanh toán trước đó (order.status === 'paid') → bỏ qua không cộng trùng
     if (outcome.alreadyConfirmed) {
+      if (orderId) markWebhookConfirmed(dedupKey);
       return NextResponse.json({ received: true, alreadyPaid: true });
     }
 
@@ -73,6 +97,11 @@ export async function POST(req: Request) {
     if (!outcome.ok) {
       if (outcome.reason === 'amount_mismatch') {
         console.warn(`[stripe-webhook] Số tiền không khớp hoặc không đủ cho orderId=${orderId}: nhận ${amountVnd} VND`);
+        emitMetric('payment_webhook_amount_mismatch', 1, {
+          gateway: 'stripe',
+          orderId,
+          amountVnd,
+        });
         return NextResponse.json({ received: true, reason: 'amount_mismatch' }, { status: 200 });
       }
       if (outcome.reason === 'not_found') {
@@ -84,6 +113,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'Confirm failed, retry' }, { status: 500 });
     }
 
+    if (orderId) markWebhookConfirmed(dedupKey);
+    emitMetric('payment_webhook_confirmed', 1, {
+      gateway: 'stripe',
+      orderId,
+      amountVnd,
+    });
     return NextResponse.json({ received: true });
   } catch (error) {
     console.error('Lỗi stripe-webhook:', error);

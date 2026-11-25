@@ -2,15 +2,22 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { checkQuota, reserveQuota, finalizeUsage, releaseUsage } from '@/lib/ai-quota';
 import { getUserTier } from '@/lib/subscription-store';
-import { checkBudget, recordGlobalCost, modelForTier } from '@/lib/ai-cost';
+import { checkBudget, recordGlobalCost, modelForTier, resolveEffectiveAiTier } from '@/lib/ai-cost';
+
+export const maxDuration = 60;
 import {
   chatCacheHash,
   getCachedReply,
   bumpHitCount,
   saveCachedReply,
 } from '@/lib/chat-cache-store';
-import { OPENAI_CHAT_COMPLETIONS_URL } from '@/lib/openai';
-import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
+import { rateLimitDistributed, getRateLimitKey } from '@/lib/rate-limit';
+import {
+  callUnifiedLlm,
+  streamGeminiSse,
+  createTextSseStream,
+  sseResponse,
+} from '@/lib/ai-router';
 
 /**
  * ============================================================================
@@ -55,6 +62,22 @@ interface ChatRequest {
   targetScore?: number | string;
   skillId?: string;
   questionType?: string;
+  stream?: boolean;
+}
+
+function resolveTargetBand(raw?: number | string | null): string {
+  if (raw === null || raw === undefined || raw === '') return '';
+  const num = Number(raw);
+  if (!Number.isFinite(num)) return '';
+  if (num < 1300) return 'sub1300';
+  if (num <= 1450) return '1300-1450';
+  return '1500+';
+}
+
+function extractGuestCookieId(req: Request): string {
+  const cookieHeader = req.headers.get('cookie') ?? '';
+  const match = cookieHeader.match(/(?:^|;\s*)sat_guest_id=([a-zA-Z0-9_-]{8,64})/);
+  return match ? match[1] : '';
 }
 
 function clamp(s: unknown, max: number): string {
@@ -205,7 +228,7 @@ export async function POST(request: Request) {
     // Áp cho MỌI tier — premium/ultimate quota vô hạn nên đây là trần duy nhất
     // chặn 1 tài khoản đốt sạch budget chung.
     const rateLimitKey = getRateLimitKey(request, 'ai-chat', user?.id);
-    const rl = rateLimit(rateLimitKey, 10, 60_000);
+    const rl = await rateLimitDistributed(rateLimitKey, 10, 60_000);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: 'Bạn hỏi hơi nhanh. Chờ chút rồi thử lại nhé.', retryAfterMs: rl.retryAfterMs },
@@ -220,6 +243,7 @@ export async function POST(request: Request) {
     const model = modelForTier(tier);
 
     const body: ChatRequest = await request.json();
+    const wantsStream = body.stream === true;
 
     const fallbackMsgFromMessages = Array.isArray(body.messages) && body.messages.length > 0
       ? (body.messages[body.messages.length - 1]?.content || body.messages[body.messages.length - 1]?.text || '')
@@ -241,6 +265,7 @@ export async function POST(request: Request) {
 
     // Metadata tùy chọn từ body để cá nhân hóa độ sâu lời giải
     const targetScore = body.targetScore ? String(body.targetScore).slice(0, 50) : null;
+    const targetBand = resolveTargetBand(body.targetScore);
     const skillId = clamp(body.skillId, 100);
     const questionType = clamp(body.questionType, 100);
 
@@ -257,11 +282,20 @@ export async function POST(request: Request) {
         selectedAnswer: ctxSelected,
         userMessage: normalizedQuery, // Dùng query đã chuẩn hóa để tối ưu hóa tỷ lệ trúng cache
         model, // phân khoang cache theo model → Ultimate không nhận đáp án mini
+        targetBand, // phân khoang nhẹ theo dải mục tiêu (<1300 / 1300-1450 / 1500+)
       });
       const cached = await getCachedReply(cacheHash);
       if (cached) {
         bumpHitCount(cacheHash, cached.hitCount).catch((e) => console.error('bumpHitCount:', e));
         const q = await checkQuota(user.id, tier, 'chat');
+        if (wantsStream) {
+          return sseResponse(
+            createTextSseStream(cached.reply, {
+              cached: true,
+              quota: { used: q.used, limit: q.limit, remaining: q.remaining },
+            })
+          );
+        }
         return NextResponse.json({
           reply: cached.reply,
           cached: true,
@@ -270,20 +304,28 @@ export async function POST(request: Request) {
       }
     }
 
-    // 1) Quota freemium: enforce qua RESERVE-BEFORE-CALL (đóng C1 TOCTOU) — đặt
-    // NGAY TRƯỚC lời gọi OpenAI, SAU khi qua cổng apiKey + budget (để bail sớm
-    // KHÔNG chiếm slot). Xem khối reserve phía dưới.
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
+    // 1) Kiểm tra có ít nhất 1 LLM key (Gemini hoặc OpenAI) trước khi reserve quota.
+    const hasGemini = Boolean((process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim());
+    const hasOpenAi = Boolean((process.env.OPENAI_API_KEY || '').trim());
+    if (!hasGemini && !hasOpenAi) {
+      const fallbackReply = buildLocalSocraticFallback({
+        userMessage,
+        ctxQuestion,
+        ctxSelected,
+        ctxCorrect,
+        ctxExplanation,
+      });
+      if (wantsStream) {
+        return sseResponse(
+          createTextSseStream(fallbackReply, {
+            isFallback: true,
+            quota: { used: 0, limit: 5, remaining: 5 },
+          })
+        );
+      }
       return NextResponse.json(
         {
-          reply: buildLocalSocraticFallback({
-            userMessage,
-            ctxQuestion,
-            ctxSelected,
-            ctxCorrect,
-            ctxExplanation,
-          }),
+          reply: fallbackReply,
           isFallback: true,
           quota: { used: 0, limit: 5, remaining: 5 },
         },
@@ -304,22 +346,40 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2b) RESERVE 1 lượt NGUYÊN TỬ TRƯỚC khi gọi OpenAI.
-    // Khách vãng lai (!isAuthenticated) dùng bucket quota ngày theo IP (3 lượt/24h/IP)
-    // để tránh lỗi UUID 22P02 và không bao giờ vượt trần chi phí AI.
+    // 2b) RESERVE 1 lượt NGUYÊN TỬ TRƯỚC khi gọi AI.
+    // Khách vãng lai (!isAuthenticated): áp dụng 2 lớp rateLimitDistributed:
+    //   1) 3 lượt/ngày theo cookie sat_guest_id (nếu có) để Wi-Fi trường học NAT không khóa chéo nhau
+    //   2) Trần cứng 15 lượt/ngày theo IP (chống xoay cookie vô hạn đốt ngân sách AI).
     let reservation: { allowed: boolean; used: number; limit: number; remaining: number; reserved: boolean; date: string };
     if (!user.isAuthenticated) {
       const guestDailyLimit = 3;
-      const guestDailyKey = getRateLimitKey(request, 'ai-chat-guest-daily', null);
-      const guestRl = rateLimit(guestDailyKey, guestDailyLimit, 86_400_000);
-      reservation = {
-        allowed: guestRl.allowed,
-        used: guestDailyLimit - guestRl.remaining,
-        limit: guestDailyLimit,
-        remaining: guestRl.remaining,
-        reserved: false,
-        date: new Date().toISOString().split('T')[0],
-      };
+      const guestIpDailyCap = 15;
+      const guestCookieId = extractGuestCookieId(request);
+      const ipDailyKey = getRateLimitKey(request, 'ai-chat-guest-ip-daily', null);
+      const ipRl = await rateLimitDistributed(ipDailyKey, guestIpDailyCap, 86_400_000);
+      if (!ipRl.allowed) {
+        reservation = {
+          allowed: false,
+          used: guestIpDailyCap,
+          limit: guestIpDailyCap,
+          remaining: 0,
+          reserved: false,
+          date: new Date().toISOString().split('T')[0],
+        };
+      } else {
+        const guestDailyKey = guestCookieId
+          ? `ai-chat-guest-daily:gid:${guestCookieId}`
+          : getRateLimitKey(request, 'ai-chat-guest-daily', null);
+        const guestRl = await rateLimitDistributed(guestDailyKey, guestDailyLimit, 86_400_000);
+        reservation = {
+          allowed: guestRl.allowed,
+          used: guestDailyLimit - guestRl.remaining,
+          limit: guestDailyLimit,
+          remaining: guestRl.remaining,
+          reserved: false,
+          date: new Date().toISOString().split('T')[0],
+        };
+      }
     } else {
       reservation = await reserveQuota(user.id, tier, 'chat');
     }
@@ -403,63 +463,73 @@ export async function POST(request: Request) {
       }
     }
 
-    const requestBody = {
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...historyMessages,
-        { role: 'user', content: userMessage },
-      ],
-      max_tokens: MAX_TOKENS,
-      temperature: TEMPERATURE,
-    };
+    // Áp dụng trần fair-use ngày cho model cao cấp gpt-4o (Ultimate): vượt 60 lượt/ngày
+    // tự động degrade mềm về tier 'premium' (Flash/mini) để bảo vệ biên lợi nhuận mà không cắt dịch vụ.
+    const effectiveAiTier = resolveEffectiveAiTier(tier, reservation.used);
 
-    // Gọi OpenAI. Mọi đường LỖI (HTTP !ok, network throw, parse throw) → RELEASE
-    // slot đã reserve: lỗi hạ tầng KHÔNG được tính vào quota người dùng.
-    let data;
-    try {
-      const response = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
+    // Gọi Unified Multi-LLM Router (Gemini 2.5 Flash ↔ OpenAI failover tự động).
+    // Nếu client yêu cầu SSE stream (`stream: true`) và có Gemini key → stream trực tiếp.
+    if (wantsStream && hasGemini) {
+      const stream = await streamGeminiSse(
+        {
+          tier: effectiveAiTier,
+          systemPrompt,
+          userPrompt: userMessage,
+          history: historyMessages,
+          maxTokens: MAX_TOKENS,
+          temperature: TEMPERATURE,
         },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        console.error("OpenAI API Error:", errorData);
-        await releaseUsage(user.id, 'chat', reservation.reserved, reservation.date);
-        return NextResponse.json(
-          {
-            reply: buildLocalSocraticFallback({
-              userMessage,
-              ctxQuestion,
-              ctxSelected,
-              ctxCorrect,
-              ctxExplanation,
-            }),
-            isFallback: true,
-            quota: { used: 0, limit: 5, remaining: 5 },
+        {
+          onComplete: async (fullText, tokIn, tokOut) => {
+            await finalizeUsage(user.id, 'chat', tokIn, tokOut, reservation.reserved, reservation.date);
+            await recordGlobalCost(tokIn, tokOut, 'gemini-2.5-flash').catch((e) => console.error('recordGlobalCost:', e));
+            if (cacheable && effectiveAiTier === tier && fullText.trim()) {
+              saveCachedReply(cacheHash, normalizedQuery, fullText).catch((e) => console.error('saveCachedReply:', e));
+            }
           },
-          { status: 200 }
-        );
+          onError: async () => {
+            await releaseUsage(user.id, 'chat', reservation.reserved, reservation.date);
+          },
+        }
+      );
+      if (stream) {
+        return sseResponse(stream);
       }
+    }
 
-      data = await response.json();
+    // Đường gọi chuẩn (JSON hoặc fallback SSE): tự động failover Gemini ↔ OpenAI.
+    // Nếu cả 2 provider lỗi → RELEASE slot đã reserve + fallback Socratic cục bộ.
+    let llmResult;
+    try {
+      llmResult = await callUnifiedLlm({
+        tier: effectiveAiTier,
+        systemPrompt,
+        userPrompt: userMessage,
+        history: historyMessages,
+        maxTokens: MAX_TOKENS,
+        temperature: TEMPERATURE,
+      });
     } catch (e) {
       await releaseUsage(user.id, 'chat', reservation.reserved, reservation.date);
-      console.warn("OpenAI fetch exception, falling back to local Socratic reply:", e);
+      console.warn("Multi-LLM failover exhausted, falling back to local Socratic reply:", e);
+      const fallbackReply = buildLocalSocraticFallback({
+        userMessage,
+        ctxQuestion,
+        ctxSelected,
+        ctxCorrect,
+        ctxExplanation,
+      });
+      if (wantsStream) {
+        return sseResponse(
+          createTextSseStream(fallbackReply, {
+            isFallback: true,
+            quota: { used: 0, limit: 5, remaining: 5 },
+          })
+        );
+      }
       return NextResponse.json(
         {
-          reply: buildLocalSocraticFallback({
-            userMessage,
-            ctxQuestion,
-            ctxSelected,
-            ctxCorrect,
-            ctxExplanation,
-          }),
+          reply: fallbackReply,
           isFallback: true,
           quota: { used: 0, limit: 5, remaining: 5 },
         },
@@ -467,18 +537,27 @@ export async function POST(request: Request) {
       );
     }
 
-    const reply: string = data.choices?.[0]?.message?.content ?? '';
+    const reply: string = llmResult.text ?? '';
     if (!reply.trim()) {
       await releaseUsage(user.id, 'chat', reservation.reserved, reservation.date);
+      const fallbackReply = buildLocalSocraticFallback({
+        userMessage,
+        ctxQuestion,
+        ctxSelected,
+        ctxCorrect,
+        ctxExplanation,
+      });
+      if (wantsStream) {
+        return sseResponse(
+          createTextSseStream(fallbackReply, {
+            isFallback: true,
+            quota: { used: 0, limit: 5, remaining: 5 },
+          })
+        );
+      }
       return NextResponse.json(
         {
-          reply: buildLocalSocraticFallback({
-            userMessage,
-            ctxQuestion,
-            ctxSelected,
-            ctxCorrect,
-            ctxExplanation,
-          }),
+          reply: fallbackReply,
           isFallback: true,
           quota: { used: 0, limit: 5, remaining: 5 },
         },
@@ -487,25 +566,30 @@ export async function POST(request: Request) {
     }
 
     // 5) Chốt usage: count đã reserve ở bước 2b, giờ chỉ cộng token (reserved:true).
-    // Pre-migration (reserved:false) → finalizeUsage gọi recordUsage cũ (tăng count
-    // + token) → giữ hành vi cũ 0 regression.
-    const tokIn = data.usage?.prompt_tokens ?? 0;
-    const tokOut = data.usage?.completion_tokens ?? 0;
+    const tokIn = llmResult.tokensIn ?? 0;
+    const tokOut = llmResult.tokensOut ?? 0;
     await finalizeUsage(user.id, 'chat', tokIn, tokOut, reservation.reserved, reservation.date);
-    // Cộng chi phí vào sổ cái toàn hệ thống (kill-switch ngày — §9.5). AWAIT
-    // (audit 2026-07-03, ROOT D): fire-and-forget trên serverless có thể bị
-    // kill trước khi ghi → thất thoát trần ngân sách. .catch giữ để lỗi ghi
-    // KHÔNG làm hỏng reply.
-    await recordGlobalCost(tokIn, tokOut, model).catch((e) => console.error('recordGlobalCost:', e));
+    await recordGlobalCost(tokIn, tokOut, llmResult.model || model).catch((e) => console.error('recordGlobalCost:', e));
 
-    // 6) Lưu vào cache chia sẻ để HS sau hỏi giống thì khỏi gọi OpenAI (§5.3).
-    if (cacheable && reply) {
+    // 6) Lưu vào cache chia sẻ để HS sau hỏi giống thì khỏi gọi AI (§5.3).
+    // Không ghi vào bucket cache Ultimate nếu request vừa chạy ở chế độ fair-use degrade.
+    if (cacheable && effectiveAiTier === tier && reply) {
       saveCachedReply(cacheHash, normalizedQuery, reply).catch((e) => console.error('saveCachedReply:', e));
     }
 
     const after = await checkQuota(user.id, tier, 'chat');
+    if (wantsStream) {
+      return sseResponse(
+        createTextSseStream(reply, {
+          provider: llmResult.provider,
+          model: llmResult.model,
+          quota: { used: after.used, limit: after.limit, remaining: after.remaining },
+        })
+      );
+    }
     return NextResponse.json({
       reply,
+      provider: llmResult.provider,
       quota: { used: after.used, limit: after.limit, remaining: after.remaining },
     });
   } catch (error) {

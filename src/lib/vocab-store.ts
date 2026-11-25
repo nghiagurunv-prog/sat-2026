@@ -32,7 +32,10 @@ export async function loadVocab(userId: string): Promise<VocabData> {
   return { words: Array.isArray(data.words) ? data.words : [] };
 }
 
-export async function saveVocab(userId: string, data: VocabData): Promise<void> {
+export async function saveVocab(
+  userId: string,
+  data: VocabData
+): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient();
   const { error } = await supabase
     .from('user_vocab_srs')
@@ -41,5 +44,9 @@ export async function saveVocab(userId: string, data: VocabData): Promise<void> 
       { onConflict: 'user_id' }
     );
 
-  if (error) console.error('Lỗi khi lưu vocab lên Supabase:', error);
+  if (error) {
+    console.error('Lỗi khi lưu vocab lên Supabase:', error);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
 }

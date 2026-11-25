@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { verifyAdmin, logAdminAudit } from '@/lib/admin-auth';
 import { confirmPaymentAtomic } from '@/lib/payment-store';
-import { activateSubscription } from '@/lib/subscription-store';
+import { activateSubscription, revokeSubscription } from '@/lib/subscription-store';
 import * as subscriptionModule from '@/lib/subscription';
 import { emitMetric } from '@/lib/telemetry';
 
@@ -110,9 +110,9 @@ export async function POST(req: Request) {
     };
 
     const action = payload?.action;
-    if (action !== 'approve' && action !== 'cancel') {
+    if (action !== 'approve' && action !== 'cancel' && action !== 'refund') {
       return NextResponse.json(
-        { success: false, error: 'Hành động không hợp lệ. Chỉ chấp nhận action là approve hoặc cancel.' },
+        { success: false, error: 'Hành động không hợp lệ. Chỉ chấp nhận action là approve, cancel hoặc refund.' },
         { status: 400 }
       );
     }
@@ -221,9 +221,12 @@ export async function POST(req: Request) {
           const tier = order.tier || 'premium';
           let durationDays = Number(order.duration_days || 0);
           if (!durationDays) {
-            const subMod = subscriptionModule as Record<string, unknown>;
-            const PLANS = subMod.PLANS as Record<string, { durationDays?: number }> | undefined;
-            durationDays = PLANS?.[tier]?.durationDays || 30;
+            const paidTier: subscriptionModule.PaidTier = tier === 'ultimate' ? 'ultimate' : 'premium';
+            const period: subscriptionModule.BillingPeriod =
+              order.period === 'yearly' || order.period === 'semiannual' || order.period === 'quarterly'
+                ? order.period
+                : 'monthly';
+            durationDays = subscriptionModule.getPlan(paidTier, period)?.durationDays || 30;
           }
           if (userId) {
             await activateSubscription(userId, tier, durationDays, canonicalOrderId);
@@ -252,6 +255,61 @@ export async function POST(req: Request) {
         orderId: order.id ?? canonicalOrderId,
         orderCode: canonicalOrderId,
         status: 'paid',
+      });
+    } else if (action === 'refund') {
+      // action === 'refund' — hoàn tiền đơn đã thanh toán + thu hồi ngay quyền VIP trong user_subscriptions
+      if (order.status !== 'paid') {
+        return NextResponse.json(
+          { success: false, error: 'Chỉ có thể hoàn tiền cho đơn hàng ở trạng thái đã thanh toán (paid).' },
+          { status: 409 }
+        );
+      }
+
+      let nextDbStatus: 'refunded' | 'cancelled' = 'refunded';
+      let refundRes = await supabase
+        .from('payment_transactions')
+        .update({ status: 'refunded' })
+        .eq('order_id', canonicalOrderId)
+        .eq('status', 'paid')
+        .select('order_id');
+
+      if (refundRes.error && /check|constraint/i.test(refundRes.error.message || '')) {
+        // Fallback nếu bảng prod cũ chỉ có CHECK constraint cho 'cancelled'/'failed'
+        nextDbStatus = 'cancelled';
+        refundRes = await supabase
+          .from('payment_transactions')
+          .update({ status: 'cancelled' })
+          .eq('order_id', canonicalOrderId)
+          .eq('status', 'paid')
+          .select('order_id');
+      }
+
+      if (refundRes.error) {
+        return NextResponse.json({ success: false, error: refundRes.error.message }, { status: 500 });
+      }
+      if (!refundRes.data || refundRes.data.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Đơn hàng đã được xử lý bởi tiến trình khác.' },
+          { status: 409 }
+        );
+      }
+
+      const revoked = order.user_id ? await revokeSubscription(order.user_id) : false;
+      emitMetric('admin_order_refunded', 1, { gateway: order.gateway || 'manual', amountVnd: order.amount_vnd || 0 });
+      await logAdminAudit(auth.actor || 'admin', 'order_refund', canonicalOrderId, {
+        note: note || undefined,
+        orderCode: canonicalOrderId,
+        userId: order.user_id,
+        subscriptionRevoked: revoked,
+      });
+
+      return NextResponse.json({
+        success: true,
+        action: 'refund',
+        orderId: order.id ?? canonicalOrderId,
+        orderCode: canonicalOrderId,
+        status: nextDbStatus,
+        subscriptionRevoked: revoked,
       });
     } else {
       // action === 'cancel' — chỉ hủy khi chưa paid

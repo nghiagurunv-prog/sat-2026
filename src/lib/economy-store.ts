@@ -104,18 +104,24 @@ export async function loadQuestClaims(userId: string, today: string): Promise<st
 }
 
 export async function saveQuestClaim(userId: string, today: string, questId: string): Promise<void> {
-  const supabase = await createClient();
-  const { data } = await supabase
+  const admin = createAdminClient();
+  const { data, error: readErr } = await admin
     .from('user_economy')
     .select('quest_claims')
     .eq('user_id', userId)
-    .single();
+    .maybeSingle();
 
-  const claims = (data?.quest_claims ?? {}) as Record<string, string[]>;
-  if (!Array.isArray(claims[today])) claims[today] = [];
-  claims[today].push(questId);
+  if (readErr) {
+    console.error('saveQuestClaim read error:', readErr.message);
+    return;
+  }
 
-  const admin = createAdminClient();
+  const claims: Record<string, string[]> = { ...((data?.quest_claims ?? {}) as Record<string, string[]>) };
+  const bucket = Array.isArray(claims[today]) ? [...claims[today]] : [];
+  if (bucket.includes(questId)) return; // idempotent: đã ghi rồi thì không nhân bản
+  bucket.push(questId);
+  claims[today] = bucket;
+
   const { error } = await admin
     .from('user_economy')
     .update({ quest_claims: claims })

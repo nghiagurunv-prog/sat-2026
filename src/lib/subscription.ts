@@ -33,6 +33,12 @@ import type { AiTier } from './ai-quota';
  * ============================================================================
  */
 
+/** Hằng số thương hiệu & CSKH chính thức duy nhất của SAT.Guru (độc lập 100%, không dùng STK tĩnh). */
+export const OFFICIAL_BRAND_NAME = 'SAT.Guru — Thầy Nghĩa Guru';
+export const OFFICIAL_SUPPORT_HOTLINE = '0986.722.324';
+export const OFFICIAL_SUPPORT_TEL = '0986722324';
+export const OFFICIAL_SITE_URL = 'https://satguru.edu.vn';
+
 /** Gói trả phí (không gồm 'free'). */
 export type PaidTier = 'premium' | 'ultimate';
 export type SubscriptionTier = PaidTier | 'free' | 'pro';
@@ -408,4 +414,254 @@ export const SCORE_GUARANTEE_POLICY = {
   headlineVi: 'Cam kết tăng tối thiểu +100 điểm SAT hoặc hoàn 100% học phí',
   conditionVi:
     'Áp dụng cho học viên gói Ultimate hoàn thành >= 90% lộ trình Sprint & tối thiểu 6 đề thi thử Full-length Bluebook trên SAT.Guru.',
+} as const;
+
+/**
+ * ============================================================================
+ *  GÓI MUA CHUNG "BẠN CÙNG TIẾN" (Study Squad 2–3 người — Mục #23)
+ * ============================================================================
+ *  1 đơn PayOS duy nhất tự động sinh 2–3 mã kích hoạt Premium 90 ngày (mỗi người
+ *  dùng 1 tài khoản độc lập). Giảm 25% cho nhóm 2 và 35% cho nhóm 3 so với giá lẻ
+ *  Premium Quarterly (1.350.000₫/người).
+ */
+export interface StudySquadPack {
+  id: 'squad_2' | 'squad_3';
+  name: string;
+  seats: number;
+  tier: PaidTier;
+  period: BillingPeriod;
+  durationDays: number;
+  discountPercent: number;
+  pricePerSeatVnd: number;
+  priceVnd: number;
+  originalPriceVnd: number;
+  badge: string;
+  description: string;
+  features: string[];
+}
+
+export const STUDY_SQUAD_PACKS: readonly StudySquadPack[] = [
+  {
+    id: 'squad_2',
+    name: 'Bạn Cùng Tiến — Nhóm 2 Người (90 Ngày)',
+    seats: 2,
+    tier: 'premium',
+    period: 'quarterly',
+    durationDays: 90,
+    discountPercent: 25,
+    pricePerSeatVnd: 1_012_500,
+    priceVnd: 2_025_000,
+    originalPriceVnd: 2_700_000,
+    badge: '👯 Tiết kiệm 25% / bạn',
+    description: 'Rủ 1 bạn cùng lớp/trường chuyên đăng ký chung — 1 giao dịch PayOS nhận ngay 2 mã kích hoạt Premium 90 ngày độc lập.',
+    features: [
+      '2 tài khoản Premium độc lập 90 ngày (1.012.500₫/bạn)',
+      'Sinh 2 mã kích hoạt ngay sau khi PayOS xác nhận',
+      'Full Cây Kỹ Năng + Gia sư AI Socratic + Cổng Phụ Huynh riêng cho từng bạn',
+    ],
+  },
+  {
+    id: 'squad_3',
+    name: 'Tam Mã Trường Chuyên — Nhóm 3 Người (90 Ngày)',
+    seats: 3,
+    tier: 'premium',
+    period: 'quarterly',
+    durationDays: 90,
+    discountPercent: 35,
+    pricePerSeatVnd: 877_500,
+    priceVnd: 2_632_500,
+    originalPriceVnd: 4_050_000,
+    badge: '🔥 Tiết kiệm 35% • Rẻ nhất nhóm',
+    description: 'Bộ 3 đồng đội cùng cày SAT 1450+ — 1 giao dịch PayOS duy nhất tự động sinh 3 mã kích hoạt Premium 90 ngày.',
+    features: [
+      '3 tài khoản Premium độc lập 90 ngày (chỉ 877.500₫/bạn)',
+      'Tự động cấp 3 mã kích hoạt dùng ngay trên /upgrade',
+      'Thi đua BXH Liên Trường + Báo cáo Phụ Huynh từng học sinh',
+    ],
+  },
+];
+
+export interface CheckoutPlanSpec {
+  planId: string;
+  tier: PaidTier;
+  period: BillingPeriod;
+  priceVnd: number;
+  durationDays: number;
+  label: string;
+  seats: number;
+  kind: 'standard' | 'sprint' | 'squad';
+}
+
+/**
+ * Tra cứu hợp nhất 100% mọi gói hợp lệ cho /api/payment/create (Server-Authoritative):
+ * - Standard PLANS (`premium`/`ultimate` × `monthly`/`quarterly`/`semiannual`/`yearly`)
+ * - Sprint Packs (`sprint_24h`, `sprint_45d`, `sprint_squad`)
+ * - Study Squad Packs (`squad_2`, `squad_3`)
+ */
+export function resolveCheckoutPlan(args: {
+  planId?: string | null;
+  tier?: string | null;
+  period?: string | null;
+}): CheckoutPlanSpec | undefined {
+  const cleanPlanId = typeof args.planId === 'string' ? args.planId.trim().toLowerCase() : '';
+  if (cleanPlanId) {
+    const sprint = SPRINT_EXAM_PACKS.find((p) => p.id === cleanPlanId);
+    if (sprint) {
+      const period: BillingPeriod =
+        sprint.durationDays >= 90 ? 'quarterly' : 'monthly';
+      return {
+        planId: sprint.id,
+        tier: 'premium',
+        period,
+        priceVnd: sprint.priceVnd,
+        durationDays: sprint.durationDays,
+        label: sprint.name,
+        seats: sprint.id === 'sprint_squad' ? 3 : 1,
+        kind: 'sprint',
+      };
+    }
+
+    const squad = STUDY_SQUAD_PACKS.find((p) => p.id === cleanPlanId);
+    if (squad) {
+      return {
+        planId: squad.id,
+        tier: squad.tier,
+        period: squad.period,
+        priceVnd: squad.priceVnd,
+        durationDays: squad.durationDays,
+        label: squad.name,
+        seats: squad.seats,
+        kind: 'squad',
+      };
+    }
+
+    const parts = cleanPlanId.split('_');
+    if (parts.length === 2) {
+      const std = getPlan(parts[0] as PaidTier, parts[1] as BillingPeriod);
+      if (std) {
+        return {
+          planId: `${std.tier}_${std.period}`,
+          tier: std.tier,
+          period: std.period,
+          priceVnd: std.priceVnd,
+          durationDays: std.durationDays,
+          label: `${std.tier === 'ultimate' ? 'Ultimate' : 'Premium'} (${std.period})`,
+          seats: 1,
+          kind: 'standard',
+        };
+      }
+    }
+    return undefined;
+  }
+
+  if (args.tier && args.period) {
+    const std = getPlan(args.tier as PaidTier, args.period as BillingPeriod);
+    if (std) {
+      return {
+        planId: `${std.tier}_${std.period}`,
+        tier: std.tier,
+        period: std.period,
+        priceVnd: std.priceVnd,
+        durationDays: std.durationDays,
+        label: `${std.tier === 'ultimate' ? 'Ultimate' : 'Premium'} (${std.period})`,
+        seats: 1,
+        kind: 'standard',
+      };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * ============================================================================
+ *  BẢO LƯU GÓI HỌC MÙA THI HỌC KỲ (Subscription Freeze — Mục #25, chuẩn #G8)
+ * ============================================================================
+ *  Thuần khiết (0 I/O), tiêm `nowISO` để unit-test xác định.
+ *  Cho phép bảo lưu 1 lần (7–14 ngày) khi học sinh bận thi giữa kỳ/cuối kỳ THPT;
+ *  hạn sử dụng mới được cộng dồn chính xác số ngày bảo lưu.
+ */
+export const SUBSCRIPTION_FREEZE_MIN_DAYS = 7;
+export const SUBSCRIPTION_FREEZE_MAX_DAYS = 14;
+
+export interface SubscriptionFreezeState {
+  freezeUsed?: boolean;
+  frozenFrom?: string | null;
+  frozenUntil?: string | null;
+  frozenDays?: number;
+}
+
+export interface FreezableSubscription extends SubscriptionRecord, SubscriptionFreezeState {}
+
+export function isSubscriptionFrozen(
+  sub: FreezableSubscription | null,
+  nowISO: string
+): boolean {
+  if (!sub?.frozenFrom || !sub?.frozenUntil) return false;
+  const nowMs = Date.parse(nowISO);
+  const fromMs = Date.parse(sub.frozenFrom);
+  const untilMs = Date.parse(sub.frozenUntil);
+  if (Number.isNaN(nowMs) || Number.isNaN(fromMs) || Number.isNaN(untilMs)) return false;
+  return nowMs >= fromMs && nowMs < untilMs;
+}
+
+export function canFreezeSubscription(
+  sub: FreezableSubscription | null,
+  days: number,
+  nowISO: string
+): { allowed: boolean; reason?: string } {
+  if (!sub || !isActive(sub, nowISO, 0)) {
+    return { allowed: false, reason: 'Gói học hiện không còn hiệu lực để bảo lưu.' };
+  }
+  if (sub.freezeUsed) {
+    return { allowed: false, reason: 'Bạn đã sử dụng quyền bảo lưu 1 lần cho chu kỳ gói hiện tại.' };
+  }
+  if (isSubscriptionFrozen(sub, nowISO)) {
+    return { allowed: false, reason: 'Gói học hiện đang trong trạng thái bảo lưu.' };
+  }
+  const intDays = Math.floor(days);
+  if (!Number.isFinite(intDays) || intDays < SUBSCRIPTION_FREEZE_MIN_DAYS || intDays > SUBSCRIPTION_FREEZE_MAX_DAYS) {
+    return {
+      allowed: false,
+      reason: `Thời gian bảo lưu hợp lệ từ ${SUBSCRIPTION_FREEZE_MIN_DAYS} đến ${SUBSCRIPTION_FREEZE_MAX_DAYS} ngày.`,
+    };
+  }
+  return { allowed: true };
+}
+
+export function applySubscriptionFreeze(
+  sub: FreezableSubscription,
+  days: number,
+  nowISO: string
+): { ok: true; updated: FreezableSubscription } | { ok: false; reason: string } {
+  const check = canFreezeSubscription(sub, days, nowISO);
+  if (!check.allowed) {
+    return { ok: false, reason: check.reason ?? 'Không đủ điều kiện bảo lưu.' };
+  }
+  const intDays = Math.floor(days);
+  const frozenUntil = computeExpiry(nowISO, intDays);
+  const newExpiresAt = computeExpiry(sub.expiresAt, intDays);
+  return {
+    ok: true,
+    updated: {
+      ...sub,
+      expiresAt: newExpiresAt,
+      freezeUsed: true,
+      frozenFrom: nowISO,
+      frozenUntil,
+      frozenDays: intDays,
+    },
+  };
+}
+
+/**
+ * Chính sách Bảo Lãnh Tiến Bộ Điểm Số Minh Bạch (Score Assurance — Mục #28).
+ */
+export const SCORE_ASSURANCE_POLICY = {
+  minSkillTreeCompletionPct: 80,
+  minStreakDays: 45,
+  minFullMocksCompleted: 4,
+  minGainPoints: 100,
+  remedyVi: 'Gia hạn miễn phí 60 ngày gói tương đương hoặc hoàn 100% học phí theo yêu cầu phụ huynh.',
+  summaryVi:
+    'Hoàn thành >= 80% Cây Kỹ Năng + duy trì streak >= 45 ngày + làm đủ >= 4 đề thi thử Full-length Bluebook mà điểm thi thật tăng dưới +100 điểm so với Diagnostic đầu vào.',
 } as const;

@@ -37,6 +37,12 @@ const PUBLIC_EXACT_PATHS = new Set<string>([
   '/scholarship',
   '/journey',
   '/study-plan',
+  '/join',
+  '/terms',
+  '/privacy',
+  '/refund',
+  '/contact',
+  '/pvp',
 ])
 
 /**
@@ -45,11 +51,14 @@ const PUBLIC_EXACT_PATHS = new Set<string>([
 const PUBLIC_PREFIXES = [
   '/auth', // OAuth / email-confirm callback
   '/parent', // trang phụ huynh đọc ?code= (no-auth) — /parent-share không khớp vì cần đúng prefix + '/'
+  '/uni-predict', // SEO SSG/ISR Hub xét tuyển SAT các trường ĐH Top VN (#29)
   '/admin', // tự bảo vệ 2 lớp (ADMIN_SECRET + session admin)
   '/exams', // phòng thi thử Guest Trial (/exams/[id])
   // API xác thực, webhook & cron
   '/api/auth',
+  '/api/health',
   '/api/cron', // Vercel Cron tự xác thực bằng Authorization: Bearer CRON_SECRET (timing-safe)
+  '/api/payment/create', // tự xác thực 2 nhánh: user session hoặc parentShareCode hợp lệ (401/403 nếu thiếu)
   '/api/payment/momo-ipn',
   '/api/payment/vnpay-ipn',
   '/api/payment/stripe-webhook',
@@ -57,6 +66,10 @@ const PUBLIC_PREFIXES = [
   '/api/payment/return',
   '/api/parent/report',
   '/api/admin', // tự bảo vệ bằng verifyAdmin
+  '/api/og', // Dynamic OG SVG card chia sẻ Zalo/Facebook (#20)
+  '/api/activity', // Verified Activity Ticker công khai không PII (#27)
+  '/api/b2b', // Form đăng ký Dùng thử 14 ngày Trung tâm (#39)
+  '/api/diagnostic', // Diagnostic test 5 câu Guest Trial (#3)
   // API hỗ trợ Guest/Trial (có rate-limit theo IP)
   '/api/exams',
   '/api/exam-session',

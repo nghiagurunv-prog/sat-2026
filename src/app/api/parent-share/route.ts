@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
 import { getCurrentUser } from '@/lib/auth';
-import { rateLimit, checkRateLimit, getRateLimitKey } from '@/lib/rate-limit';
+import { rateLimitDistributed, getRateLimitKey } from '@/lib/rate-limit';
 import { createShareCode, listShareCodes, revokeShareCode, resolveShareCode } from '@/lib/parent-share-store';
 import { isValidCodeFormat } from '@/lib/parent-share';
+
+/** Thời hạn mặc định cho mã chia sẻ phụ huynh: 30 ngày (chống mã sống vĩnh viễn #2). */
+const DEFAULT_SHARE_CODE_TTL_DAYS = 30;
 
 /**
  * Che bớt email để bảo vệ quyền riêng tư học sinh (ví dụ: ab***@gmail.com).
@@ -20,24 +22,10 @@ function maskEmail(email?: string | null): string {
 }
 
 /**
- * Sinh mã chia sẻ ngẫu nhiên an toàn bằng crypto.randomBytes.
- * Sử dụng tập ký tự không gây nhầm lẫn thị giác (bỏ 0, O, 1, I, L) với độ dài >= 8 ký tự.
- */
-const SAFE_CODE_CHARS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-function generateSecureShareCode(length = 8): string {
-  const bytes = crypto.randomBytes(length);
-  let code = '';
-  for (let i = 0; i < length; i++) {
-    code += SAFE_CODE_CHARS[bytes[i] % SAFE_CODE_CHARS.length];
-  }
-  return code;
-}
-
-/**
  * PARENT SHARE — học sinh quản lý mã chia sẻ tiến độ cho phụ huynh.
  *
  * GET                       → list mã của mình (kèm trạng thái revoked/expires).
- * POST {action:'generate'}  → sinh mã mới (rate-limit chống spam mã).
+ * POST {action:'generate'}  → sinh mã mới có hạn 30 ngày (rate-limit chống spam).
  * POST {action:'revoke', code} → thu hồi 1 mã của mình.
  *
  * Yêu cầu đăng nhập (student). Ghi qua service-role trong store; RLS chỉ cho
@@ -46,17 +34,13 @@ function generateSecureShareCode(length = 8): string {
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
 
-  // Rate limit tra cứu mã: 15 req / phút với key chuẩn từ getRateLimitKey
-  const limiter = typeof checkRateLimit === 'function' ? checkRateLimit : rateLimit;
-  const rlKey = typeof getRateLimitKey === 'function'
-    ? getRateLimitKey(req, 'parent-share', user.isAuthenticated ? user.id : undefined)
-    : `parent-share:${user.isAuthenticated ? user.id : 'anon'}`;
-  const rl = limiter(rlKey, 15, 60_000);
+  const rlKey = getRateLimitKey(req, 'parent-share', user.isAuthenticated ? user.id : undefined);
+  const rl = await rateLimitDistributed(rlKey, 15, 60_000);
   if (!rl.allowed) {
     return NextResponse.json({ error: 'Quá nhiều yêu cầu. Vui lòng thử lại sau.', retryAfterMs: rl.retryAfterMs }, { status: 429 });
   }
 
-  // Hỗ trợ kiểm tra mã chia sẻ công khai qua query param
+  // Hỗ trợ kiểm tra tính hợp lệ của mã công khai (KHÔNG lộ studentId UUID nội bộ — vá #9)
   const codeParam = req.nextUrl?.searchParams?.get('code');
   if (codeParam) {
     if (!isValidCodeFormat(codeParam)) {
@@ -66,7 +50,7 @@ export async function GET(req: NextRequest) {
     if (!studentId) {
       return NextResponse.json({ error: 'Mã không tồn tại hoặc đã hết hạn' }, { status: 404 });
     }
-    return NextResponse.json({ valid: true, studentId });
+    return NextResponse.json({ valid: true });
   }
 
   if (!user.isAuthenticated) {
@@ -74,13 +58,12 @@ export async function GET(req: NextRequest) {
   }
 
   const rawCodes = await listShareCodes(user.id);
-  // Che bớt email nếu có thông tin email gắn kèm mã
   const codes = Array.isArray(rawCodes)
-    ? rawCodes.map((item: any) => {
+    ? rawCodes.map((item) => {
         if (item && typeof item === 'object') {
-          const sanitized = { ...item };
-          if (sanitized.email) sanitized.email = maskEmail(sanitized.email);
-          if (sanitized.studentEmail) sanitized.studentEmail = maskEmail(sanitized.studentEmail);
+          const sanitized = { ...item } as Record<string, unknown>;
+          if (typeof sanitized.email === 'string') sanitized.email = maskEmail(sanitized.email);
+          if (typeof sanitized.studentEmail === 'string') sanitized.studentEmail = maskEmail(sanitized.studentEmail);
           return sanitized;
         }
         return item;
@@ -96,12 +79,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Cần đăng nhập' }, { status: 401 });
   }
 
-  // Rate-limit chuẩn 15 req / phút chống brute-force và spam tạo mã
-  const limiter = typeof checkRateLimit === 'function' ? checkRateLimit : rateLimit;
-  const rlKey = typeof getRateLimitKey === 'function'
-    ? getRateLimitKey(req, 'parent-share', user.id)
-    : `parent-share:${user.id}`;
-  const rl = limiter(rlKey, 15, 60_000);
+  const rlKey = getRateLimitKey(req, 'parent-share', user.id);
+  const rl = await rateLimitDistributed(rlKey, 15, 60_000);
   if (!rl.allowed) {
     return NextResponse.json({ error: 'Quá nhiều lần tạo mã. Thử lại sau.', retryAfterMs: rl.retryAfterMs }, { status: 429 });
   }
@@ -110,13 +89,13 @@ export async function POST(req: NextRequest) {
   const action = body?.action;
 
   if (action === 'generate') {
-    // Sinh mã ngẫu nhiên an toàn bằng crypto.randomBytes chống dò mã
-    const secureCode = generateSecureShareCode(8);
-    const code = await (createShareCode as (userId: string, customCode?: string) => Promise<string | null>)(user.id, secureCode);
+    const rawTtl = typeof body?.ttlDays === 'number' && Number.isFinite(body.ttlDays) ? Math.floor(body.ttlDays) : DEFAULT_SHARE_CODE_TTL_DAYS;
+    const ttlDays = Math.min(90, Math.max(1, rawTtl));
+    const code = await createShareCode(user.id, ttlDays);
     if (!code) {
       return NextResponse.json({ error: 'Không thể tạo mã. Vui lòng thử lại.' }, { status: 503 });
     }
-    return NextResponse.json({ code });
+    return NextResponse.json({ code, ttlDays });
   }
 
   if (action === 'revoke') {

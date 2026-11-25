@@ -110,8 +110,12 @@ export function checkWebhookTimestampAnomaly(
   let parsedMs: number | null = null;
   const s = String(rawTimestamp).trim();
 
-  // VNPay format: YYYYMMDDHHmmss (GMT+7)
-  if (/^\d{14}$/.test(s)) {
+  // Epoch milliseconds (MoMo responseTime)
+  if (/^\d{13}$/.test(s)) {
+    const t = Number(s);
+    if (Number.isFinite(t)) parsedMs = t;
+  } else if (/^\d{14}$/.test(s)) {
+    // VNPay format: YYYYMMDDHHmmss (GMT+7)
     const iso = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T${s.slice(8, 10)}:${s.slice(10, 12)}:${s.slice(12, 14)}+07:00`;
     const t = Date.parse(iso);
     if (!Number.isNaN(t)) parsedMs = t;

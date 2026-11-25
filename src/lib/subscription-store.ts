@@ -251,17 +251,50 @@ export async function activateSubscription(
     );
 
     if (error) {
-      await admin.from('user_subscriptions').insert({
+      const { error: insertErr } = await admin.from('user_subscriptions').insert({
         user_id: userId,
         tier: effectiveTier,
         period,
         started_at: nowISO,
         expires_at: newExpiresAt,
       });
+      if (insertErr) {
+        console.error('activateSubscription insert fallback lỗi:', insertErr);
+        return false;
+      }
     }
     return true;
   } catch (err) {
     console.error('activateSubscription lỗi:', err);
+    return false;
+  }
+}
+
+/**
+ * Thu hồi / hạ cấp gói trả phí của user khi Admin xử lý hoàn tiền (`refund`)
+ * hoặc hủy kích hoạt khẩn cấp. Đặt `expires_at` về quá khứ vượt quá grace period (12h)
+ * để quyền VIP chấm dứt ngay lập tức nhưng vẫn giữ bản ghi đối soát lịch sử.
+ */
+export async function revokeSubscription(userId: string): Promise<boolean> {
+  try {
+    const admin = createAdminClient();
+    const nowMs = Date.now();
+    // Lùi 24h để vượt qua cả 12h grace period trong selectBestSubscription
+    const revokedIso = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();
+    const nowIso = new Date(nowMs).toISOString();
+
+    const { error } = await admin
+      .from('user_subscriptions')
+      .update({ expires_at: revokedIso, updated_at: nowIso })
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('revokeSubscription lỗi:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('revokeSubscription lỗi:', err);
     return false;
   }
 }

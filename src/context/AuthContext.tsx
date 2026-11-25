@@ -55,6 +55,55 @@ function clearUserLocalCaches() {
   }
 }
 
+/**
+ * W2 #19: Tự động đồng bộ mượt dữ liệu Học thử 3 phút (sat_exam_history_v1,
+ * sat_mistake_bank_v1, sat_vocab_vault) lên Supabase ngay sau khi đăng nhập.
+ * Idempotent theo từng userId để không lặp lại nhiều lần.
+ */
+async function autoMigrateGuestProgress(userId: string): Promise<void> {
+  if (typeof window === 'undefined' || !userId) return;
+  const markerKey = `sat_guest_migrated_${userId}`;
+  try {
+    if (localStorage.getItem(markerKey) === '1') return;
+
+    const rawHistory = localStorage.getItem('sat_exam_history_v1');
+    const rawMistakes = localStorage.getItem('sat_mistake_bank_v1');
+    const rawVocab = localStorage.getItem('sat_vocab_vault');
+    const rawCoins = localStorage.getItem('sat_user_coins');
+
+    const history = rawHistory ? JSON.parse(rawHistory) : [];
+    const mistakes = rawMistakes ? JSON.parse(rawMistakes) : [];
+    const vocab = rawVocab ? JSON.parse(rawVocab) : [];
+
+    const hasGuestData =
+      (Array.isArray(history) && history.length > 0) ||
+      (Array.isArray(mistakes) && mistakes.length > 0) ||
+      (Array.isArray(vocab) && vocab.length > 0);
+
+    if (!hasGuestData) {
+      localStorage.setItem(markerKey, '1');
+      return;
+    }
+
+    const res = await fetch('/api/migrate-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        history: Array.isArray(history) ? history.slice(0, 50) : [],
+        mistakes: Array.isArray(mistakes) ? mistakes.slice(0, 100) : [],
+        vocab: Array.isArray(vocab) ? vocab.slice(0, 200) : [],
+        coins: rawCoins ? Math.min(500, Math.max(0, parseInt(rawCoins, 10) || 0)) : 0,
+      }),
+    });
+    if (res.ok) {
+      localStorage.setItem(markerKey, '1');
+      window.dispatchEvent(new CustomEvent('sat_mistake_bank_updated'));
+    }
+  } catch {
+    // Không làm gián đoạn luồng đăng nhập nếu mạng chậm
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -83,9 +132,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     supabase.auth.getSession().then(({ data }) => {
       if (!isMounted) return;
-      setUser(data.session?.user ?? null);
+      const u = data.session?.user ?? null;
+      setUser(u);
       setSession(data.session ?? null);
       setIsLoading(false);
+      if (u?.id) void autoMigrateGuestProgress(u.id);
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
@@ -93,7 +144,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === 'SIGNED_OUT') {
         clearUserLocalCaches();
       }
-      setUser(session?.user ?? null);
+      const u = session?.user ?? null;
+      if (event === 'SIGNED_IN' && u?.id) {
+        void autoMigrateGuestProgress(u.id);
+      }
+      setUser(u);
       setSession(session ?? null);
       setIsLoading(false);
     });

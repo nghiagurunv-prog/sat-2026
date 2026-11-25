@@ -2,6 +2,9 @@
   "name": "sat-prep-web",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=23.6"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import ./src/test-int/loader-register.mjs --test \"src/**/*.test.ts\" \"src/test-int/**/*.test.mjs\"",
     "verify": "npm run typecheck && npm test",
+    "verify:release": "npm run typecheck && npm test && npm run lint && npm run build:webpack",
     "e2e": "playwright test"
   },
   "dependencies": {

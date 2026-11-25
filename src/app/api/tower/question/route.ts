@@ -4,6 +4,8 @@ import { getMasterySummary } from '@/lib/mastery';
 import { pickTowerSkill } from '@/lib/adaptive';
 import { getUserTier } from '@/lib/subscription-store';
 import { TIER_TOWER_CAP_PER_DAY } from '@/lib/subscription';
+import { rateLimitDistributed, getRateLimitKey } from '@/lib/rate-limit';
+import { POST as generatePracticePost } from '@/app/api/generate-practice/route';
 
 /**
  * TOWER QUESTION API — Tháp Vô Tận adaptive (V1, kế thừa engine task #12).
@@ -24,6 +26,14 @@ import { TIER_TOWER_CAP_PER_DAY } from '@/lib/subscription';
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
 
+  const rl = await rateLimitDistributed(getRateLimitKey(request, 'tower-q', user.id), 15, 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Bạn leo tháp hơi nhanh. Chờ chút rồi thử lại nhé.', retryAfterMs: rl.retryAfterMs },
+      { status: 429 }
+    );
+  }
+
   // Giới hạn count / limit truy vấn tối đa (<= 50) chống DoS/treo server (#016)
   const countParam = request.nextUrl.searchParams.get('count') ?? request.nextUrl.searchParams.get('limit');
   if (countParam !== null) {
@@ -42,7 +52,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'floor phải là số nguyên >= 1' }, { status: 400 });
   }
 
-  // Cap theo gói: floor yêu cầu không được vượt cap/ngày. Free 5, premium 20, ultimate 50.
+  // Cap theo gói: floor yêu cầu không được vượt cap/ngày VÀ tổng số lượt gọi trong 24h không vượt cap*2 (chống lặp floor=1 vô hạn).
   const tier = await getUserTier(user.id);
   const towerCap = TIER_TOWER_CAP_PER_DAY[tier];
   if (floor > towerCap) {
@@ -55,6 +65,19 @@ export async function GET(request: NextRequest) {
       { status: 403 }
     );
   }
+  // Cap theo gói chuẩn (vá #12): dùng rateLimitDistributed đúng mức towerCap (không nhân đôi)
+  const dailyTowerKey = getRateLimitKey(request, 'tower-daily', user.id);
+  const dailyTowerRl = await rateLimitDistributed(dailyTowerKey, towerCap, 86_400_000);
+  if (!dailyTowerRl.allowed) {
+    return NextResponse.json(
+      {
+        error: `Bạn đã đạt giới hạn ${towerCap} tầng Tháp hôm nay cho gói ${tier}. Nâng cấp để leo cao hơn!`,
+        tierLocked: tier === 'free',
+        towerCap,
+      },
+      { status: 429 }
+    );
+  }
 
   const summary = await getMasterySummary(user.id);
   const pick = pickTowerSkill(summary.skills, floor);
@@ -63,9 +86,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const res = await fetch(new URL('/api/generate-practice', request.nextUrl.origin), {
+    // Gọi trực tiếp handler nội bộ — không forward cookie qua request.nextUrl.origin
+    const internalReq = new Request('http://internal.satguru.local/api/generate-practice', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', cookie: request.headers.get('cookie') ?? '' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         moduleType: pick.moduleType,
         topic: pick.label,
@@ -73,6 +97,7 @@ export async function GET(request: NextRequest) {
         difficulty: pick.difficulty,
       }),
     });
+    const res = await generatePracticePost(internalReq);
 
     if (!res.ok) {
       // Chuyển nguyên trạng thái lỗi (quota 429 / budget 503 / cấu hình 500) để

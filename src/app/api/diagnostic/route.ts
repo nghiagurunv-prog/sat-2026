@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitDistributed, getRateLimitKey } from '@/lib/rate-limit';
 import { getDiagnosticQuestions, stripQuestion } from '@/lib/diagnostic';
 import { issueQuestion, countAnsweredQuestionsBySource, getIssuedSkillStateBySource, gradeAnswer } from '@/lib/issued-questions';
 import { loadOnboarding, saveOnboardingComplete } from '@/lib/onboarding-store';
 import { setGoal, predictScore } from '@/lib/score-prediction';
 import { getUserTier } from '@/lib/subscription-store';
-import { matchesAnswer } from '@/lib/answer-match';
 
 /**
  * DIAGNOSTIC ONBOARDING — bài test xếp lớp đầu vào (§10.A.2/§10.A.5).
@@ -43,7 +42,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Bạn cần đăng nhập để làm bài test xếp lớp.' }, { status: 401 });
   }
 
-  const rl = rateLimit(`diagnostic:${user.id}`, 5, 60_000);
+  const rl = await rateLimitDistributed(getRateLimitKey(req, 'diagnostic', user.id), 15, 60_000);
   if (!rl.allowed) {
     return NextResponse.json({ error: 'Quá nhiều request. Thử lại sau.', retryAfterMs: rl.retryAfterMs }, { status: 429 });
   }
@@ -124,20 +123,27 @@ export async function POST(req: Request) {
   }
 
   if (action === 'grade') {
-    const { questionId, answer, userAns, correctAns } = body ?? {};
+    // Server-authoritative (#3): tuyệt đối KHÔNG nhận correctAns từ client.
+    const { questionId, answer, userAns } = body ?? {};
     const submittedAns = userAns ?? answer;
-    let isCorrect = false;
-    if (questionId && submittedAns !== undefined) {
-      const res = await gradeAnswer(questionId, user.id, String(submittedAns));
-      if (res) {
-        isCorrect = res.correct;
-      } else if (correctAns !== undefined) {
-        isCorrect = matchesAnswer(String(submittedAns ?? ''), String(correctAns ?? ''));
-      }
-    } else if (submittedAns !== undefined && correctAns !== undefined) {
-      isCorrect = matchesAnswer(String(submittedAns ?? ''), String(correctAns ?? ''));
+    if (typeof questionId !== 'string' || !questionId.trim() || submittedAns === undefined || submittedAns === null) {
+      return NextResponse.json(
+        { error: 'Thiếu questionId hoặc đáp án để chấm server-side.' },
+        { status: 400 }
+      );
     }
-    return NextResponse.json({ correct: isCorrect });
+    const res = await gradeAnswer(questionId.trim(), user.id, String(submittedAns));
+    if (!res) {
+      return NextResponse.json(
+        { error: 'Không tìm thấy câu hỏi diagnostic hợp lệ hoặc câu đã được chấm.' },
+        { status: 404 }
+      );
+    }
+    return NextResponse.json({
+      correct: res.correct,
+      correctChoice: res.correctChoice,
+      choice_analysis: res.choiceAnalysis,
+    });
   }
 
   return NextResponse.json({ error: 'action không hợp lệ' }, { status: 400 });

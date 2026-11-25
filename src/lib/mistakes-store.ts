@@ -84,21 +84,27 @@ export async function addMistake(
   const supabase = await createClient();
 
   // Chống trùng lặp câu hỏi (Fix #023 - Deduplication):
-  // Kiểm tra xem học sinh đã có câu hỏi cùng question (hoặc cùng id) chưa
+  // Validate UUID trước khi `.eq('id', ...)` để tránh lỗi PostgreSQL 22P02 khiến
+  // check deduplication bị vỡ khi client gửi non-UUID id (vd 'q-math-01').
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   try {
     let checkQuery = supabase
       .from('user_mistakes')
       .select('*')
       .eq('user_id', userId);
 
-    if (mistake.id) {
-      checkQuery = checkQuery.eq('id', mistake.id);
+    if (typeof mistake.id === 'string' && UUID_RE.test(mistake.id.trim())) {
+      checkQuery = checkQuery.eq('id', mistake.id.trim());
     } else if (mistake.question) {
       checkQuery = checkQuery.eq('question', mistake.question);
+    } else {
+      checkQuery = checkQuery.eq('question', '__NEVER_MATCH__');
     }
 
-    const { data: existing } = await checkQuery.maybeSingle();
-    if (existing) {
+    const { data: existing, error: checkError } = await checkQuery.maybeSingle();
+    if (checkError) {
+      console.warn('Lỗi truy vấn kiểm tra trùng lặp câu sai:', checkError.message);
+    } else if (existing) {
       // Đã tồn tại bản ghi câu sai này -> trả về bản ghi hiện tại để tránh duplicate rows
       return existing as MistakeEntry;
     }

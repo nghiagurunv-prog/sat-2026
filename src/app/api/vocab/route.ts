@@ -9,6 +9,9 @@ import { TIER_COIN_MULTIPLIER } from '@/lib/subscription';
 import { recordAnswer } from '@/lib/mastery';
 import { bumpDailyActivity } from '@/lib/daily-activity-store';
 import { matchesAnswer } from '@/lib/answer-match';
+import { rateLimit, getRateLimitKey } from '@/lib/rate-limit';
+
+const MAX_VOCAB_WORDS = 500;
 
 // Sentinel bucket cho thưởng ôn từ vựng trong quest_claims (cùng cơ chế claim-once
 // atomic với dailyLogin/streak). itemId = `${wordId}:${next_review gốc}` → mỗi
@@ -52,6 +55,17 @@ export async function GET(req: NextRequest) {
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
+    if (!user.isAuthenticated) {
+      return NextResponse.json({ error: 'Vui lòng đăng nhập để lưu tiến độ từ vựng.' }, { status: 401 });
+    }
+    const rl = rateLimit(getRateLimitKey(req, 'vocab-post', user.id), 30, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: 'Bạn thao tác hơi nhanh. Chờ chút rồi thử lại nhé.', retryAfterMs: rl.retryAfterMs },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
     let {
       wordId,
@@ -63,16 +77,7 @@ export async function POST(req: Request) {
       partOfSpeech,
       isHarvest,
       userAnswer,
-      correctAnswer,
     } = body;
-
-    // Chấm đáp án trực tiếp bằng matchesAnswer nếu client gửi userAnswer (#016)
-    if (typeof userAnswer === 'string') {
-      const targetCorrect = typeof correctAnswer === 'string' ? correctAnswer : (customWord || wordId || '');
-      if (targetCorrect) {
-        isRemembered = matchesAnswer(userAnswer, targetCorrect);
-      }
-    }
 
     const data = await loadVocab(user.id);
 
@@ -95,6 +100,12 @@ export async function POST(req: Request) {
       if (!canAutoUpsert) {
         return NextResponse.json({ error: 'Word not found' }, { status: 404 });
       }
+      if (data.words.length >= MAX_VOCAB_WORDS) {
+        return NextResponse.json(
+          { error: `Kho từ vựng đã đạt giới hạn tối đa ${MAX_VOCAB_WORDS} từ.` },
+          { status: 400 }
+        );
+      }
       isNewWord = true;
       const initialBox = isRemembered ? 2 : 1;
       const effectiveId = wordId || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -115,12 +126,23 @@ export async function POST(req: Request) {
 
     const word = data.words[wordIndex];
 
+    // Chấm đáp án trực tiếp bằng matchesAnswer chỉ so với đáp án SERVER lưu (word.word / word.meaning),
+    // TUYỆT ĐỐI không tin trường correctAnswer do client gửi.
+    if (typeof userAnswer === 'string') {
+      const serverTarget = String(word.word || word.meaning || '').trim();
+      if (serverTarget) {
+        isRemembered = matchesAnswer(userAnswer, serverTarget);
+      }
+    }
+
     // Khóa idempotent theo DUE-INSTANCE: next_review GỐC (trước khi Leitner đẩy về
     // tương lai) → 2 POST cùng wordId đồng thời chỉ thưởng 1 lần; lần due kế
-    // (next_review khác) vẫn thưởng được. 'new' cho từ chưa từng ôn.
+    // (next_review khác) vẫn thưởng được.
+    // 🔒 ĐÓNG FAUCET XU VÔ HẠN: từ mới tạo (isNewWord / isHarvest) KHÔNG được thưởng xu/XP
+    // ngay lúc thêm vào sổ tay — chỉ thưởng khi ôn lại từ ĐÃ TỒN TẠI và ĐẾN HẠN.
     const today = getTodayVN();
     const dueKey = isNewWord ? 'new' : (word.next_review ?? 'new');
-    const wasDue = isNewWord ? true : isDue(word.next_review, today);
+    const wasDue = isNewWord ? false : isDue(word.next_review, today);
 
     // Tính TRƯỚC trạng thái Leitner mới (CHƯA lưu) — lưu SAU khi đã chốt thưởng, để
     // rpc_error KHÔNG đẩy next_review về tương lai làm mất due-instance khi retry.
@@ -134,7 +156,7 @@ export async function POST(req: Request) {
     // claimedFresh = POST NÀY là lần ĐẦU chốt thưởng cho due-instance này (CAS thắng).
     // Dùng để gate ghi mastery câu ĐÚNG → 2 POST đồng thời / resubmit KHÔNG bơm đôi.
     let claimedFresh = false;
-    if (wasDue && isRemembered) {
+    if (wasDue && !isNewWord && !isHarvest && isRemembered) {
       const tier = await getUserTier(user.id);
       // Delta ĐỘC LẬP số dư (chỉ theo độ khó × hệ số tier) → dùng .granted, KHÔNG
       // dùng .state (tránh read-modify-write hở race).

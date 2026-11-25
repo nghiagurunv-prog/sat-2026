@@ -250,10 +250,12 @@ export async function POST(req: Request) {
       hintResult = generateSocraticLocalHint(questionId);
     }
 
-    // Ở gợi ý Tier 1 và Tier 2, tuyệt đối KHÔNG trả về correctAnswer / correct_choice
-    // và hậu xử lý xoá mọi cụm lộ trực tiếp kiểu "Đáp án đúng là A/B/C/D".
-    // Chỉ cho phép giải thích hoàn toàn ở Tier 3.
+    // 🔒 BẢO MẬT (#G7): LUÔN loại bỏ correctAnswer/correct_choice và hậu xử lý
+    // stripDirectAnswerDisclosure ở MỌI tier (không cho client gửi tier=3 để bypass
+    // lộ đáp án trước khi nộp bài).
+    const requestedTier = Number.isFinite(tier) ? Math.min(Math.max(tier, 1), 3) : 1;
     const result: Record<string, unknown> = {
+      tier: requestedTier,
       choice_letter: hintResult.choice_letter,
       analysis: hintResult.analysis,
       isFallback: !!hintResult.isFallback,
@@ -264,26 +266,24 @@ export async function POST(req: Request) {
       },
     };
 
-    if (tier < 3) {
-      delete result.correctAnswer;
-      delete result.correct_choice;
-      delete result.correct_answer;
+    delete result.correctAnswer;
+    delete result.correct_choice;
+    delete result.correct_answer;
 
-      for (const [k, v] of Object.entries(result)) {
-        if (typeof v === 'string') {
-          result[k] = stripDirectAnswerDisclosure(v);
-        }
+    for (const [k, v] of Object.entries(result)) {
+      if (typeof v === 'string') {
+        result[k] = stripDirectAnswerDisclosure(v);
       }
+    }
 
-      if (result.hint && typeof result.hint === 'object') {
-        const hintObj = result.hint as Record<string, unknown>;
-        delete hintObj.correctAnswer;
-        delete hintObj.correct_choice;
-        delete hintObj.correct_answer;
-        for (const [k, v] of Object.entries(hintObj)) {
-          if (typeof v === 'string') {
-            hintObj[k] = stripDirectAnswerDisclosure(v);
-          }
+    if (result.hint && typeof result.hint === 'object') {
+      const hintObj = result.hint as Record<string, unknown>;
+      delete hintObj.correctAnswer;
+      delete hintObj.correct_choice;
+      delete hintObj.correct_answer;
+      for (const [k, v] of Object.entries(hintObj)) {
+        if (typeof v === 'string') {
+          hintObj[k] = stripDirectAnswerDisclosure(v);
         }
       }
     }

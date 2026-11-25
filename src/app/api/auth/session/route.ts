@@ -30,7 +30,10 @@ export async function POST() {
 
 export async function DELETE() {
   if (!isE2E()) {
-    return NextResponse.json({ success: true });
+    return NextResponse.json(
+      { error: 'Dev stub session endpoint is disabled outside E2E test mode.' },
+      { status: 404 }
+    );
   }
   return NextResponse.json({ success: true });
 }

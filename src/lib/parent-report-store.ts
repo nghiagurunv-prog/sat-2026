@@ -61,17 +61,6 @@ export async function buildParentReport(studentId: string): Promise<ParentReport
   const trendWindowDays = TREND_WINDOW_DAYS[studentTier];
   const recentLimit = RECENT_TESTS_LIMIT[studentTier];
 
-  // 1) Mastery (skills JSONB) → summary thuần.
-  const { data: mRow } = await admin.from('user_mastery').select('skills').eq('user_id', studentId).maybeSingle();
-  const skillsData = (mRow?.skills ?? {}) as Record<string, SkillMastery>;
-  const summary = summarizeMastery(skillsData);
-
-  // 2) Goal (target score) → prediction thuần.
-  const { data: gRow } = await admin.from('user_goals').select('target_score').eq('user_id', studentId).maybeSingle();
-  const targetScore = typeof gRow?.target_score === 'number' ? gRow.target_score : null;
-  const prediction = computePrediction(summary, targetScore);
-
-  // 3) Time-series → trend theo cửa sổ tier (7/30/90 ngày).
   const today = todayVN();
   const since = (() => {
     const [y, m, d] = today.split('-').map(Number);
@@ -79,7 +68,29 @@ export async function buildParentReport(studentId: string): Promise<ParentReport
     dt.setUTCDate(dt.getUTCDate() - (trendWindowDays - 1));
     return dt.toISOString().slice(0, 10);
   })();
-  const snapshots = await loadSnapshots(studentId, since);
+
+  // Chạy song song 4 truy vấn độc lập (giảm mạnh độ trễ tải Báo cáo Phụ huynh)
+  const [mRes, gRes, snapshots, hRes] = await Promise.all([
+    admin.from('user_mastery').select('skills').eq('user_id', studentId).maybeSingle(),
+    admin.from('user_goals').select('target_score').eq('user_id', studentId).maybeSingle(),
+    loadSnapshots(studentId, since),
+    admin
+      .from('test_history')
+      .select('module, subject, correct, total, score, test_timestamp')
+      .eq('user_id', studentId)
+      .order('test_timestamp', { ascending: false })
+      .limit(recentLimit),
+  ]);
+
+  // 1) Mastery (skills JSONB) → summary thuần.
+  const skillsData = (mRes.data?.skills ?? {}) as Record<string, SkillMastery>;
+  const summary = summarizeMastery(skillsData);
+
+  // 2) Goal (target score) → prediction thuần.
+  const targetScore = typeof gRes.data?.target_score === 'number' ? gRes.data.target_score : null;
+  const prediction = computePrediction(summary, targetScore);
+
+  // 3) Time-series → trend theo cửa sổ tier (7/30/90 ngày).
   const weeklyTrend = computeWeeklyTrend(snapshots, today, trendWindowDays);
 
   // 4) Streak SERVER-SIDE từ daily_snapshots (không tin blob client save-data —
@@ -88,13 +99,7 @@ export async function buildParentReport(studentId: string): Promise<ParentReport
   const streak = computeDayStreak(snapshots.map((s) => s.snapshot_date), today);
 
   // Lịch sử thi gần đây (số bài theo tier).
-  const { data: hRows } = await admin
-    .from('test_history')
-    .select('module, subject, correct, total, score, test_timestamp')
-    .eq('user_id', studentId)
-    .order('test_timestamp', { ascending: false })
-    .limit(recentLimit);
-  const recentTests = (hRows ?? []).map((r) => ({
+  const recentTests = (hRes.data ?? []).map((r) => ({
     module: r.module,
     subject: r.subject,
     correct: r.correct,

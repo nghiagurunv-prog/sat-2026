@@ -318,48 +318,8 @@ export default function TeacherPortalPage() {
   const [hwDeadline, setHwDeadline] = useState('22:00 Chủ Nhật');
   const [generatedHwMessage, setGeneratedHwMessage] = useState<string | null>(null);
 
-  // At-Risk Students State
-  const [atRiskList] = useState<AtRiskStudent[]>([
-    {
-      id: 'st-01',
-      name: 'Nguyễn Trần Minh Đức (Ams)',
-      avatar: '👨‍🎓',
-      classCode: 'CLASS-AMS-1500',
-      parentPhone: '0912.888.xxx (Bố Tuấn)',
-      inactiveDays: 4,
-      currentEstimatedScore: 1330,
-      scoreDelta: -60,
-      primaryIssue: 'Nghỉ làm bài 4 ngày, sai 6/7 câu Hàm số bậc hai',
-      lastActive: '4 ngày trước',
-      status: 'critical',
-    },
-    {
-      id: 'st-02',
-      name: 'Phạm Quỳnh Chi (Chu Văn An)',
-      avatar: '👩‍🎓',
-      classCode: 'CLASS-AMS-1500',
-      parentPhone: '0983.666.xxx (Mẹ Hằng)',
-      inactiveDays: 3,
-      currentEstimatedScore: 1360,
-      scoreDelta: -40,
-      primaryIssue: 'Chưa nộp bài tập Boundaries, tụt 40đ bài test Tuần 3',
-      lastActive: '3 ngày trước',
-      status: 'warning',
-    },
-    {
-      id: 'st-03',
-      name: 'Lê Hoàng Nam (Chuyên Sư Phạm)',
-      avatar: '🧑‍💻',
-      classCode: 'CLASS-AMS-1500',
-      parentPhone: '0904.333.xxx (Bố Dũng)',
-      inactiveDays: 5,
-      currentEstimatedScore: 1290,
-      scoreDelta: -70,
-      primaryIssue: 'Vắng 5 ngày liên tiếp, tỷ lệ hoàn thành chỉ đạt 42%',
-      lastActive: '5 ngày trước',
-      status: 'critical',
-    },
-  ]);
+  // At-Risk Students State (vá #13: xóa sạch học sinh mock cứng & SĐT giả; nạp từ dữ liệu lớp thật Supabase)
+  const [atRiskList, setAtRiskList] = useState<AtRiskStudent[]>([]);
 
   const [contactedStudents, setContactedStudents] = useState<Record<string, boolean>>({});
   const [selectedAtRiskStudent, setSelectedAtRiskStudent] = useState<AtRiskStudent | null>(null);
@@ -518,11 +478,14 @@ export default function TeacherPortalPage() {
     copyToClipboard(generatedCode, `Mã lớp ${generatedCode} đã tạo thành công & sao chép vào bộ nhớ!`);
   };
 
-  // Handle Dispatch Homework (Mục #22 & #23: Giao bài thật qua /api/teacher/assignments)
+  // Handle Dispatch Homework (Mục #22 & #23 & W3 #36: Giao bài tập hoặc Full Mock Adaptive qua /api/teacher/assignments)
   const handleDispatchHomework = async (e: React.FormEvent) => {
     e.preventDefault();
+    const isFullMock = hwDomain === 'Full Test Simulation';
     const newHwCode = `HW-${activeClass.code.slice(6, 9)}-${Math.floor(100 + Math.random() * 900)}`;
-    const link = `https://sat.nghiaguru.com/practice?class=${encodeURIComponent(activeClass.code)}&hw=${encodeURIComponent(newHwCode)}`;
+    const link = isFullMock
+      ? `https://satguru.edu.vn/mock-exams?examId=sat-mock-01&class=${encodeURIComponent(activeClass.code)}&hw=${encodeURIComponent(newHwCode)}`
+      : `https://satguru.edu.vn/practice?class=${encodeURIComponent(activeClass.code)}&hw=${encodeURIComponent(newHwCode)}`;
 
     let assignmentId = `hw-${Date.now()}`;
     try {
@@ -533,7 +496,9 @@ export default function TeacherPortalPage() {
           classroomId: activeClass.id,
           title: hwTitle,
           skillIds: [hwDomain],
-          questionCount: hwCount,
+          questionCount: isFullMock ? 98 : hwCount,
+          assignmentType: isFullMock ? 'full_mock' : 'drill',
+          examId: isFullMock ? 'sat-mock-01' : undefined,
         }),
       });
       if (res.ok) {
@@ -667,7 +632,7 @@ export default function TeacherPortalPage() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => copyToClipboard(
-                    `https://sat.nghiaguru.com/join?code=${encodeURIComponent(activeClass.code)}`,
+                    `https://satguru.edu.vn/join?code=${encodeURIComponent(activeClass.code)}`,
                     `Đã chép link tham gia lớp ${activeClass.code} cho học sinh!`
                   )}
                   className="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm"
@@ -866,7 +831,7 @@ export default function TeacherPortalPage() {
                         setHwDomain(skill.domain);
                         setHwCount(10);
                         copyToClipboard(
-                          `https://sat.nghiaguru.com/practice?skill=${encodeURIComponent(skill.id)}&class=${encodeURIComponent(activeClass.code)}`,
+                          `https://satguru.edu.vn/practice?skill=${encodeURIComponent(skill.id)}&class=${encodeURIComponent(activeClass.code)}`,
                           `Đã tạo link luyện 1-Click cho chuyên đề "${skill.skillName}"!`
                         );
                       }}
@@ -929,9 +894,9 @@ export default function TeacherPortalPage() {
                       onChange={(e) => setHwDomain(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
-                      <option value="Reading & Writing">Reading & Writing</option>
+                      <option value="Reading & Writing">Reading &amp; Writing</option>
                       <option value="Math">Math</option>
-                      <option value="Full Test Simulation">Full Test (Cả 2 phần)</option>
+                      <option value="Full Test Simulation">Full Mock Adaptive Bluebook (98 câu — Khóa khung giờ #36)</option>
                     </select>
                   </div>
 
@@ -976,8 +941,65 @@ export default function TeacherPortalPage() {
                   className="w-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-sm py-2.5 rounded-xl shadow-lg shadow-indigo-500/25 transition-all active:scale-[0.99] flex items-center justify-center gap-2"
                 >
                   <span>🚀</span>
-                  <span>Phát Động Bài Tập & Sao Chép Tin Nhắn Zalo Lớp</span>
+                  <span>Phát Động Bài Tập &amp; Sao Chép Tin Nhắn Zalo Lớp</span>
                 </button>
+
+                {/* W2 #35 + W3 #36, #37, #38: Bộ Công Cụ Trung Tâm 1-Chạm (Link /join, Cứu hộ Top 3 <55%, In Phiếu Phụ Huynh Hàng Loạt) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://satguru.edu.vn';
+                      const joinUrl = `${origin}/join?code=${encodeURIComponent(activeClass.code)}`;
+                      copyToClipboard(joinUrl, `Đã sao chép Link Mời Học Sinh 1-chạm: ${joinUrl}`);
+                    }}
+                    className="py-2 px-3 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-200 text-xs font-bold transition"
+                  >
+                    🔗 Copy Link Mời (/join)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const weakTop3 = skillsHeatmap.filter((s) => s.masteryRate < 55).slice(0, 3);
+                      const skillNames = weakTop3.map((s) => s.skillName.split('(')[0].trim());
+                      const remedialTitle = `Cứu hộ Top ${weakTop3.length} điểm yếu (<55%): ${skillNames.join(', ')}`;
+                      setHwTitle(remedialTitle);
+                      try {
+                        await fetch('/api/teacher/assignments', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            classroomId: activeClass.id,
+                            title: remedialTitle,
+                            skillIds: weakTop3.map((s) => s.id),
+                            questionCount: 15,
+                            assignmentType: 'drill',
+                          }),
+                        });
+                      } catch (err) {
+                        console.warn('[teacher] Không thể đồng bộ bài tập cứu hộ Top 3 lên API:', err);
+                      }
+                      copyToClipboard(
+                        `📢 [SAT.Guru — Bài Tập Cứu Hộ Lớp ${activeClass.name}]\n🎯 Tập trung Top ${weakTop3.length} kỹ năng yếu <55%: ${skillNames.join(' • ')}\n🔗 Vào lớp làm bài ngay: https://satguru.edu.vn/join?code=${activeClass.code}`,
+                        '✅ Đã tự động sinh bài tập cứu hộ Top 3 kỹ năng < 55% & chép tin Zalo!'
+                      );
+                    }}
+                    className="py-2 px-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-200 text-xs font-bold transition"
+                  >
+                    🎯 Giao Cứu Hộ Top 3 (&lt;55%)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') window.print();
+                    }}
+                    className="py-2 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-200 text-xs font-bold transition"
+                  >
+                    🖨️ Xuất Phiếu Báo Điểm Cả Lớp (PDF)
+                  </button>
+                </div>
               </form>
 
               {/* Generated Zalo Template Preview */}
@@ -1044,7 +1066,7 @@ export default function TeacherPortalPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            const origin = typeof window !== 'undefined' ? window.location.origin : 'https://sat.nghiaguru.com';
+                            const origin = typeof window !== 'undefined' ? window.location.origin : 'https://satguru.edu.vn';
                             const link = `${origin}/mock-exams?examId=sat-mock-01&hwCode=${encodeURIComponent(hw.code)}&class=${encodeURIComponent(activeClass.code)}`;
                             copyToClipboard(link, `Đã chép link giao đề ${hw.code}!`);
                           }}

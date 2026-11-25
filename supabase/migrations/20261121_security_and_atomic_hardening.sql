@@ -6,20 +6,47 @@
 
 -- 1. Thu hồi hoàn toàn quyền ghi trực tiếp từ client authenticated trên các bảng
 --    dùng chung & server-authoritative (chống AI Cache Poisoning, Question Pollution,
---    và tự sửa quota/xu).
-DROP POLICY IF EXISTS "auth_insert_chat_cache" ON public.ai_chat_cache;
-DROP POLICY IF EXISTS "auth_update_chat_cache" ON public.ai_chat_cache;
-DROP POLICY IF EXISTS "auth_insert_questions"  ON public.questions;
-DROP POLICY IF EXISTS "auth_update_questions"  ON public.questions;
+--    và tự sửa quota/xu). Bọc to_regclass guard để tuyệt đối không crash 42P01 trên DB trắng.
+DO $$
+DECLARE
+  v_tbl text;
+  v_tables text[] := ARRAY[
+    'ai_chat_cache',
+    'questions',
+    'user_economy',
+    'user_mastery',
+    'user_ai_usage',
+    'ai_cost_ledger',
+    'user_progress',
+    'user_goals'
+  ];
+BEGIN
+  IF to_regclass('public.ai_chat_cache') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS "auth_insert_chat_cache" ON public.ai_chat_cache';
+    EXECUTE 'DROP POLICY IF EXISTS "auth_update_chat_cache" ON public.ai_chat_cache';
+  END IF;
 
-REVOKE INSERT, UPDATE, DELETE ON public.ai_chat_cache  FROM authenticated;
-REVOKE INSERT, UPDATE, DELETE ON public.questions      FROM authenticated;
-REVOKE INSERT, UPDATE, DELETE ON public.user_economy   FROM authenticated;
-REVOKE INSERT, UPDATE, DELETE ON public.user_mastery   FROM authenticated;
-REVOKE INSERT, UPDATE, DELETE ON public.user_ai_usage  FROM authenticated;
-REVOKE INSERT, UPDATE, DELETE ON public.ai_cost_ledger FROM authenticated;
-REVOKE INSERT, UPDATE, DELETE ON public.user_progress  FROM authenticated;
-REVOKE INSERT, UPDATE, DELETE ON public.user_goals     FROM authenticated;
+  IF to_regclass('public.questions') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS "auth_insert_questions" ON public.questions';
+    EXECUTE 'DROP POLICY IF EXISTS "auth_update_questions" ON public.questions';
+  END IF;
+
+  FOREACH v_tbl IN ARRAY v_tables LOOP
+    IF to_regclass('public.' || v_tbl) IS NOT NULL THEN
+      EXECUTE format('REVOKE INSERT, UPDATE, DELETE ON public.%I FROM authenticated', v_tbl);
+    END IF;
+  END LOOP;
+
+  -- Khóa luôn RPC increment_question_usage khỏi authenticated nếu hàm đã tồn tại
+  IF to_regprocedure('public.increment_question_usage(text)') IS NOT NULL THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION public.increment_question_usage(text) FROM public, anon, authenticated';
+    EXECUTE 'GRANT  EXECUTE ON FUNCTION public.increment_question_usage(text) TO service_role';
+  END IF;
+  IF to_regprocedure('public.increment_question_usage(text[])') IS NOT NULL THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION public.increment_question_usage(text[]) FROM public, anon, authenticated';
+    EXECUTE 'GRANT  EXECUTE ON FUNCTION public.increment_question_usage(text[]) TO service_role';
+  END IF;
+END $$;
 
 -- 2. RPC spend_coins ATOMIC (khóa dòng SELECT ... FOR UPDATE chống double-spend xu)
 CREATE OR REPLACE FUNCTION public.spend_coins(

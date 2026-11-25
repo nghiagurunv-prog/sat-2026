@@ -8,6 +8,8 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 
 interface BluebookToolsProps {
   compact?: boolean;
+  /** Optional (#G2 additive-only): tách nháp riêng cho từng câu hỏi (#08 & #13) */
+  questionId?: string;
 }
 
 type DesmosSizeMode = "normal" | "large" | "split";
@@ -102,8 +104,8 @@ const DESMOS_TRICKS: DesmosTrick[] = [
   },
 ];
 
-// 85+ High-Frequency SAT Math Vocabulary Terms (Item 31)
-interface MathVocabItem {
+// 85+ High-Frequency SAT Math Vocabulary Terms (Item 31 & #04)
+export interface MathVocabItem {
   term: string;
   pron?: string;
   vi: string;
@@ -111,7 +113,7 @@ interface MathVocabItem {
   trap: string;
 }
 
-const MATH_VOCABULARY: MathVocabItem[] = [
+export const MATH_VOCABULARY: MathVocabItem[] = [
   // --- ARITHMETIC ---
   { term: "Integer", pron: "/ˈɪntɪdʒər/", vi: "Số nguyên (... -2, -1, 0, 1, 2...)", cat: "arithmetic", trap: "0 là số nguyên chẵn nhưng KHÔNG âm cũng KHÔNG dương." },
   { term: "Positive integer", pron: "", vi: "Số nguyên dương (1, 2, 3...)", cat: "arithmetic", trap: "Số 0 KHÔNG phải số nguyên dương!" },
@@ -200,14 +202,14 @@ const MATH_VOCABULARY: MathVocabItem[] = [
   { term: "Correlation vs Causation", pron: "", vi: "Tương quan vs Nhân quả", cat: "statistics", trap: "CHỈ có thí nghiệm phân bổ ngẫu nhiên (Randomized Experiment) mới chứng minh được Nhân quả!" },
 ];
 
-// Helper to validate SPR inputs (Item 14)
-interface SprValidationResult {
+// Helper to validate SPR inputs (Item 14 & #03 — exported for direct CorePracticeUI realtime validation)
+export interface SprValidationResult {
   isValid: boolean;
   message: string;
   type: "success" | "warning" | "error";
 }
 
-function validateSprInput(val: string): SprValidationResult {
+export function validateSprInput(val: string): SprValidationResult {
   const trimmed = val.trim();
   if (!trimmed) {
     return { isValid: false, message: "Nhập thử đáp án để kiểm tra tính hợp lệ quy chuẩn SPR", type: "warning" };
@@ -294,9 +296,13 @@ function clampPosition(pos: { x: number; y: number }): { x: number; y: number } 
 // MAIN COMPONENT
 // ============================================================================
 
-export function BluebookTools({ compact = false }: BluebookToolsProps) {
+export function BluebookTools({ compact = false, questionId }: BluebookToolsProps) {
+  const scratchStorageKey = questionId
+    ? `${SCRATCHPAD_STORAGE_KEY}:${questionId.slice(0, 80)}`
+    : SCRATCHPAD_STORAGE_KEY;
   // Modal toggles
   const [showDesmos, setShowDesmos] = useState(false);
+  const [injectedLatex, setInjectedLatex] = useState<string | null>(null);
   const [desmosSize, setDesmosSize] = useState<DesmosSizeMode>("normal");
   const [showDesmosCheats, setShowDesmosCheats] = useState(false);
   const [showReference, setShowReference] = useState(false);
@@ -351,51 +357,55 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Mouse drag listeners for Desmos
+  // Pointer drag listeners for Desmos (hỗ trợ cả chuột lẫn cảm ứng iPad/tablet — vá #7)
   useEffect(() => {
     if (!isDraggingDesmos) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
       const rawX = e.clientX - desmosDragOffsetRef.current.x;
       const rawY = e.clientY - desmosDragOffsetRef.current.y;
       setDesmosPos(clampPosition({ x: rawX, y: rawY }));
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
       setIsDraggingDesmos(false);
     };
 
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
     };
   }, [isDraggingDesmos]);
 
-  // Mouse drag listeners for Reference Sheet
+  // Pointer drag listeners for Reference Sheet (hỗ trợ iPad/tablet — vá #7)
   useEffect(() => {
     if (!isDraggingRef) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
       const rawX = e.clientX - refDragOffsetRef.current.x;
       const rawY = e.clientY - refDragOffsetRef.current.y;
       setRefPos(clampPosition({ x: rawX, y: rawY }));
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
       setIsDraggingRef(false);
     };
 
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
     };
   }, [isDraggingRef]);
 
-  const handleDesmosDragStart = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleDesmosDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("button, input, select, textarea, a")) {
       return;
     }
@@ -414,7 +424,7 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
     setIsDraggingDesmos(true);
   };
 
-  const handleRefDragStart = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleRefDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("button, input, select, textarea, a")) {
       return;
     }
@@ -431,6 +441,35 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
     setIsDraggingRef(true);
   };
 
+  // Lắng nghe nạp công thức 1-chạm vào Desmos (#01) & mở nhanh Từ điển Toán SAT (#04)
+  useEffect(() => {
+    const onDesmosInject = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ latex?: string }>).detail;
+      const expr = typeof detail?.latex === "string" ? detail.latex.trim() : "";
+      if (expr) {
+        setInjectedLatex(expr);
+        if (typeof navigator !== "undefined" && navigator.clipboard) {
+          navigator.clipboard.writeText(expr).catch(() => {});
+        }
+      }
+      setShowDesmos(true);
+    };
+    const onOpenVocab = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ term?: string }>).detail;
+      setActiveRefTab("dictionary");
+      if (typeof detail?.term === "string") {
+        setVocabSearch(detail.term);
+      }
+      setShowReference(true);
+    };
+    window.addEventListener("sat:desmos-inject", onDesmosInject);
+    window.addEventListener("sat:open-math-vocab", onOpenVocab);
+    return () => {
+      window.removeEventListener("sat:desmos-inject", onDesmosInject);
+      window.removeEventListener("sat:open-math-vocab", onOpenVocab);
+    };
+  }, []);
+
   // Scratchpad state (Item 13)
   const [scratchText, setScratchText] = useState("");
 
@@ -444,12 +483,12 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
   // SPR interactive tester (Item 14)
   const [sprTestInput, setSprTestInput] = useState("");
 
-  // Safe localStorage initialization
+  // Safe localStorage initialization (nháp tách riêng theo từng questionId — #08 & #13)
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
-        const savedScratch = localStorage.getItem(SCRATCHPAD_STORAGE_KEY);
-        if (savedScratch !== null) setScratchText(savedScratch);
+        const savedScratch = localStorage.getItem(scratchStorageKey);
+        setScratchText(savedScratch ?? "");
 
         const savedSize = localStorage.getItem(DESMOS_SIZE_STORAGE_KEY) as DesmosSizeMode | null;
         if (savedSize === "normal" || savedSize === "large" || savedSize === "split") {
@@ -459,14 +498,14 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
         // Ignore localStorage access errors
       }
     }
-  }, []);
+  }, [scratchStorageKey]);
 
   // Update Scratchpad & localStorage
   const handleScratchChange = (text: string) => {
     setScratchText(text);
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem(SCRATCHPAD_STORAGE_KEY, text);
+        localStorage.setItem(scratchStorageKey, text);
       } catch {
         // Ignore
       }
@@ -796,10 +835,10 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
         >
           {/* Desmos Window Header */}
           <div
-            onMouseDown={handleDesmosDragStart}
-            className={`flex flex-wrap items-center justify-between border-b border-slate-800 bg-slate-900 px-3 py-2 gap-2 ${desmosSize === "normal" ? "cursor-move select-none" : ""
+            onPointerDown={handleDesmosDragStart}
+            className={`flex flex-wrap items-center justify-between border-b border-slate-800 bg-slate-900 px-3 py-2 gap-2 ${desmosSize === "normal" ? "cursor-move select-none touch-none" : ""
               }`}
-            title={desmosSize === "normal" ? "Kéo thả thanh tiêu đề để di chuyển máy tính" : undefined}
+            title={desmosSize === "normal" ? "Kéo thả thanh tiêu đề để di chuyển máy tính (hỗ trợ cả chuột & cảm ứng iPad)" : undefined}
           >
             <div className="flex items-center gap-2">
               <span className="text-base">🧮</span>
@@ -933,7 +972,24 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
             </div>
           )}
 
-          {/* Iframe or Error fallback (#062) */}
+          {/* Banner biểu thức 1-chạm vừa đẩy từ đề bài (#01) */}
+          {injectedLatex && (
+            <div className="flex items-center justify-between gap-2 border-b border-emerald-500/30 bg-emerald-950/50 px-3 py-1.5 text-[11px] text-emerald-200">
+              <div className="truncate">
+                <strong className="text-emerald-300">⚡ Đã copy vào Clipboard (bấm Ctrl+V vào dòng 1 Desmos):</strong>{" "}
+                <code className="font-mono text-amber-300">{injectedLatex}</code>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInjectedLatex(null)}
+                className="text-slate-400 hover:text-white shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Iframe or Error fallback (#062 + vá #7: ?embed & clipboard-read) */}
           <div className="relative flex-1 bg-white">
             {desmosError ? (
               <div className="flex h-full w-full flex-col items-center justify-center bg-slate-950 p-6 text-center text-slate-200">
@@ -953,10 +1009,10 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
             ) : (
               <iframe
                 key={desmosRetryKey}
-                src="https://www.desmos.com/calculator"
+                src="https://www.desmos.com/calculator?embed"
                 title="Desmos Graphing Calculator"
                 className="h-full w-full border-0"
-                allow="clipboard-write"
+                allow="clipboard-read; clipboard-write"
                 onError={() => setDesmosError(true)}
               />
             )}
@@ -985,9 +1041,9 @@ export function BluebookTools({ compact = false }: BluebookToolsProps) {
           >
             {/* Modal Header */}
             <div
-              onMouseDown={handleRefDragStart}
-              className="flex flex-wrap items-center justify-between border-b border-slate-800 bg-slate-900 px-4 py-3 gap-2 cursor-move select-none"
-              title="Kéo thả thanh tiêu đề để di chuyển bảng tham khảo"
+              onPointerDown={handleRefDragStart}
+              className="flex flex-wrap items-center justify-between border-b border-slate-800 bg-slate-900 px-4 py-3 gap-2 cursor-move select-none touch-none"
+              title="Kéo thả thanh tiêu đề để di chuyển bảng tham khảo (hỗ trợ chuột & iPad)"
             >
               <div>
                 <div className="text-[10px] font-black uppercase tracking-widest text-amber-400">

@@ -4,6 +4,8 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { useGamification } from '@/context/GamificationContext';
 import { WeeklyTrendPanel, type WeeklyTrend } from '@/components/WeeklyTrendPanel';
 import { EmptyState } from '@/components/EmptyState';
+import { DashboardGrowthPanel } from '@/components/DashboardGrowthPanel';
+import { useExamCountdown } from '@/hooks/useExamCountdown';
 
 /** Shape trả về từ /api/mastery (getMasterySummary). */
 interface MasterySkill {
@@ -274,8 +276,12 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // Point 61: Kỳ thi mục tiêu College Board
-  const [targetExamDateId, setTargetExamDateId] = useState<string>('2026-05-02');
+  // Point 61 & W1 #13: Đồng bộ ngày thi SAT College Board 2026–2027 toàn app qua useExamCountdown
+  const examCountdown = useExamCountdown({
+    currentScore: score?.total ?? 1250,
+    targetScore: score?.targetScore ?? 1450,
+  });
+  const [targetExamDateId, setTargetExamDateId] = useState<string>(examCountdown.targetExam.dateStr);
 
   // Point 62: Mục tiêu điểm tách biệt Toán & Đọc-Viết
   const [splitTarget, setSplitTarget] = useState<{ math: number; reading: number }>({ math: 780, reading: 670 });
@@ -302,6 +308,12 @@ export default function DashboardPage() {
 
   // Lịch sử học tập thực tế cho Heatmap 30 ngày (Point 75)
   const [actualStudyHistory, setActualStudyHistory] = useState<Record<string, number>>({});
+
+  // Lớp học của tôi (Teacher/Classroom Student Join Flow — V3-P1)
+  const [joinedClasses, setJoinedClasses] = useState<Array<{ id: string; name: string; code: string }>>([]);
+  const [joinClassCode, setJoinClassCode] = useState('');
+  const [joiningClass, setJoiningClass] = useState(false);
+  const [joinClassMsg, setJoinClassMsg] = useState<string | null>(null);
 
   // Nút "Thử lại"
   const retry = () => {
@@ -404,19 +416,18 @@ export default function DashboardPage() {
     }
   }, [userStats?.streak]);
 
-  // Tính số ngày đếm ngược đến kỳ thi mục tiêu (Point 61)
-  const currentExam = useMemo(() => {
-    return OFFICIAL_SAT_DATES.find((d) => d.id === targetExamDateId) || OFFICIAL_SAT_DATES[0];
-  }, [targetExamDateId]);
-
-  const daysUntilExam = useMemo(() => {
-    if (!currentExam?.dateStr) return 0;
-    const examTime = new Date(currentExam.dateStr).getTime();
-    if (!Number.isFinite(examTime)) return 0;
-    const now = new Date().getTime();
-    const diff = Math.ceil((examTime - now) / (1000 * 60 * 60 * 24));
-    return Number.isFinite(diff) ? Math.max(0, diff) : 0;
-  }, [currentExam]);
+  // Đồng bộ kỳ thi mục tiêu & số ngày còn lại từ useExamCountdown (#13)
+  const currentExam = useMemo(
+    () => ({
+      id: examCountdown.targetExam.dateStr,
+      label: examCountdown.targetExam.name,
+      dateStr: examCountdown.targetExam.dateStr,
+      regDeadline: examCountdown.targetExam.regDeadlineDisplay,
+      note: `Hạn ĐK chuẩn College Board: ${examCountdown.targetExam.regDeadlineDisplay}`,
+    }),
+    [examCountdown.targetExam]
+  );
+  const daysUntilExam = examCountdown.daysUntilExam;
 
   // Tự động gợi ý kích hoạt Nước Rút nếu còn <= 7 ngày
   useEffect(() => {
@@ -426,34 +437,82 @@ export default function DashboardPage() {
   }, [daysUntilExam, cramMode]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     async function loadData() {
       try {
-        const [mRes, sRes, tRes] = await Promise.all([
-          fetch('/api/mastery'),
-          fetch('/api/score'),
-          fetch('/api/progress/weekly'),
+        const [mRes, sRes, tRes, cRes] = await Promise.all([
+          fetch('/api/mastery', { signal }),
+          fetch('/api/score', { signal }),
+          fetch('/api/progress/weekly', { signal }),
+          fetch('/api/teacher/classrooms?role=student', { signal }).catch(() => null),
         ]);
+        if (signal.aborted) return;
         if (!mRes.ok || !sRes.ok) {
           setError(true);
           return;
         }
         const mData = await mRes.json();
         const sData = await sRes.json();
+        if (signal.aborted) return;
         setMastery(mData);
         setScore(sData);
         if (sData?.total) {
           setCalcSat(sData.total);
         }
         if (tRes.ok) setTrend(await tRes.json());
-      } catch (e) {
+        if (cRes && cRes.ok) {
+          const cData = await cRes.json().catch(() => ({}));
+          if (Array.isArray(cData.classrooms)) {
+            setJoinedClasses(
+              cData.classrooms.map((c: Record<string, unknown>) => ({
+                id: String(c.id ?? c.code ?? ''),
+                name: String(c.name ?? 'Lớp SAT'),
+                code: String(c.code ?? ''),
+              }))
+            );
+          }
+        }
+      } catch (e: unknown) {
+        if (e instanceof Error && e.name === 'AbortError') return;
         console.error('Lỗi tải dữ liệu dashboard', e);
         setError(true);
       } finally {
-        setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
     }
-    loadData();
+    void loadData();
+    return () => controller.abort();
   }, [reloadKey]);
+
+  const handleJoinClassroom = async () => {
+    const code = joinClassCode.trim().toUpperCase();
+    if (!code) {
+      setJoinClassMsg('Vui lòng nhập mã lớp (VD: SAT-ABCD).');
+      return;
+    }
+    setJoiningClass(true);
+    setJoinClassMsg(null);
+    try {
+      const res = await fetch('/api/teacher/classrooms', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setJoinClassMsg(`⚠️ ${data?.error || 'Không thể tham gia lớp. Kiểm tra lại mã lớp.'}`);
+        return;
+      }
+      setJoinClassMsg(`✅ Đã tham gia lớp ${data?.classroom?.name || code} thành công!`);
+      setJoinClassCode('');
+      setReloadKey((k) => k + 1);
+    } catch {
+      setJoinClassMsg('⚠️ Lỗi kết nối khi tham gia lớp học.');
+    } finally {
+      setJoiningClass(false);
+    }
+  };
 
   // Mastery trung bình theo từng domain (0..100)
   const domainScore = (domainId: string): number => {
@@ -518,12 +577,10 @@ export default function DashboardPage() {
     }
   };
 
-  // Point 61: Xử lý chọn kỳ thi
+  // Point 61 & W1 #13: Xử lý chọn kỳ thi (đồng bộ sang Trang chủ & Cổng Phụ Huynh)
   const handleSelectExamDate = (examId: string) => {
     setTargetExamDateId(examId);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('sat_target_exam_date_v1', examId);
-    }
+    examCountdown.selectExamDate(examId);
   };
 
   // Point 62: Xử lý lưu mục tiêu tách biệt Math & R&W
@@ -874,58 +931,63 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
             <div className="bg-black/40 p-3.5 rounded-xl border border-amber-500/20">
               <div className="font-bold text-amber-300 mb-1 flex items-center gap-1.5">
-                <span>📕</span> 1. Ôn Sổ Tay Lỗi Sai
+                <span>🧮</span> Micro-Drill 1 • 15p: Desmos 15s
               </div>
               <p className="text-slate-300">
-                Ưu tiên số 1: Xem lại toàn bộ câu hỏi đã làm sai trong tuần qua. Tuyệt đối không cày
-                bộ đề lạ làm hoang mang tinh thần.
+                Ôn nhanh hồi quy `~`, giao điểm hệ phương trình, đỉnh parabol và thanh trượt tham số k để ăn trọn Toán.
               </p>
-              <Link
-                href="/forge"
-                className="inline-block mt-2 text-[11px] font-bold text-emerald-400 hover:underline"
-              >
-                Mở Sổ tay lỗi sai →
+              <Link href="/desmos" className="inline-block mt-2 text-[11px] font-bold text-emerald-400 hover:underline">
+                Luyện Desmos 15p →
               </Link>
             </div>
 
             <div className="bg-black/40 p-3.5 rounded-xl border border-amber-500/20">
               <div className="font-bold text-amber-300 mb-1 flex items-center gap-1.5">
-                <span>📐</span> 2. Khắc Cốt Công Thức & Desmos
+                <span>✍️</span> Micro-Drill 2 • 15p: Punctuation
               </div>
               <p className="text-slate-300">
-                Lướt lại 20 công thức Toán trọng tâm, mẹo bấm hồi quy `~`, giải hệ phương trình và
-                tìm nghiệm đồ thị nhanh trên Desmos.
+                Chốt cứng quy tắc dấu chấm phẩy, hai chấm, gạch ngang và liên từ Transitions — nhóm câu dễ lấy điểm nhất R&amp;W.
               </p>
-              <Link
-                href="/math"
-                className="inline-block mt-2 text-[11px] font-bold text-emerald-400 hover:underline"
-              >
-                Ôn mẹo Desmos →
+              <Link href="/literature" className="inline-block mt-2 text-[11px] font-bold text-emerald-400 hover:underline">
+                Ôn Ngữ pháp 15p →
               </Link>
             </div>
 
             <div className="bg-black/40 p-3.5 rounded-xl border border-amber-500/20">
               <div className="font-bold text-amber-300 mb-1 flex items-center gap-1.5">
-                <span>⏰</span> 3. Chuẩn Hóa Nhịp Sinh Học
+                <span>📚</span> Micro-Drill 3 • 15p: Vocab Hộp 1
               </div>
               <p className="text-slate-300">
-                Tập thức dậy lúc 6:30 sáng, ăn sáng nhẹ và luyện tập đúng khung giờ 8:00 - 11:15 để não
-                bộ đạt đỉnh hưng phấn vào giờ thi thật.
+                Quét sạch từ vựng học thuật Hộp 1 Leitner hay quên nhất để không sập bẫy câu Words in Context.
               </p>
+              <Link href="/vocab" className="inline-block mt-2 text-[11px] font-bold text-emerald-400 hover:underline">
+                Ôn Từ vựng 15p →
+              </Link>
             </div>
 
             <div className="bg-black/40 p-3.5 rounded-xl border border-amber-500/20">
-              <div className="font-bold text-red-300 mb-1 flex items-center gap-1.5">
-                <span>⚠️</span> 4. Cảnh Báo Ngủ Đủ 8 Tiếng
+              <div className="font-bold text-rose-300 mb-1 flex items-center gap-1.5">
+                <span>📕</span> Micro-Drill 4 • 15p: Top 10 Câu Sai
               </div>
               <p className="text-slate-300">
-                Đêm trước ngày thi: BẮT BUỘC đi ngủ trước 22:30. Bài thi SAT thích ứng kiểm tra sự
-                nhanh nhạy, thức khuya sẽ giảm 40-70 điểm!
+                Phục thù 10 câu sai lặp lại nhiều nhất ở chế độ Blind Revenge. Tuyệt đối không cày đề lạ sát ngày thi!
               </p>
+              <Link href="/mistakes" className="inline-block mt-2 text-[11px] font-bold text-emerald-400 hover:underline">
+                Phục thù Top 10 →
+              </Link>
             </div>
           </div>
         </div>
       )}
+
+      {/* W2 #11, #20, #24, #25: Phân tích bẫy tư duy tuần, Thẻ OG Diagnostic, Bảo lưu gói 7-14 ngày & Mã giới thiệu */}
+      <DashboardGrowthPanel
+        totalScore={score?.total ?? 1300}
+        mathScore={score?.math ?? 660}
+        rwScore={score?.reading ?? 640}
+        targetScore={score?.targetScore ?? 1450}
+        weakLabels={(score?.focusSkills ?? []).map((s) => s.label)}
+      />
 
       {/* Point 61 & Point 64: Hàng Tiện ích Countdown Kỳ thi & Bộ chọn Quỹ thời gian học */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -939,8 +1001,8 @@ export default function DashboardPage() {
                   Đếm Ngược Kỳ Thi SAT Quốc Tế Chính Thức
                 </h3>
               </div>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                College Board Official
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                KPI hôm nay: {examCountdown.dailyQuestionKpi} câu SAT
               </span>
             </div>
 
@@ -959,17 +1021,20 @@ export default function DashboardPage() {
                   onChange={(e) => handleSelectExamDate(e.target.value)}
                   className="w-full bg-[#0f172a] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none"
                 >
-                  {OFFICIAL_SAT_DATES.map((exam) => (
-                    <option key={exam.id} value={exam.id}>
-                      {exam.label} ({exam.dateStr})
+                  {examCountdown.upcomingExams.map((exam) => (
+                    <option key={exam.dateStr} value={exam.dateStr}>
+                      {exam.name} ({exam.dateStr})
                     </option>
                   ))}
                 </select>
               </div>
 
               <div className="bg-[#0f172a] rounded-lg p-3 border border-[#334155] flex flex-col items-center justify-center">
-                <span className="text-xs text-slate-400">Thời gian còn lại</span>
+                <span className="text-xs text-slate-400">Còn lại • KPI hôm nay</span>
                 <span className="text-2xl font-black text-emerald-400">{daysUntilExam} Ngày</span>
+                <span className="text-[11px] font-bold text-amber-300 mt-0.5">
+                  🎯 {examCountdown.dailyQuestionKpi} câu / ngày
+                </span>
               </div>
             </div>
 
@@ -2009,6 +2074,61 @@ export default function DashboardPage() {
           </div>
         </>
       )}
+
+      {/* Lớp học của tôi (Teacher / Classroom Student Join) */}
+      <section className="rounded-2xl bg-[#131d2e] border border-[#26344a] p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-black text-white flex items-center gap-2">
+              <span>🏫</span> Lớp học của tôi
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Nhập mã lớp từ Thầy/Cô (VD: SAT-2026) để đồng bộ bài tập và bảng xếp hạng lớp.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={joinClassCode}
+              onChange={(e) => setJoinClassCode(e.target.value.toUpperCase())}
+              placeholder="Nhập mã lớp SAT-XXXX..."
+              maxLength={24}
+              className="px-3 py-2 rounded-lg bg-[#0f172a] border border-[#334155] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 min-h-[40px]"
+            />
+            <button
+              type="button"
+              onClick={handleJoinClassroom}
+              disabled={joiningClass}
+              className="px-4 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-amber-950 font-bold text-xs whitespace-nowrap min-h-[40px]"
+            >
+              {joiningClass ? 'Đang vào...' : 'Tham gia lớp'}
+            </button>
+          </div>
+        </div>
+        {joinClassMsg && (
+          <p className="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+            {joinClassMsg}
+          </p>
+        )}
+        {joinedClasses.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {joinedClasses.map((cls) => (
+              <div
+                key={cls.id || cls.code}
+                className="p-3 rounded-xl bg-[#0f172a] border border-[#2b3a50] flex items-center justify-between gap-2"
+              >
+                <div>
+                  <div className="text-sm font-bold text-white">{cls.name}</div>
+                  <div className="text-[11px] font-mono text-amber-300">Mã lớp: {cls.code}</div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  Đã tham gia
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Point 63: Modal Học Nhanh 10 Phút (Micro-Session) */}
       {showMicroModal && (

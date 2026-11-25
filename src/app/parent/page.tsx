@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ParentReport, type ParentReportData } from '@/components/ParentReport';
+import {
+  OFFICIAL_SAT_DATES,
+  resolveTargetSatDate,
+  evaluateSatRegistrationAlert,
+  type OfficialSatDate,
+} from '@/lib/sat-dates';
 
 /**
  * TRANG PHỤ HUYNH (KHÔNG cần đăng nhập) — mở /parent?code=PH-XXXX xem tiến độ con.
@@ -169,24 +175,15 @@ function getScholarshipEstimate(score: number) {
 }
 
 /**
- * #C059: Lịch thi SAT Quốc tế chính thức từ College Board
+ * #C059 & #33: Lịch thi SAT Quốc tế chính thức 2026–2027 từ College Board (đồng bộ từ @/lib/sat-dates)
  */
-interface OfficialSatDate {
-  dateStr: string;
-  name: string;
-  regDeadline: string;
-}
-
-const OFFICIAL_SAT_DATES: OfficialSatDate[] = [
-  { dateStr: '2025-05-03', name: 'Đợt thi SAT Tháng 5/2025', regDeadline: '18/04/2025' },
-  { dateStr: '2025-06-07', name: 'Đợt thi SAT Tháng 6/2025', regDeadline: '22/05/2025' },
-  { dateStr: '2025-08-23', name: 'Đợt thi SAT Tháng 8/2025', regDeadline: '08/08/2025' },
-  { dateStr: '2025-10-04', name: 'Đợt thi SAT Tháng 10/2025', regDeadline: '19/09/2025' },
-  { dateStr: '2025-11-08', name: 'Đợt thi SAT Tháng 11/2025', regDeadline: '24/10/2025' },
-  { dateStr: '2025-12-06', name: 'Đợt thi SAT Tháng 12/2025', regDeadline: '21/11/2025' },
-  { dateStr: '2026-03-14', name: 'Đợt thi SAT Tháng 3/2026', regDeadline: '27/02/2026' },
-  { dateStr: '2026-05-02', name: 'Đợt thi SAT Tháng 5/2026', regDeadline: '17/04/2026' },
-];
+type NextExamWithAlert = OfficialSatDate & {
+  daysLeft: number;
+  daysUntilRegDeadline: number;
+  regClosed: boolean;
+  isRegUrgent: boolean;
+  recommendSprint45d: boolean;
+};
 
 export default function ParentPage() {
   const [state, setState] = useState<State>({ phase: 'loading' });
@@ -363,17 +360,18 @@ export default function ParentPage() {
     }
   };
 
-  // #C059: Tính toán đợt thi gần nhất
-  const nextExam = useMemo(() => {
-    const now = new Date();
-    for (const item of OFFICIAL_SAT_DATES) {
-      const examDate = new Date(item.dateStr);
-      if (examDate.getTime() > now.getTime()) {
-        const diffDays = Math.ceil((examDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        return { ...item, daysLeft: diffDays };
-      }
-    }
-    return null;
+  // #C059 & #33: Tính toán đợt thi College Board 2026–2027 sắp tới + cảnh báo hạn đăng ký sớm
+  const nextExam = useMemo<NextExamWithAlert>(() => {
+    const target = resolveTargetSatDate();
+    const alert = evaluateSatRegistrationAlert(target);
+    return {
+      ...target,
+      daysLeft: alert.daysUntilExam,
+      daysUntilRegDeadline: alert.daysUntilRegDeadline,
+      regClosed: alert.regClosed,
+      isRegUrgent: alert.isRegUrgent,
+      recommendSprint45d: alert.recommendSprint45d,
+    };
   }, []);
 
   // #C052: Tính thời lượng tập trung thực chất
@@ -537,6 +535,15 @@ export default function ParentPage() {
                   <span>{copiedZalo ? '✓ Đã chép bản Zalo!' : '📲 Xuất tin nhắn Zalo gia đình'}</span>
                 </button>
 
+                {/* #31: Nút Xuất PDF chuẩn học thuật gửi Zalo */}
+                <button
+                  onClick={() => typeof window !== 'undefined' && window.print()}
+                  className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-3 py-1.5 rounded-lg transition shadow flex items-center gap-1.5 active:scale-95"
+                  title="In hoặc lưu thành file PDF báo cáo học thuật đẹp để gửi Zalo"
+                >
+                  <span>🖨️ Xuất PDF học thuật</span>
+                </button>
+
                 {/* Sao chép link xem */}
                 <button
                   onClick={handleCopyCurrentLink}
@@ -547,24 +554,41 @@ export default function ParentPage() {
               </div>
             </div>
 
-            {/* #C059: Thông báo lịch thi SAT chính thức sắp tới */}
+            {/* #C059 & #33: Cảnh báo lịch thi SAT 2026–2027 & Hạn đăng ký sớm College Board */}
             {nextExam && (
-              <div className="bg-gradient-to-r from-blue-900/30 to-indigo-900/30 border border-blue-500/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 print:hidden">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">📅</span>
+              <div className={`rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border print:hidden ${
+                nextExam.isRegUrgent
+                  ? 'bg-gradient-to-r from-amber-950/60 to-rose-950/40 border-amber-500/60'
+                  : 'bg-gradient-to-r from-blue-900/30 to-indigo-900/30 border-blue-500/30'
+              }`}>
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xl">{nextExam.isRegUrgent ? '🚨' : '📅'}</span>
                     <h3 className="text-sm font-bold text-white">{nextExam.name}</h3>
                     <span className="bg-blue-500/20 text-blue-300 text-[11px] font-semibold px-2 py-0.5 rounded-full border border-blue-500/30">
-                      Còn {nextExam.daysLeft} ngày
+                      Còn {nextExam.daysLeft} ngày thi
                     </span>
+                    {nextExam.isRegUrgent && (
+                      <span className="bg-amber-500/25 text-amber-200 text-[11px] font-bold px-2 py-0.5 rounded-full border border-amber-400/50">
+                        ⏰ Còn {nextExam.daysUntilRegDeadline} ngày đóng cổng ĐK sớm!
+                      </span>
+                    )}
                   </div>
-                  <p className="text-xs text-slate-300">
-                    Hạn đăng ký cuối cùng từ College Board: <strong className="text-amber-300">{nextExam.regDeadline}</strong>. Phụ huynh nên chuẩn bị thẻ thanh toán quốc tế (Visa/Mastercard) để hoàn tất thủ tục đúng hạn.
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Hạn đăng ký chuẩn College Board: <strong className="text-amber-300">{nextExam.regDeadlineDisplay}</strong> (Hạn đăng ký muộn tốn thêm phí <strong className="text-rose-300">34 USD</strong>: {nextExam.lateDeadlineDisplay}). Phụ huynh nên đăng ký sớm để giữ điểm thi gần nhà tại Việt Nam.
                   </p>
                 </div>
-                <div className="text-right shrink-0">
-                  <span className="text-xs text-indigo-300 font-mono bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-700 inline-block">
-                    Kỳ thi chuẩn hóa quốc tế
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  {nextExam.recommendSprint45d && (
+                    <a
+                      href="/pricing"
+                      className="text-xs font-black bg-amber-400 hover:bg-amber-300 text-slate-950 px-3 py-1.5 rounded-lg transition shadow"
+                    >
+                      ⚡ Gợi ý Gói Nước Rút 45 Ngày
+                    </a>
+                  )}
+                  <span className="text-[11px] text-indigo-300 font-mono bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-700 inline-block">
+                    Lịch thi SAT Quốc tế chính thức từ College Board (2026–2027)
                   </span>
                 </div>
               </div>
