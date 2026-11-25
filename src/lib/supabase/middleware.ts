@@ -43,6 +43,10 @@ const PUBLIC_EXACT_PATHS = new Set<string>([
   '/refund',
   '/contact',
   '/pvp',
+  '/robots.txt',
+  '/sitemap.xml',
+  '/manifest.json',
+  '/sw.js',
 ])
 
 /**
@@ -66,6 +70,7 @@ const PUBLIC_PREFIXES = [
   '/api/payment/return',
   '/api/parent/report',
   '/api/admin', // tự bảo vệ bằng verifyAdmin
+  '/api/questions/report', // POST rate-limit + GET/PATCH tự bảo vệ fail-closed bằng verifyAdmin (#10)
   '/api/og', // Dynamic OG SVG card chia sẻ Zalo/Facebook (#20)
   '/api/activity', // Verified Activity Ticker công khai không PII (#27)
   '/api/b2b', // Form đăng ký Dùng thử 14 ngày Trung tâm (#39)
