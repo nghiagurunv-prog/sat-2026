@@ -2398,6 +2398,11 @@ export default function AdminPage() {
         {/* =========================================================================
             FOOTER QUẢN TRỊ NỀN TẢNG SAT.GURU
            ========================================================================= */}
+        {/* W3 #10 & #40: Hàng đợi Báo lỗi câu hỏi & Quản trị Điểm chuẩn ĐH VN động */}
+        <div className="mt-8">
+          <AdminOpsExtensions adminSecret={secret} />
+        </div>
+
         <footer className="mt-12 rounded-2xl border border-white/10 bg-slate-900/80 p-6 text-xs text-slate-400 backdrop-blur-sm">
           <div className="flex flex-col items-center justify-between gap-4 text-left md:flex-row">
             <div>

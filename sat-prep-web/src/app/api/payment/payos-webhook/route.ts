@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { verifyPayosWebhook, isPayosSuccess } from '@/lib/payment-payos';
 import { confirmPaymentAtomic } from '@/lib/payment-store';
+import { confirmWalletTopupAtomic } from '@/lib/wallet-store';
 import {
   checkWebhookTimestampAnomaly,
   emitMetric,
@@ -99,9 +100,31 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: true, received: true, reason: 'amount_mismatch' }, { status: 200 });
       }
       if (outcome.reason === 'not_found') {
-        emitMetric('webhook_order_not_found', 1, { gateway: 'payos', orderId });
-        console.warn(`[payos-webhook] Không tìm thấy đơn hàng: orderId=${orderId}`);
-        return NextResponse.json({ success: true, received: true, reason: 'not_found' }, { status: 200 });
+        // Kiểm tra nhánh Nạp Ví Chung (`wallet_topups`) dùng chung 1 PayOS Webhook duy nhất
+        const walletOutcome = await confirmWalletTopupAtomic(orderId, gatewayTxnId, amountVnd);
+        if (walletOutcome.ok) {
+          markWebhookConfirmed(dedupKey);
+          if (!walletOutcome.alreadyConfirmed) {
+            emitMetric('webhook_wallet_topup_confirmed', 1, { gateway: 'payos', amountVnd });
+          }
+          return NextResponse.json({
+            success: true,
+            received: true,
+            walletTopup: true,
+            ...(walletOutcome.alreadyConfirmed ? { alreadyPaid: true } : {}),
+          });
+        }
+        if (walletOutcome.reason === 'amount_mismatch') {
+          emitMetric('webhook_amount_mismatch', 1, { gateway: 'payos', orderId, kind: 'wallet_topup' });
+          return NextResponse.json({ success: true, received: true, reason: 'amount_mismatch' }, { status: 200 });
+        }
+        if (walletOutcome.reason === 'not_found') {
+          emitMetric('webhook_order_not_found', 1, { gateway: 'payos', orderId });
+          console.warn(`[payos-webhook] Không tìm thấy đơn hàng: orderId=${orderId}`);
+          return NextResponse.json({ success: true, received: true, reason: 'not_found' }, { status: 200 });
+        }
+        emitMetric('webhook_confirm_error', 1, { gateway: 'payos', reason: walletOutcome.reason, kind: 'wallet_topup' });
+        return NextResponse.json({ success: false, message: 'Wallet topup confirm failed, retry' }, { status: 500 });
       }
       // Lỗi hệ thống / cập nhật DB thất bại → trả 500 để payOS tự động retry
       emitMetric('webhook_confirm_error', 1, { gateway: 'payos', reason: outcome.reason });

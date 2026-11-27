@@ -28,6 +28,7 @@ export const MENU_GROUPS: MenuGroup[] = [
     items: [
       { name: '✨ Ôn Luyện Hằng Ngày', path: '/', icon: '✨' },
       { name: '⚡ Trả Lời Nhanh', path: '/speed-quiz', icon: '⚡' },
+      { name: '💳 Ví Nạp & 4 App', path: '/wallet', icon: '💳' },
       { name: '💎 Nâng Cấp Gói VIP', path: '/upgrade', icon: '💎' },
     ]
   },

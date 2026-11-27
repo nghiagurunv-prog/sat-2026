@@ -12,6 +12,7 @@ const PUBLIC_EXACT_PATHS = new Set<string>([
   '/login',
   '/pricing',
   '/upgrade',
+  '/wallet',
   '/teacher',
   '/onboarding',
   '/diagnostic',
@@ -68,6 +69,7 @@ const PUBLIC_PREFIXES = [
   '/api/payment/stripe-webhook',
   '/api/payment/payos-webhook',
   '/api/payment/return',
+  '/api/wallet', // GET công khai danh mục 4 app; POST /topup & /purchase tự fail-closed 401
   '/api/parent/report',
   '/api/admin', // tự bảo vệ bằng verifyAdmin
   '/api/questions/report', // POST rate-limit + GET/PATCH tự bảo vệ fail-closed bằng verifyAdmin (#10)
@@ -141,6 +143,17 @@ export async function updateSession(request: NextRequest) {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (supabaseUrl && supabaseAnonKey) {
+    const rawSharedDomain =
+      process.env.NODE_ENV === 'production'
+        ? process.env.NEXT_PUBLIC_COOKIE_DOMAIN?.trim() || undefined
+        : undefined
+    const reqHost = request.nextUrl.hostname.toLowerCase()
+    const cleanRoot = rawSharedDomain?.replace(/^\./, '').toLowerCase()
+    const sharedDomain =
+      rawSharedDomain && cleanRoot && (reqHost === cleanRoot || reqHost.endsWith(`.${cleanRoot}`))
+        ? rawSharedDomain
+        : undefined
+
     const supabase = createServerClient(
       supabaseUrl,
       supabaseAnonKey,
@@ -155,7 +168,13 @@ export async function updateSession(request: NextRequest) {
               request,
             })
             cookiesToSet.forEach(({ name, value, options }) =>
-              supabaseResponse.cookies.set(name, value, options)
+              supabaseResponse.cookies.set(
+                name,
+                value,
+                sharedDomain
+                  ? { ...options, domain: sharedDomain, sameSite: 'lax', secure: true }
+                  : options
+              )
             )
           },
         },

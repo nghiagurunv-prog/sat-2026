@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import { verifyStripeWebhook, isStripeConfigured } from '@/lib/payment-stripe';
 import { confirmPaymentAtomic } from '@/lib/payment-store';
+import { confirmWalletTopupAtomic } from '@/lib/wallet-store';
 import {
   emitMetric,
   isWebhookRecentlyConfirmed,
@@ -105,8 +106,27 @@ export async function POST(req: Request) {
         return NextResponse.json({ received: true, reason: 'amount_mismatch' }, { status: 200 });
       }
       if (outcome.reason === 'not_found') {
-        console.warn(`[stripe-webhook] Không tìm thấy đơn hàng: orderId=${orderId}`);
-        return NextResponse.json({ received: true, reason: 'not_found' }, { status: 200 });
+        const walletOutcome = await confirmWalletTopupAtomic(orderId, gatewayTxnId, amountVnd);
+        if (walletOutcome.ok) {
+          if (orderId) markWebhookConfirmed(dedupKey);
+          if (!walletOutcome.alreadyConfirmed) {
+            emitMetric('payment_webhook_wallet_topup_confirmed', 1, { gateway: 'stripe', orderId, amountVnd });
+          }
+          return NextResponse.json({
+            received: true,
+            walletTopup: true,
+            ...(walletOutcome.alreadyConfirmed ? { alreadyPaid: true } : {}),
+          });
+        }
+        if (walletOutcome.reason === 'amount_mismatch') {
+          emitMetric('payment_webhook_amount_mismatch', 1, { gateway: 'stripe', orderId, amountVnd, kind: 'wallet_topup' });
+          return NextResponse.json({ received: true, reason: 'amount_mismatch' }, { status: 200 });
+        }
+        if (walletOutcome.reason === 'not_found') {
+          console.warn(`[stripe-webhook] Không tìm thấy đơn hàng: orderId=${orderId}`);
+          return NextResponse.json({ received: true, reason: 'not_found' }, { status: 200 });
+        }
+        return NextResponse.json({ message: 'Wallet topup confirm failed, retry' }, { status: 500 });
       }
       // Lỗi tạm (confirm_unavailable / bad_status / error) → 500 để Stripe retry.
       console.error(`[stripe-webhook] Lỗi hệ thống khi xác nhận orderId=${orderId}:`, outcome.reason);

@@ -15,6 +15,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '', priority: 1.0, changeFrequency: 'daily' },
     { path: '/pricing', priority: 0.9, changeFrequency: 'weekly' },
     { path: '/upgrade', priority: 0.9, changeFrequency: 'weekly' },
+    { path: '/wallet', priority: 0.9, changeFrequency: 'weekly' },
     { path: '/diagnostic', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/exams', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/real-exams', priority: 0.8, changeFrequency: 'weekly' },

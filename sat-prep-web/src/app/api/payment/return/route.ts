@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getTransaction, getTransactionPublicStatus } from '@/lib/payment-store';
+import { getWalletTopupPublicStatus } from '@/lib/wallet-store';
 
 /**
  * ============================================================================
@@ -13,7 +14,7 @@ import { getTransaction, getTransactionPublicStatus } from '@/lib/payment-store'
  */
 
 const ALLOWED_STATUSES = new Set(['paid', 'pending', 'processing', 'cancelled', 'failed', 'unknown']);
-const ALLOWED_PATHS = new Set(['/upgrade', '/pricing', '/dashboard']);
+const ALLOWED_PATHS = new Set(['/upgrade', '/pricing', '/dashboard', '/wallet']);
 
 /** Lấy origin an toàn từ NEXT_PUBLIC_APP_URL / APP_BASE_URL hoặc req.nextUrl.origin (chống Open Redirect) */
 function getSafeOrigin(req: Request, url: URL): string {
@@ -73,6 +74,7 @@ export async function GET(req: Request) {
   const origin = getSafeOrigin(req, url);
 
   let status = 'unknown';
+  let isWalletTopupOrder = false;
   if (orderId) {
     const txn = await getTransaction(orderId);
     if (txn && ALLOWED_STATUSES.has(txn.status)) {
@@ -82,6 +84,12 @@ export async function GET(req: Request) {
       const pubTxn = await getTransactionPublicStatus(orderId);
       if (pubTxn && ALLOWED_STATUSES.has(pubTxn.status)) {
         status = pubTxn.status;
+      } else {
+        const walletTxn = await getWalletTopupPublicStatus(orderId);
+        if (walletTxn && ALLOWED_STATUSES.has(walletTxn.status)) {
+          status = walletTxn.status;
+          isWalletTopupOrder = true;
+        }
       }
     }
   }
@@ -109,9 +117,14 @@ export async function GET(req: Request) {
     status = 'unknown';
   }
 
-  // Xác định path đích nội bộ an toàn (chống Open Redirect, chỉ cho phép /upgrade, /pricing, /dashboard)
+  // Xác định path đích nội bộ an toàn (chống Open Redirect, chỉ cho phép /upgrade, /pricing, /dashboard, /wallet)
   const requestedPath = url.searchParams.get('redirect_to') || url.searchParams.get('return_to');
-  const targetPath = (requestedPath && ALLOWED_PATHS.has(requestedPath)) ? requestedPath : '/upgrade';
+  const targetPath =
+    requestedPath && ALLOWED_PATHS.has(requestedPath)
+      ? requestedPath
+      : isWalletTopupOrder
+      ? '/wallet'
+      : '/upgrade';
 
   // Redirect về trang nâng cấp với trạng thái để UI hiển thị thân thiện.
   const dest = new URL(targetPath, origin);
